@@ -9,21 +9,13 @@
 
 ## Context
 
-ADR-0005 split the editing by address space but left the input in `TrackViewerInputController`. It held
-both editors, dispatched per view mode, and owned the cursor, the entry values, the resolution of
-rendered cells and runs, the cursor navigation and the grid's note action menu, including its
-rendering. Every new edit added another view-mode branch, and the controller grew past 1200 lines.
+ADR-0005 split the editing by address space but left the input in `TrackViewerInputController`. It held both editors, dispatched per view mode, and owned the cursor, the entry values, the resolution of rendered cells and runs, the cursor navigation and the grid's note action menu, including its rendering. Every new edit added another view-mode branch, and the controller grew past 1200 lines.
 
 ## Decision
 
-We will let the editor of the view the user works in execute the input. The controller translates
-pointer and key events into actions of the active `MeasureEditor` and forwards the requisitions of the
-toolbars to it; the app reports which editor is active when the view mode changes. Cursor, entry values,
-preview and the resolution of rendered elements live in the editor, so the controller carries no view
-knowledge, no position format and no rendering.
+We will let the editor of the view the user works in execute the input. The controller translates pointer and key events into actions of the active `MeasureEditor` and forwards the requisitions of the toolbars to it; the app reports which editor is active when the view mode changes. Cursor, entry values, preview and the resolution of rendered elements live in the editor, so the controller carries no view knowledge, no position format and no rendering.
 
-Supersedes: ADR-0005, part "The input controller holds both and dispatches per view mode", and its
-consequence that a caller must know which view it serves.
+Supersedes: ADR-0005, part "The input controller holds both and dispatches per view mode", and its consequence that a caller must know which view it serves.
 
 ## Invariants
 

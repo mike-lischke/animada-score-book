@@ -1,7 +1,6 @@
 # Handbook Images
 
-Shared visual assets for the English handbook, the README, and the published website. Screenshots are captured from
-the running application, never drawn or mocked.
+Shared visual assets for the English handbook, the README, and the published website. Screenshots are captured from the running application, never drawn or mocked.
 
 ## Directory Layout
 
@@ -11,14 +10,11 @@ docs/images/
   notation/      notation crops without UI text
 ```
 
-Language-specific directories such as `de/` or `pt/` are added only when a translation exists. Images that carry no
-UI text stay in `notation/` and are shared by all languages.
+Language-specific directories such as `de/` or `pt/` are added only when a translation exists. Images that carry no UI text stay in `notation/` and are shared by all languages.
 
-Chapter folders used by `en/`: `getting-started/`, `library/`, `presentation/`, `staff-editing/`, `grid-editing/`,
-`playback/`, `print/`, `settings/`, `administration/`, `troubleshooting/`.
+Chapter folders used by `en/`: `getting-started/`, `library/`, `presentation/`, `staff-editing/`, `grid-editing/`, `playback/`, `print/`, `settings/`, `administration/`, `troubleshooting/`.
 
-A folder is created when its first image is added. The planned images, their capture context, and their target paths
-are recorded in [`docs/planning/handbook-2.0/screenshot-storyboard.md`](../planning/handbook-2.0/screenshot-storyboard.md).
+A folder is created when its first image is added. The planned images, their capture context, and their target paths are recorded in [`docs/planning/handbook-2.0/screenshot-storyboard.md`](../planning/handbook-2.0/screenshot-storyboard.md).
 
 ## File Naming
 
@@ -48,11 +44,8 @@ Links are relative and must resolve on GitHub and in any static-site build:
 - From a chapter page (`docs/en/<section>/<page>.md`): `../../images/en/<topic>/<name>.png`
 - From a root page (`docs/en/instruments.md`, `docs/en/index.md`): `../images/notation/<name>.png`
 
-Absolute repository URLs (`https://github.com/.../blob/...`) are not used, because they break forks, offline copies,
-and static-site rendering.
+Absolute repository URLs (`https://github.com/.../blob/...`) are not used, because they break forks, offline copies, and static-site rendering.
 
 ## Lifecycle
 
-An image is added together with the text that uses it, in the same change. When a UI element changes, the image is
-re-captured from the same score, theme, font, and viewport, and the file name stays the same. Temporary capture
-artifacts are deleted once the final image is selected.
+An image is added together with the text that uses it, in the same change. When a UI element changes, the image is re-captured from the same score, theme, font, and viewport, and the file name stays the same. Temporary capture artifacts are deleted once the final image is selected.

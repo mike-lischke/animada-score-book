@@ -12,5 +12,4 @@ Planned sections:
 - Selection modifiers
 - Dialog and menu keys
 
-Related chapters: [Editing in the Staff View](../using/staff-editing.md),
-[Editing in the Grid View](../using/grid-editing.md), [Playback and Practice](../using/playback.md).
+Related chapters: [Editing in the Staff View](../using/staff-editing.md), [Editing in the Grid View](../using/grid-editing.md), [Playback and Practice](../using/playback.md).

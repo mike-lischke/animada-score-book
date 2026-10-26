@@ -8,19 +8,13 @@
 
 ## Context
 
-ADR-0003 made room for an entry per view: the grid shortened the new note before the next one, the
-staff shifted everything behind it. Neither could replace the element the cursor addresses, which
-correcting a bar needs; delete had the same question.
+ADR-0003 made room for an entry per view: the grid shortened the new note before the next one, the staff shifted everything behind it. Neither could replace the element the cursor addresses, which correcting a bar needs; delete had the same question.
 
-Supersedes: ADR-0003, part "make room for a note per view" — the staff follows the entry mode now, the
-grid keeps shortening in overwrite.
+Supersedes: ADR-0003, part "make room for a note per view" — the staff follows the entry mode now, the grid keeps shortening in overwrite.
 
 ## Decision
 
-We will let the user choose how an entry makes room. Insert writes its length and moves the content
-behind it to the right; overwrite replaces what the cursor addresses and leaves the rest alone. The app
-resolves the mode: the grid always reports overwrite, the staff the mode the user picked, stored with
-the other entry values.
+We will let the user choose how an entry makes room. Insert writes its length and moves the content behind it to the right; overwrite replaces what the cursor addresses and leaves the rest alone. The app resolves the mode: the grid always reports overwrite, the staff the mode the user picked, stored with the other entry values.
 
 ## Invariants
 

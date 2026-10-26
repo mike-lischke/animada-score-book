@@ -8,15 +8,11 @@
 
 ## Context
 
-Repeat barlines (`|:`, `:|`) make a bar sound more than once, but the written timeline that playback, transport,
-playhead and status bar derived their times from addresses every bar once. Letting every consumer interpret the
-marks itself would let them disagree about what is played.
+Repeat barlines (`|:`, `:|`) make a bar sound more than once, but the written timeline that playback, transport, playhead and status bar derived their times from addresses every bar once. Letting every consumer interpret the marks itself would let them disagree about what is played.
 
 ## Decision
 
-We will resolve the repeat marks in `PlaybackOrder.performedBars()` into a play order: written bar numbers in
-performed sequence. A bar starts at its order index times the bar length, a note at that start plus its fraction of
-the bar. Track players, play range, transport loop, playhead and status bar all work on this order.
+We will resolve the repeat marks in `PlaybackOrder.performedBars()` into a play order: written bar numbers in performed sequence. A bar starts at its order index times the bar length, a note at that start plus its fraction of the bar. Track players, play range, transport loop, playhead and status bar all work on this order.
 
 ## Invariants
 

@@ -15,5 +15,4 @@ Planned sections:
 - Resetting inherited access for child entries
 - Resetting the database as a last resort
 
-Related chapters: [The Score Library](../using/score-library.md), [Security Notes](security.md),
-[Backup, Restore and Upgrades](backup-restore-upgrades.md).
+Related chapters: [The Score Library](../using/score-library.md), [Security Notes](security.md), [Backup, Restore and Upgrades](backup-restore-upgrades.md).

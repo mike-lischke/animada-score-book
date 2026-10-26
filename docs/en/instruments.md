@@ -2,8 +2,7 @@
 
 > **Draft.** This chapter is planned for the 2.0.0 handbook and not written yet (issue #62, Phase 3).
 
-Explains how every supported instrument is written and played. It opens with the notation that applies to all of
-them, then devotes one section to each instrument type.
+Explains how every supported instrument is written and played. It opens with the notation that applies to all of them, then devotes one section to each instrument type.
 
 Every instrument section follows the same order:
 
@@ -17,8 +16,7 @@ Every instrument section follows the same order:
 
 ## Notation Basics
 
-> Planned: percussion clef, the per-instrument staff lines, note values and rests as prerequisites, how playing
-> techniques are drawn, and how articulations and dynamics look. Illustrated with notation crops.
+> Planned: percussion clef, the per-instrument staff lines, note values and rests as prerequisites, how playing techniques are drawn, and how articulations and dynamics look. Illustrated with notation crops.
 
 Planned sections, in this order and with these fixed section names:
 
@@ -34,5 +32,4 @@ Planned sections, in this order and with these fixed section names:
 - Surdo Segunda
 - Surdo Primeira
 
-Related chapters: [Editing in the Staff View](using/staff-editing.md), [Playback and Practice](using/playback.md),
-[Glossary](reference/glossary.md).
+Related chapters: [Editing in the Staff View](using/staff-editing.md), [Playback and Practice](using/playback.md), [Glossary](reference/glossary.md).

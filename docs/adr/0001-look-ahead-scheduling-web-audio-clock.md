@@ -7,20 +7,11 @@
 
 ## Context
 
-Playback must keep audio sample-accurate while also driving UI state (current bar/step, cursor animation).
-Scheduling every note up front is wasteful for long and looping scores. Web Audio offers a sample-accurate
-clock (`AudioContext.currentTime`) but no high-level transport.
+Playback must keep audio sample-accurate while also driving UI state (current bar/step, cursor animation). Scheduling every note up front is wasteful for long and looping scores. Web Audio offers a sample-accurate clock (`AudioContext.currentTime`) but no high-level transport.
 
 ## Decision
 
-We will use a look-ahead scheduler in which the AudioContext clock is the single time authority.
-`ArrangementPlayer` keeps an `offset` so that `AudioContext.currentTime - offset` equals score time.
-A `setTimeout` loop repeatedly schedules the next short look-ahead window of events (audio, metronome,
-timing callbacks). Audio and metronome events are placed sample-accurately on the Web Audio clock via
-`AudioBufferSourceNode.start(time)` / `OscillatorNode.start(time)` at `offset + realTime`; timing callbacks
-use `setTimeout` delays because UI does not need sample accuracy. Event queries use half-open intervals
-`[start, end)` so a boundary event is emitted exactly once across look-ahead chunks. The look-ahead window
-size and the timer interval are tunable implementation parameters, not part of this decision.
+We will use a look-ahead scheduler in which the AudioContext clock is the single time authority. `ArrangementPlayer` keeps an `offset` so that `AudioContext.currentTime - offset` equals score time. A `setTimeout` loop repeatedly schedules the next short look-ahead window of events (audio, metronome, timing callbacks). Audio and metronome events are placed sample-accurately on the Web Audio clock via `AudioBufferSourceNode.start(time)` / `OscillatorNode.start(time)` at `offset + realTime`; timing callbacks use `setTimeout` delays because UI does not need sample accuracy. Event queries use half-open intervals `[start, end)` so a boundary event is emitted exactly once across look-ahead chunks. The look-ahead window size and the timer interval are tunable implementation parameters, not part of this decision.
 
 ## Invariants
 

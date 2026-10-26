@@ -10,5 +10,4 @@ Planned sections:
 - Music terms the handbook relies on
 - German and Portuguese equivalents for the Samba terms that occur in practice
 
-Related chapters: [What Animada Score Book Is](../getting-started/overview.md),
-[Instrument and Notation Reference](../instruments.md).
+Related chapters: [What Animada Score Book Is](../getting-started/overview.md), [Instrument and Notation Reference](../instruments.md).

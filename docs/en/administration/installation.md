@@ -14,5 +14,4 @@ Planned sections:
 - A reverse proxy and HTTPS
 - Upgrading an existing installation
 
-Related chapters: [Configuring the Backend](configuration.md), [Security Notes](security.md),
-[Backup, Restore and Upgrades](backup-restore-upgrades.md).
+Related chapters: [Configuring the Backend](configuration.md), [Security Notes](security.md), [Backup, Restore and Upgrades](backup-restore-upgrades.md).

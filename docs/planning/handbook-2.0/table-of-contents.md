@@ -43,9 +43,7 @@
 
 ## Instrument Reference Sections
 
-`docs/en/instruments.md` is a single page. It opens with notation basics that apply to every instrument (percussion
-clef, per-instrument staff lines, note values and rests as prerequisites, how playing techniques are drawn, how
-articulations and dynamics look), then one section per instrument type:
+`docs/en/instruments.md` is a single page. It opens with notation basics that apply to every instrument (percussion clef, per-instrument staff lines, note values and rests as prerequisites, how playing techniques are drawn, how articulations and dynamics look), then one section per instrument type:
 
 | Section | Instrument                | Note styles | Special drawing                               |
 | ------- | ------------------------- | ----------- | --------------------------------------------- |
@@ -61,9 +59,7 @@ articulations and dynamics look), then one section per instrument type:
 | 10      | Surdo Segunda             | 2           | Same as Surdo Terceira                        |
 | 11      | Surdo Primeira            | 2           | Same as Surdo Terceira                        |
 
-Each section uses the same internal order: what the instrument is, how it sits on the staff, a table of note styles
-(name, marker, meaning, sample), the articulations the track offers, playback notes, and a cross-reference to the
-editing instructions that create these marks.
+Each section uses the same internal order: what the instrument is, how it sits on the staff, a table of note styles (name, marker, meaning, sample), the articulations the track offers, playback notes, and a cross-reference to the editing instructions that create these marks.
 
 ## Reserved Sibling Directories
 
@@ -92,6 +88,4 @@ docs/
 
 ## README Link Targets (Phase 5)
 
-The README links to `docs/en/index.md`, to the four priority chapters (staff view, instruments, Zen mode/presentation,
-Score Library) and to the release notes. It does not repeat installation steps beyond a short pointer to
-`docs/en/administration/installation.md`.
+The README links to `docs/en/index.md`, to the four priority chapters (staff view, instruments, Zen mode/presentation, Score Library) and to the release notes. It does not repeat installation steps beyond a short pointer to `docs/en/administration/installation.md`.

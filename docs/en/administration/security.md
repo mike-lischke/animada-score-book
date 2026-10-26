@@ -14,6 +14,4 @@ Planned sections:
 - What the backend does not provide
 - Hardening checklist
 
-Related chapters: [Configuring the Backend](configuration.md),
-[Users, Groups and Permissions](users-groups-permissions.md),
-[Troubleshooting and Known Limitations](../troubleshooting.md).
+Related chapters: [Configuring the Backend](configuration.md), [Users, Groups and Permissions](users-groups-permissions.md), [Troubleshooting and Known Limitations](../troubleshooting.md).

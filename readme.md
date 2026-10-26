@@ -1,5 +1,4 @@
-[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/mike-lischke/animada-score-book/nodejs.yml?branch=main&style=for-the-badge&color=green&logo=github)](https://github.com/mike-lischke/animada-score-book/actions/workflows/nodejs.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge&color=green)](./License.txt)
+[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/mike-lischke/animada-score-book/nodejs.yml?branch=main&style=for-the-badge&color=green&logo=github)](https://github.com/mike-lischke/animada-score-book/actions/workflows/nodejs.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge&color=green)](./License.txt)
 
 <p align="center">
 <img src="public/logo.svg" title="Animada Score Book" alt="Animada Score Book" style="height: 200px" /><br/>
@@ -42,19 +41,13 @@ Animada Score Book is your ensemble's digital home for rhythm — a rich, browse
 - **BananaDrum Import.** Import scores from BananaDrum URLs to bring your existing repertoire on board.
 
 > [!IMPORTANT]
-> **Editing is implemented.** It works in both views: notes can be entered, given a note style and an articulation,
-> copied, pasted, subdivided and removed in the grid view and in the staff view; the staff view additionally offers
-> the note length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
+> **Editing is implemented.** It works in both views: notes can be entered, given a note style and an articulation, copied, pasted, subdivided and removed in the grid view and in the staff view; the staff view additionally offers the note length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
 
 ### Printing and PDF Export
 
-Open **Print** to adjust the paginated preview, then choose **Print / PDF** to open the browser's print dialog.
-Print scale controls the notation size; preview zoom only changes its on-screen magnification. Closing or canceling
-the browser dialog returns to the preview with its settings intact.
+Open **Print** to adjust the paginated preview, then choose **Print / PDF** to open the browser's print dialog. Print scale controls the notation size; preview zoom only changes its on-screen magnification. Closing or canceling the browser dialog returns to the preview with its settings intact.
 
-For output matching the preview, select **A4** and the same portrait or landscape orientation, use **100% scale**,
-and disable browser-added **headers and footers**. The document supplies its own margins, title, and page numbers;
-do not add extra browser margins. Browser and printer-driver settings can still alter the final output.
+For output matching the preview, select **A4** and the same portrait or landscape orientation, use **100% scale**, and disable browser-added **headers and footers**. The document supplies its own margins, title, and page numbers; do not add extra browser margins. Browser and printer-driver settings can still alter the final output.
 
 ## Getting Started
 

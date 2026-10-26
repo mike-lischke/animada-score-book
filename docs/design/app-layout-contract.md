@@ -15,45 +15,23 @@
 | Selection popover | Note and selection-based structure actions | Temporary; groups follow selection. |
 | Status/navigation | Status, section/position, score navigator, zoom | Outside score content; coordinated group. |
 
-Persistent toolbars are app-shell surfaces, not score children: score zoom and scrolling must not move or resize them.
-Secondary playback controls may collapse, but must remain easy to reach on every platform.
-The range-articulation toolbar is a tool selector, not an indicator that drawing mode is already active. The selected
-action starts the viewer's pointer-owning placing mode; Escape leaves that mode, while choosing the other action
-switches tools. A contextual popover is temporary: Escape, loss of its target, or a press outside the surface it belongs
-to closes it. A press inside that surface — the score, for the selection popover — is an interaction with the popover
-instead, so the selection it produces decides whether the popover follows, shows other tools, or closes. Pointer and
-keyboard therefore behave alike: the popover travels between selections rather than blinking. Focus returns to its
-invoking control, and the score remains interactive outside the popover. On narrow screens, an anchored popover may
-become edge-attached.
+Persistent toolbars are app-shell surfaces, not score children: score zoom and scrolling must not move or resize them. Secondary playback controls may collapse, but must remain easy to reach on every platform. The range-articulation toolbar is a tool selector, not an indicator that drawing mode is already active. The selected action starts the viewer's pointer-owning placing mode; Escape leaves that mode, while choosing the other action switches tools. A contextual popover is temporary: Escape, loss of its target, or a press outside the surface it belongs to closes it. A press inside that surface — the score, for the selection popover — is an interaction with the popover instead, so the selection it produces decides whether the popover follows, shows other tools, or closes. Pointer and keyboard therefore behave alike: the popover travels between selections rather than blinking. Focus returns to its invoking control, and the score remains interactive outside the popover. On narrow screens, an anchored popover may become edge-attached.
 
 ## Selection Action Grouping
 
-Tuplets, simile, and repeat barlines are selection actions: none is note-specific or starts a pointer-owning mode.
-Keep them out of permanent toolbars and group them in the selection popover, separate from note-value/style controls.
-Offer only the group applicable to the current selection, using the existing eligibility rules:
+Tuplets, simile, and repeat barlines are selection actions: none is note-specific or starts a pointer-owning mode. Keep them out of permanent toolbars and group them in the selection popover, separate from note-value/style controls. Offer only the group applicable to the current selection, using the existing eligibility rules:
 
 - Tuplets apply to one note/cell or a compatible note selection.
 - Simile applies to selected track-measure pieces.
 - Repeat start/end marks apply to selected whole measures.
 
-Each action completes on activation and leaves score input in its normal state. The selection popover remains the
-single contextual surface; it adapts its action groups instead of opening a second toolbar or nested popover.
+Each action completes on activation and leaves score input in its normal state. The selection popover remains the single contextual surface; it adapts its action groups instead of opening a second toolbar or nested popover.
 
 ## Floating Surface Lifecycle
 
-Persistent shell controls stay outside the portal stack and coexist without outside-click or Escape dismissal. Native
-`popover="auto"` menus keep the browser's light-dismiss behavior. Only one framework `Popup` is active at a time;
-opening another replaces it. Modal `Dialog` portals keep their backdrop and stack behavior, with only the topmost portal
-handling Escape.
+Persistent shell controls stay outside the portal stack and coexist without outside-click or Escape dismissal. Native `popover="auto"` menus keep the browser's light-dismiss behavior. Only one framework `Popup` is active at a time; opening another replaces it. Modal `Dialog` portals keep their backdrop and stack behavior, with only the topmost portal handling Escape.
 
-Contextual `Popup` surfaces are nonmodal: a pointer press or keyboard-activated click outside dismisses the popup
-without blocking the target action, while a press inside the surface the popover belongs to counts as an interaction
-with its anchor — `Popup.anchorArea` states that surface and defaults to the anchor element itself, so the selection
-popover states the score and follows the selection instead of closing and reopening. Escape and programmatic close
-restore focus to the trigger; outside-click close leaves focus with the clicked target.
-Interactive popups may focus their first control on open. Prefer live elements as anchors so placement follows
-scrolling, resizing, orientation, and visual-viewport changes; removing an anchor closes the popup. If neither side has
-room on mobile, attach the popup to the bottom edge and scroll its contents.
+Contextual `Popup` surfaces are nonmodal: a pointer press or keyboard-activated click outside dismisses the popup without blocking the target action, while a press inside the surface the popover belongs to counts as an interaction with its anchor — `Popup.anchorArea` states that surface and defaults to the anchor element itself, so the selection popover states the score and follows the selection instead of closing and reopening. Escape and programmatic close restore focus to the trigger; outside-click close leaves focus with the clicked target. Interactive popups may focus their first control on open. Prefer live elements as anchors so placement follows scrolling, resizing, orientation, and visual-viewport changes; removing an anchor closes the popup. If neither side has room on mobile, attach the popup to the bottom edge and scroll its contents.
 
 ## Header and Responsive Priorities
 
@@ -66,8 +44,7 @@ room on mobile, attach the popup to the bottom edge and scroll its contents.
   persistent playback toolbar. Use touch-sized controls and reachable contextual editing; expose collapsed playback
   controls through an obvious affordance. Do not make the score page itself scroll to reach app controls.
 
-The responsive layout adapts density and disclosure, not the available functionality. Breakpoint values and final
-dimensions are implementation details for later phases.
+The responsive layout adapts density and disclosure, not the available functionality. Breakpoint values and final dimensions are implementation details for later phases.
 
 ## State Matrix
 
@@ -79,9 +56,7 @@ dimensions are implementation details for later phases.
 | Range placing | Hairpin/forte activates staff placing mode; active action is indicated and Escape exits. |
 | Playback | Play/stop and current position remain visible; playback can coexist with reading or editing. |
 
-Grid-specific and staff-specific actions remain distinct. Staff entry options are shown only in staff mode. Playback
-position and duration continue to use the shared repeat-aware playback order; the presentation layer does not
-reinterpret timing.
+Grid-specific and staff-specific actions remain distinct. Staff entry options are shown only in staff mode. Playback position and duration continue to use the shared repeat-aware playback order; the presentation layer does not reinterpret timing.
 
 ## Existing Control Inventory
 
@@ -98,15 +73,8 @@ reinterpret timing.
 
 ## Details to Refine
 
-The playback toolbar may collapse secondary controls when space is limited, provided they remain easy to reopen on
-desktop and mobile. Keep the instrument sidebar and its collapsed-by-default per-track mixer. Refine exact placement,
-density, and visual treatment against later mockups; this text is a structural working template, not a finalized visual
-specification.
+The playback toolbar may collapse secondary controls when space is limited, provided they remain easy to reopen on desktop and mobile. Keep the instrument sidebar and its collapsed-by-default per-track mixer. Refine exact placement, density, and visual treatment against later mockups; this text is a structural working template, not a finalized visual specification.
 
 ## Constraints
 
-Layout changes preserve viewer-local score element identity (ADR-0002), requisition-based cross-module state
-(ADR-0004), data-driven measure widths and staff windowing (ADR-0009), and shared repeat-aware playback semantics
-(ADR-0017). Staff row geometry is decided in ADR-0018: each staff row is sized from the notation its track holds,
-shared across the note rows, prefix column, side controls and print; the grid keeps its own cell height. Manual
-track resizing is deferred — heights are automatic for now.
+Layout changes preserve viewer-local score element identity (ADR-0002), requisition-based cross-module state (ADR-0004), data-driven measure widths and staff windowing (ADR-0009), and shared repeat-aware playback semantics (ADR-0017). Staff row geometry is decided in ADR-0018: each staff row is sized from the notation its track holds, shared across the note rows, prefix column, side controls and print; the grid keeps its own cell height. Manual track resizing is deferred — heights are automatic for now.

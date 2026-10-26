@@ -8,16 +8,11 @@
 
 ## Context
 
-The staff hit test resolved groups from rendered geometry, taking the narrowest overlap between an
-element and the note runs as the innermost group. That does not match the notation: a beam is drawn
-per stroke, so a click reached only the runs underneath it, and a tuplet bracket lies outside the
-note band.
+The staff hit test resolved groups from rendered geometry, taking the narrowest overlap between an element and the note runs as the innermost group. That does not match the notation: a beam is drawn per stroke, so a click reached only the runs underneath it, and a tuplet bracket lies outside the note band.
 
 ## Decision
 
-We will compose the note groups of a measure in one place, `MeasureProjection.noteGroups`: tuplets
-and beam runs with their events, spans and nesting depth, ordered innermost first. The renderer draws
-from it; the hit test looks up the group of the marker it touched.
+We will compose the note groups of a measure in one place, `MeasureProjection.noteGroups`: tuplets and beam runs with their events, spans and nesting depth, ordered innermost first. The renderer draws from it; the hit test looks up the group of the marker it touched.
 
 ## Invariants
 

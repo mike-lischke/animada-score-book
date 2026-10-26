@@ -14,5 +14,4 @@ Planned sections:
 - Upgrading between releases
 - Resetting the database as a last resort
 
-Related chapters: [Installing Animada Score Book](installation.md), [Configuring the Backend](configuration.md),
-[Troubleshooting and Known Limitations](../troubleshooting.md).
+Related chapters: [Installing Animada Score Book](installation.md), [Configuring the Backend](configuration.md), [Troubleshooting and Known Limitations](../troubleshooting.md).

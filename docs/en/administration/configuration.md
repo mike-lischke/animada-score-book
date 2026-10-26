@@ -16,5 +16,4 @@ Planned sections:
 - Sound library path
 - Separate databases per branch in development
 
-Related chapters: [Installing Animada Score Book](installation.md), [Security Notes](security.md),
-[Development Setup](../development/setup.md).
+Related chapters: [Installing Animada Score Book](installation.md), [Security Notes](security.md), [Development Setup](../development/setup.md).

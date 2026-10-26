@@ -1,7 +1,6 @@
 # Architecture Decision Records
 
-ADRs document only durable, cross-module decisions or invariants that would be
-hard to infer from code alone.
+ADRs document only durable, cross-module decisions or invariants that would be hard to infer from code alone.
 
 ## Rules
 

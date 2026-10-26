@@ -14,5 +14,4 @@ Planned sections:
 - Database migrations and separate databases per branch
 - Debugging in VS Code
 
-Related chapters: [Architecture and Decisions](architecture.md), [Maintaining This Documentation](documentation.md),
-[Configuring the Backend](../administration/configuration.md).
+Related chapters: [Architecture and Decisions](architecture.md), [Maintaining This Documentation](documentation.md), [Configuring the Backend](../administration/configuration.md).

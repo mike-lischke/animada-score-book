@@ -2,8 +2,7 @@
 
 > **Draft.** This chapter is planned for the 2.0.0 handbook and not written yet (issue #62, Phase 3).
 
-Maps the codebase for contributors and points to the documents that hold the reasoning. It summarizes and links; it
-does not restate the architecture.
+Maps the codebase for contributors and points to the documents that hold the reasoning. It summarizes and links; it does not restate the architecture.
 
 Planned sections:
 

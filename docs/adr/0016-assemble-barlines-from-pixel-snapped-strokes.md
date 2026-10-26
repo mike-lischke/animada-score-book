@@ -9,16 +9,11 @@
 
 ## Context
 
-A font's barline glyphs are thinner than a pixel at score size, so the browser anti-aliases them and they look
-fuzzy. The engraving defaults ADR-0014 measures barlines by state a stroke separation wider than the font's own
-repeat glyphs draw, so a barline built from them alone looks wrong next to the font.
+A font's barline glyphs are thinner than a pixel at score size, so the browser anti-aliases them and they look fuzzy. The engraving defaults ADR-0014 measures barlines by state a stroke separation wider than the font's own repeat glyphs draw, so a barline built from them alone looks wrong next to the font.
 
 ## Decision
 
-We will assemble every barline from the parts the symbol catalogue lists: strokes in the thickness the engraving
-defaults state, rounded to whole pixels, and the repeat dots as the font's glyph. The stroke separation is what the
-font's glyph for the same barline leaves of its ink width after the parts and dot gaps. The font loader publishes
-width and separation per barline as CSS variables.
+We will assemble every barline from the parts the symbol catalogue lists: strokes in the thickness the engraving defaults state, rounded to whole pixels, and the repeat dots as the font's glyph. The stroke separation is what the font's glyph for the same barline leaves of its ink width after the parts and dot gaps. The font loader publishes width and separation per barline as CSS variables.
 
 ## Invariants
 

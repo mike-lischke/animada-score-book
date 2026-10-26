@@ -5,8 +5,7 @@
 
 ## Chunk Layout
 
-`vite.config.ts` divides the bundle with `chunkGroups`: one explicit package per third-party pattern, plus the app's
-domain layer as a chunk of its own.
+`vite.config.ts` divides the bundle with `chunkGroups`: one explicit package per third-party pattern, plus the app's domain layer as a chunk of its own.
 
 | Chunk                                                                | Contents                                    | Load    |
 | -------------------------------------------------------------------- | ------------------------------------------- | ------- |
@@ -42,21 +41,15 @@ Startup loads only what the running app shows by itself. Everything the user has
   until they are opened. `App` stores the imported component in its state and opens it in the `setState` callback, so
   the dialog is in the DOM before its `open()` runs. Once loaded they stay mounted, as their `open()` API expects.
 
-A dialog that is added to `App` later follows the same pattern; an always-mounted dialog silently keeps its whole
-module graph in the initial bundle.
+A dialog that is added to `App` later follows the same pattern; an always-mounted dialog silently keeps its whole module graph in the initial bundle.
 
 ## Size Budget
 
-The `bundle-budget-check` plugin in `vite.config.ts` runs `BundleBudget.verify()` (`build/BundleBudget.ts`) at the end
-of every `vite build`. It reads `dist/.vite/manifest.json` (`build.manifest`) and fails the build when
+The `bundle-budget-check` plugin in `vite.config.ts` runs `BundleBudget.verify()` (`build/BundleBudget.ts`) at the end of every `vite build`. It reads `dist/.vite/manifest.json` (`build.manifest`) and fails the build when
 
 - any single emitted file exceeds 500 kB raw — the limit Vite itself warns about, so the warning never gets ignored, or
 - the initial load — entry chunk, its static imports and their CSS — exceeds 210 kB gzip.
 
-Sizes use decimal kB, like Vite's reporter, so a chunk's number is the same in both outputs. Raw sizes bound the
-individual chunks; the initial load is measured gzip because that is what the browser downloads. The check stays
-quiet while the bundle fits — Vite's own chunk table is where to read the sizes — and a violation fails the build with
-the full size report attached. The font verification behaves the same way: it only speaks up when a font is broken.
+Sizes use decimal kB, like Vite's reporter, so a chunk's number is the same in both outputs. Raw sizes bound the individual chunks; the initial load is measured gzip because that is what the browser downloads. The check stays quiet while the bundle fits — Vite's own chunk table is where to read the sizes — and a violation fails the build with the full size report attached. The font verification behaves the same way: it only speaks up when a font is broken.
 
-Raising a budget is a deliberate decision: change `BundleBudget.budget` and say why. Prefer splitting instead — a
-library that does not have to be there at startup belongs behind an `import()`.
+Raising a budget is a deliberate decision: change `BundleBudget.budget` and say why. Prefer splitting instead — a library that does not have to be there at startup belongs behind an `import()`.

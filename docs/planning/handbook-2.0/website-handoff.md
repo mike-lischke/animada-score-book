@@ -7,8 +7,7 @@
 
 ## Source of Truth
 
-The documentation is edited only in this repository. The website project consumes a fixed version of it and must not
-keep an editorial second copy; corrections go back into this repository.
+The documentation is edited only in this repository. The website project consumes a fixed version of it and must not keep an editorial second copy; corrections go back into this repository.
 
 | Content                     | Path                            | Notes                                                              |
 | --------------------------- | ------------------------------- | ------------------------------------------------------------------ |

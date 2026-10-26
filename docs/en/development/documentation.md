@@ -12,7 +12,6 @@ Planned sections:
 - The published website, versioned handoff, and what belongs in this repository
 - Updating the documentation for a release
 
-The handoff requirements for the separate website project are recorded in
-`docs/planning/handbook-2.0/website-handoff.md`.
+The handoff requirements for the separate website project are recorded in `docs/planning/handbook-2.0/website-handoff.md`.
 
 Related chapters: [Architecture and Decisions](architecture.md), [Glossary](../reference/glossary.md).

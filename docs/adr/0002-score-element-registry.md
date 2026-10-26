@@ -7,15 +7,11 @@
 
 ## Context
 
-Grid and staff renderers previously serialized note identity into `data-*` attributes. Input and selection code
-then reconstructed domain values by querying and parsing those attributes. The duplicated DOM contract was fragile:
-a missing or inconsistent attribute could silently break cursor movement, note selection, or selection overlays.
+Grid and staff renderers previously serialized note identity into `data-*` attributes. Input and selection code then reconstructed domain values by querying and parsing those attributes. The duplicated DOM contract was fragile: a missing or inconsistent attribute could silently break cursor movement, note selection, or selection overlays.
 
 ## Decision
 
-We will resolve rendered score elements through one typed `ScoreElementRegistry` owned by each
-`ArrangementViewer`. Score renderers register their live elements through callback refs. Consumers resolve elements
-and their locations through the registry instead of using `data-*` attributes as a production identity contract.
+We will resolve rendered score elements through one typed `ScoreElementRegistry` owned by each `ArrangementViewer`. Score renderers register their live elements through callback refs. Consumers resolve elements and their locations through the registry instead of using `data-*` attributes as a production identity contract.
 
 ## Invariants
 

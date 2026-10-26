@@ -7,19 +7,11 @@
 
 ## Context
 
-The arrangement published two overlapping signals. `arrangementChanged(arrangementId)` fired from the arrangement
-model for every structural change and from `setMeasureWidth` on every frame of a width drag. `arrangementMutated`
-fired once per finished edit from the public data-model API. A single edit therefore notified receivers twice, and
-five receivers listened to both paths. The arrangement id in the payload existed only to detect that a different
-score had been loaded — a fact the model already publishes as `scoreBookLoaded`.
+The arrangement published two overlapping signals. `arrangementChanged(arrangementId)` fired from the arrangement model for every structural change and from `setMeasureWidth` on every frame of a width drag. `arrangementMutated` fired once per finished edit from the public data-model API. A single edit therefore notified receivers twice, and five receivers listened to both paths. The arrangement id in the payload existed only to detect that a different score had been loaded — a fact the model already publishes as `scoreBookLoaded`.
 
 ## Decision
 
-We will send `arrangementMutated` once per finished edit and make it the only signal that an edit is complete.
-Viewers, players, toolbars, undo recording, and autosave all react to it. `arrangementChanged` is removed.
-A per-frame measure resize publishes the view-only `measureLayoutChanged`, which no undo, autosave, or toolbar
-receiver listens to. Undo, redo, and discarding changes publish `arrangementReverted`, so a replaced snapshot
-reaches the same viewers without looking like a new edit. Loading a score stays `scoreBookLoaded`.
+We will send `arrangementMutated` once per finished edit and make it the only signal that an edit is complete. Viewers, players, toolbars, undo recording, and autosave all react to it. `arrangementChanged` is removed. A per-frame measure resize publishes the view-only `measureLayoutChanged`, which no undo, autosave, or toolbar receiver listens to. Undo, redo, and discarding changes publish `arrangementReverted`, so a replaced snapshot reaches the same viewers without looking like a new edit. Loading a score stays `scoreBookLoaded`.
 
 ## Invariants
 

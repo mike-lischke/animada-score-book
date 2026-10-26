@@ -29,10 +29,7 @@
 
 ## Documentation Example Score
 
-Instrument crops come from one locally created score, **"Instrument Reference"**, containing all eleven instruments
-as tracks; each track holds one bar in which every note style of that instrument appears once in reading order. It is
-created through the normal `New Song` dialog, stays in the local database only and is not committed. It contains no
-personal data and is deleted after the crops are captured.
+Instrument crops come from one locally created score, **"Instrument Reference"**, containing all eleven instruments as tracks; each track holds one bar in which every note style of that instrument appears once in reading order. It is created through the normal `New Song` dialog, stays in the local database only and is not committed. It contains no personal data and is deleted after the crops are captured.
 
 ## Storyboard
 
@@ -138,6 +135,4 @@ S-05 and S-06 are montages of the same bars. Both are produced from one capture 
 
 ## Retake Triggers
 
-A capture is redone when any of these change: header or footer layout, toolbar layout, default theme, bundled fonts,
-instrument note styles, print preview controls, or the demo scores. The capture context column names what to keep
-identical; anything not listed may change freely.
+A capture is redone when any of these change: header or footer layout, toolbar layout, default theme, bundled fonts, instrument note styles, print preview controls, or the demo scores. The capture context column names what to keep identical; anything not listed may change freely.

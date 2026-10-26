@@ -6,8 +6,7 @@
 
 ## 1. Terminology
 
-The handbook uses the labels the application shows. Where code or earlier documents use a different word, the
-handbook uses the user-facing word and the glossary notes the difference.
+The handbook uses the labels the application shows. Where code or earlier documents use a different word, the handbook uses the user-facing word and the glossary notes the difference.
 
 | Concept                             | Term used in the handbook                               | UI evidence                                                                  | Avoid                                                                             |
 | ----------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
@@ -42,14 +41,11 @@ handbook uses the user-facing word and the glossary notes the difference.
 | Planned demo entry                  | **demo access**                                         | Not implemented yet                                                          | `guest mode`                                                                      |
 | Release artifact                    | **deployment package**                                  | New `npm run package`                                                        | `bundle` (that is the JavaScript build)                                           |
 
-Capitalisation rules: UI labels keep their exact case (`Settings`, `Play Focus`, `Group Access`, `Users &
-Groups`, `Score Library`). Descriptive terms are lower case in running text (`grid view`, `staff view`, `edit mode`,
-`Zen mode`, `one-bar repeat`). Headings may capitalise the first word only, except for UI labels.
+Capitalisation rules: UI labels keep their exact case (`Settings`, `Play Focus`, `Group Access`, `Users & Groups`, `Score Library`). Descriptive terms are lower case in running text (`grid view`, `staff view`, `edit mode`, `Zen mode`, `one-bar repeat`). Headings may capitalise the first word only, except for UI labels.
 
 ### 1.1 UI wording inconsistencies
 
-The application was inconsistent in three places. The first two were approved and applied on 2026-10-26; the
-remaining occurrences await a decision.
+The application was inconsistent in three places. The first two were approved and applied on 2026-10-26; the remaining occurrences await a decision.
 
 | Inconsistency                       | Instances                                                                                                       | State                                                                                                   |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -57,12 +53,9 @@ remaining occurrences await a decision.
 | `Display Options` versus `Settings` | Gear tooltip and overflow item said `Display Options`; the dialog header says `Settings`                        | **Applied:** tooltip, overflow item and tutorial texts now say `Settings` (tutorial removed, issue #63) |
 | `Edit Mode` versus `Editing`        | The switch shows `Edit Mode` outside and `Editing` inside edit mode                                             | Keep both (they describe state changes) and document the pair                                           |
 
-Remaining "measure" labels outside the footer awaited approval: the print-preview overflow warning (`Measure 3`) and
-the selection toolbar caption (`Measure 5`). Both were changed to `Bar`/`Bars` on 2026-10-26 as well. The tutorial,
-which also had an outdated print step, is disabled for 2.0.0; its rework is tracked in issue #63.
+Remaining "measure" labels outside the footer awaited approval: the print-preview overflow warning (`Measure 3`) and the selection toolbar caption (`Measure 5`). Both were changed to `Bar`/`Bars` on 2026-10-26 as well. The tutorial, which also had an outdated print step, is disabled for 2.0.0; its rework is tracked in issue #63.
 
-Until these are changed, the handbook uses "bar" in prose and quotes a remaining UI label only where the described
-screenshot shows it.
+Until these are changed, the handbook uses "bar" in prose and quotes a remaining UI label only where the described screenshot shows it.
 
 ## 2. Documentation Audit
 
@@ -92,9 +85,7 @@ screenshot shows it.
 | Features | Feature list omits Zen mode, Play Focus, notification center, settings, users/groups, group login, dynamics, tuplets, insert/overwrite, simile, measure widths, seven music fonts, thirteen themes | Covered by the coverage checklist and the README refresh in Phase 5                                               |
 | 98–107   | `backend-config.json` example lists four config groups                                                                                                                                             | Missing `allowedOrigins` and `trustProxy`; environment variables are not mentioned at all                         |
 
-Correct and reused as-is: system requirements (MySQL/MariaDB/PostgreSQL), `JWT_SECRET` explanation, `npm run start`
-and `npm run build` split, migration runner and `@mysql`/`@postgres` markers, branch-specific databases,
-`npm run db:cleanup`, print-output guidance, development command table, technology summary.
+Correct and reused as-is: system requirements (MySQL/MariaDB/PostgreSQL), `JWT_SECRET` explanation, `npm run start` and `npm run build` split, migration runner and `@mysql`/`@postgres` markers, branch-specific databases, `npm run db:cleanup`, print-output guidance, development command table, technology summary.
 
 ### 2.3 Internal documents to correct while working on the release
 
@@ -123,13 +114,11 @@ and `npm run build` split, migration runner and `@mysql`/`@postgres` markers, br
 | Server-side static serving | The backend serves `public/` and `dist/` itself, with `dist/index.html` as SPA fallback                                                    |
 | Committed configuration    | `backend-config.json` is git-ignored and untracked; no example file is shipped                                                             |
 
-Consequence: the issue's premise of an "existing deployment package distributed through GitHub Releases" does not
-match the repository. Previous releases shipped source only.
+Consequence: the issue's premise of an "existing deployment package distributed through GitHub Releases" does not match the repository. Previous releases shipped source only.
 
 ### 3.2 Agreed direction (maintainer decision, Phase 1)
 
-Introduce a deployment package script for 2.0.0. It produces a versioned archive that an operator can unpack and run
-without a development checkout.
+Introduce a deployment package script for 2.0.0. It produces a versioned archive that an operator can unpack and run without a development checkout.
 
 Contents derived from the code:
 
@@ -145,16 +134,11 @@ Contents derived from the code:
 | `backend-config.example.json`                                    | Template, because the real file is ignored and untracked |
 | `docs/en/`, `release-notes.md`, `readme.md`, `License.txt`       | Offline handbook and licence information                 |
 
-Open points for Phase 6: archive format (tar.gz only or tar.gz plus zip), whether to ship `node_modules` or require
-`npm ci --omit=dev`, and whether the package should include the handbook or link to the published site.
-`npm ci --omit=dev` currently breaks the production start because of the `tsx` devDependency — this must be resolved
-by the packaging decision, not by documentation wording.
+Open points for Phase 6: archive format (tar.gz only or tar.gz plus zip), whether to ship `node_modules` or require `npm ci --omit=dev`, and whether the package should include the handbook or link to the published site. `npm ci --omit=dev` currently breaks the production start because of the `tsx` devDependency — this must be resolved by the packaging decision, not by documentation wording.
 
 ## 4. Known Limitations
 
-Severity: **document** = listed in the handbook; **internal** = tracked, not user-facing. Maintainer decision
-(2026-10-26): no limitation blocks the release; every entry below is documented instead of fixed in 2.0.0. The
-packaging work in section 3 stays a release task, not a limitation.
+Severity: **document** = listed in the handbook; **internal** = tracked, not user-facing. Maintainer decision (2026-10-26): no limitation blocks the release; every entry below is documented instead of fixed in 2.0.0. The packaging work in section 3 stays a release task, not a limitation.
 
 ### Product
 
@@ -215,11 +199,9 @@ No defect blocks 2.0.0. The four candidates are handled as follows:
 4. **Refresh token invalidation on logout** (L-20): the security chapter states that signing out does not revoke an
    already issued refresh token, and that rotating `JWT_SECRET` remains the operator's lever.
 
-These items are fixed in a later release. Creating follow-up GitHub issues for them is recommended so they do not
-disappear once the handbook is published.
+These items are fixed in a later release. Creating follow-up GitHub issues for them is recommended so they do not disappear once the handbook is published.
 
-Everything else is documented as a known limitation. Nothing here is silently added to the 2.0.0 scope as a new
-feature.
+Everything else is documented as a known limitation. Nothing here is silently added to the 2.0.0 scope as a new feature.
 
 ## 5. Scope Decisions
 

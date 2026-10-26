@@ -9,16 +9,11 @@
 
 ## Context
 
-Selection entries could accumulate into disjoint blocks, and hit testing chose the finest granularity present anywhere
-inside a drag rectangle. This made selection meaning depend on incidental content and left popup placement ambiguous
-when selected content was outside the rendered staff window.
+Selection entries could accumulate into disjoint blocks, and hit testing chose the finest granularity present anywhere inside a drag rectangle. This made selection meaning depend on incidental content and left popup placement ambiguous when selected content was outside the rendered staff window.
 
 ## Decision
 
-We will represent the active selection as one filled rectangular range in score coordinates, materialized as the
-existing selection entries for consumers. A new drag replaces the range. Shift extends it to the smallest enclosing
-rectangle containing both the original selection and the new drag rectangle. The element at the start of a new range
-fixes its granularity; the anchor retains that granularity for later extensions. Ctrl/Cmd inversion is removed.
+We will represent the active selection as one filled rectangular range in score coordinates, materialized as the existing selection entries for consumers. A new drag replaces the range. Shift extends it to the smallest enclosing rectangle containing both the original selection and the new drag rectangle. The element at the start of a new range fixes its granularity; the anchor retains that granularity for later extensions. Ctrl/Cmd inversion is removed.
 
 ## Invariants
 
