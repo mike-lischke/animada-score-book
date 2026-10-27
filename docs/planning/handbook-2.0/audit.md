@@ -107,10 +107,10 @@ Correct and reused as-is: system requirements (MySQL/MariaDB/PostgreSQL), `JWT_S
 | Git tags                   | `v1.0.0` … `v1.5.0`, `package.json` version `1.5.0`                                                                                        |
 | GitHub releases            | `v1.3.0`, `v1.4.0`, `Animada Score Book 1.5.0` (latest)                                                                                    |
 | Release assets             | None. `gh release view v1.5.0 --json assets` returns `[]`; only GitHub's automatic source archives exist                                   |
-| Packaging script           | None in `package.json`; no `zip`/`tar`/`archive` tooling                                                                                   |
+| Packaging script           | `npm run package` (`build/package.ts`) builds `dist-package/animada-score-book-<version>.tar.gz`                                           |
 | Release automation         | None. Workflows are `nodejs.yml`, `nodejs-windows.yml`, `playwright.yml` (build and test only)                                             |
 | Build output               | `npm run build` generates SMuFL metrics, verifies fonts, generates themes, runs `vite build` into `dist/`, then enforces the bundle budget |
-| Production start           | `npm run start` runs `tsx src/server/backend.ts`; `tsx` is a **devDependency**                                                             |
+| Production start           | Development: `npm run start` runs `tsx src/server/backend.ts`. Package: `node server.js`, a bundle of the backend and its dependencies     |
 | Server-side static serving | The backend serves `public/` and `dist/` itself, with `dist/index.html` as SPA fallback                                                    |
 | Committed configuration    | `backend-config.json` is git-ignored and untracked; no example file is shipped                                                             |
 
@@ -122,19 +122,18 @@ Introduce a deployment package script for 2.0.0. It produces a versioned archive
 
 Contents derived from the code:
 
-| Path                                                             | Reason                                                   |
-| ---------------------------------------------------------------- | -------------------------------------------------------- |
-| `dist/`                                                          | Built frontend, including generated theme CSS            |
-| `public/`                                                        | Fonts with metrics, sounds, logo, static assets          |
-| `src/server/`, `src/core/` and their transitive imports          | `npm run start` executes TypeScript sources directly     |
-| `build/migration.ts`, `build/seed.sql`                           | Imported by `src/server/backend.ts` at startup           |
-| `migrations/*.sql`                                               | Schema and migrations                                    |
-| `package.json`, `package-lock.json`                              | Dependency installation                                  |
-| `tsx` (moved to `dependencies` or server compiled to JavaScript) | Required by the production start command                 |
-| `backend-config.example.json`                                    | Template, because the real file is ignored and untracked |
-| `docs/en/`, `release-notes.md`, `readme.md`, `License.txt`       | Offline handbook and licence information                 |
+| Path                                                       | Reason                                                                |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| `dist/`                                                    | Built frontend, including generated theme CSS                         |
+| `server.js`                                                | Backend bundled with `mysql2`, `pg`, `jsonwebtoken`, and `mime-types` |
+| `public/`                                                  | Fonts with metrics, sounds, logo, static assets                       |
+| `build/seed.sql`                                           | Read by the backend at startup                                        |
+| `migrations/*.sql`                                         | Schema and migrations                                                 |
+| `package.json`                                             | Generated manifest: one `start` script, no dependencies               |
+| `backend-config.example.json`                              | Template, because the real file is ignored and untracked              |
+| `docs/en/`, `release-notes.md`, `readme.md`, `License.txt` | Offline handbook and licence information                              |
 
-Open points for Phase 6: archive format (tar.gz only or tar.gz plus zip), whether to ship `node_modules` or require `npm ci --omit=dev`, and whether the package should include the handbook or link to the published site. `npm ci --omit=dev` currently breaks the production start because of the `tsx` devDependency — this must be resolved by the packaging decision, not by documentation wording.
+Resolved decisions: the archive is `tar.gz`, it ships no `node_modules`, no `src/`, and no lock file, and the backend is bundled so that unpacking the archive is the whole installation. The package includes `docs/en/` for offline reading.
 
 ## 4. Known Limitations
 
@@ -180,8 +179,8 @@ Severity: **document** = listed in the handbook; **internal** = tracked, not use
 
 | ID   | Limitation                                                                                         | Severity |
 | ---- | -------------------------------------------------------------------------------------------------- | -------- |
-| L-27 | Production start depends on the `tsx` devDependency                                                | document |
-| L-28 | No TLS in the Node process; a reverse proxy is required for HTTPS                                  | document |
+| L-27 | Production start depended on the `tsx` devDependency — resolved by the bundled package             | resolved |
+| L-28 | No TLS in the Node process; TLS has to be terminated in front of it                                | document |
 | L-29 | A modified migration file requires dropping the whole database (no down migrations, no repair)     | document |
 | L-30 | No access log, metrics or structured logging                                                       | internal |
 | L-31 | Health state is not reported (`configLoaded` is always true; the fatal config branch is dead code) | internal |
@@ -190,8 +189,7 @@ Severity: **document** = listed in the handbook; **internal** = tracked, not use
 
 No defect blocks 2.0.0. The four candidates are handled as follows:
 
-1. **Deployment package** (L-27): stays a release task — implement the packaging script in Phase 6 and use it for the
-   GitHub release in Phase 7. The production start must not depend on an unshipped devDependency.
+1. **Deployment package** (L-27): implemented — `npm run package` builds a `tar.gz` whose `server.js` carries the backend and its dependencies, so the package needs no install step. The 2.0.0 archive is produced in Phase 6 and attached to the GitHub release in Phase 7.
 2. **HTTPS and the refresh cookie** (L-19): the installation chapter states HTTPS as mandatory, and the
    troubleshooting chapter explains that a plain-HTTP deployment loses the refresh session after 15 minutes.
 3. **Lock enforcement on score update** (L-22): the handbook documents last-write-wins; it does not promise conflict

@@ -12,10 +12,10 @@ Choose the path that matches your role:
 
 ## Getting Started
 
-| Chapter                                                   | Contents                                                                                                                          |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [What Animada Score Book Is](getting-started/overview.md) | The product idea, the terms used throughout the handbook, browser and device requirements, and what demo access can and cannot do |
-| [Your First Session](getting-started/first-steps.md)      | Signing in, opening a score, playback, switching views, zoom, Zen mode, saving, and where the settings are                        |
+| Chapter                                                   | Contents                                                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [What Animada Score Book Is](getting-started/overview.md) | The product idea, the terms used throughout the handbook, browser and device requirements, and how anonymous access works |
+| [Your First Session](getting-started/first-steps.md)      | Signing in, opening a score, playback, switching views, zoom, Zen mode, saving, and where the settings are                |
 
 ## Using the Application
 
@@ -46,11 +46,11 @@ Choose the path that matches your role:
 
 ## Reference
 
-| Chapter                                                     | Contents                                                                    |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [Keyboard Shortcuts](reference/keyboard-shortcuts.md)       | Global shortcuts, score input keys, selection modifiers, and dialog keys    |
-| [Glossary](reference/glossary.md)                           | Application terms, music terms, and their German and Portuguese equivalents |
-| [Troubleshooting and Known Limitations](troubleshooting.md) | Common problems with their cause, and the limitations documented for 2.0.0  |
+| Chapter                                                     | Contents                                                                   |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [Keyboard Shortcuts](reference/keyboard-shortcuts.md)       | Global shortcuts, score input keys, selection modifiers, and dialog keys   |
+| [Glossary](reference/glossary.md)                           | Application terms, music terms, and the instruments of a bateria           |
+| [Troubleshooting and Known Limitations](troubleshooting.md) | Common problems with their cause, and the limitations documented for 2.0.0 |
 
 ## Development
 
