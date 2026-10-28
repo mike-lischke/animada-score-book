@@ -86,6 +86,18 @@ const staffBar = (page: Page, barNumber: number): Locator => {
 
 /**
  * @param page The page under test.
+ * @param barNumber The 1-based measure number.
+ *
+ * @returns The measure column of the grid.
+ */
+const gridBar = (page: Page, barNumber: number): Locator => {
+    return page.locator(".grid-measure-viewer").filter({
+        has: page.locator(".grid-measure-number", { hasText: new RegExp(`^${barNumber}$`) }),
+    });
+};
+
+/**
+ * @param page The page under test.
  *
  * @returns The tray of the track-piece popup's card.
  */
@@ -127,6 +139,31 @@ test("keeps a mark the snapshot puts on the first measure off", async ({ page })
     const bar = staffBar(page, 1);
     await expect(bar.locator(".staff-note-viewer-simile")).toHaveCount(0);
     await expect(bar.locator(".staff-note-viewer-note-run")).toHaveCount(1);
+});
+
+test("draws the mark in the grid in place of the cells", async ({ page }) => {
+    await seedScore(page, snapshotWith([notePiece, { ...restPiece, simile: true }]));
+    await showTrackView(page, TrackViewMode.Grid);
+
+    const bar = gridBar(page, 2);
+    const mark = bar.locator(".grid-simile-overlay");
+
+    await expect(mark).toBeVisible();
+    await expect(mark.locator("text")).toHaveText(String.fromCodePoint(0xE500));
+    await expect(bar.locator(".note-viewer")).toHaveCount(0);
+
+    // The bar before it keeps its cells, so the mark stands for that bar rather than replacing every bar.
+    await expect(gridBar(page, 1).locator(".note-viewer")).not.toHaveCount(0);
+    await expect(gridBar(page, 1).locator(".grid-simile-overlay")).toHaveCount(0);
+});
+
+test("keeps a mark the snapshot puts on the first measure off in the grid", async ({ page }) => {
+    await seedScore(page, snapshotWith([{ ...notePiece, simile: true }, restPiece]));
+    await showTrackView(page, TrackViewMode.Grid);
+
+    const bar = gridBar(page, 1);
+    await expect(bar.locator(".grid-simile-overlay")).toHaveCount(0);
+    await expect(bar.locator(".note-viewer")).not.toHaveCount(0);
 });
 
 test("does not offer the mark for a note selection", async ({ page }) => {

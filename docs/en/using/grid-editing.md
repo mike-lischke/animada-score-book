@@ -59,6 +59,11 @@ A subdivision occupies a cell and shows its sub-steps inside it. Two rules follo
 - An empty subdivision is removed with `Delete` or `Backspace`; a subdivision that still holds notes has to be emptied
   first.
 
+![A quintuplet with a triplet nested in its third slot, drawn in the grid view](../../images/en/grid-editing/tuplets.png)
+
+*The same nested tuplet as in the staff view: the quintuplet fills the first half of the bar, so its five slots are
+narrower than the cells around them, and the triplet inside the third slot becomes three slots of its own.*
+
 [Editing in the Staff View](staff-editing.md) explains the ratios, nesting, and the three ways of pasting a copied subdivision.
 
 ## What the Grid Cannot Do
@@ -68,7 +73,12 @@ Some things exist only in the staff view, because they need more room than a cel
 - Free note values that do not fit the raster.
 - Bar widths, which are adjusted by dragging a barline.
 - Dynamics such as crescendo, decrescendo, and forte.
-- The one-bar repeat (simile), which belongs to a track piece in the staff view.
+- Setting a one-bar repeat (simile): the mark belongs to a track piece, and the grid does not select track pieces. A
+  simile placed in the staff view does show in the grid, as the repeat sign across that measure.
+
+![A simile bar in the grid view: one track shows only the repeat sign while the other tracks keep their notes](../../images/en/grid-editing/simile.png)
+
+*Bar 4 of one track: the simile stands for bar 3, so the grid draws the repeat sign in place of that track's cells.*
 
 If a change needs one of these, switch to the staff view and back; both views show the same score.
 

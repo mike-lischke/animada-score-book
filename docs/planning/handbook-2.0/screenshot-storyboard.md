@@ -123,6 +123,8 @@ All P2 motives are captured.
 | S-31 | `en/staff-editing/track-actions.png`      | Track sidebar kebab open with add, duplicate, clear, delete                                                 |
 | S-32 | `en/staff-editing/simile.png`             | Second bar with the simile sign and the track piece toolbar                                                 |
 | S-35 | `en/staff-editing/paste-warning.png`      | Toast of a refused paste across instruments, in the grid view                                               |
+| S-56 | `en/grid-editing/simile.png`              | Grid view with one track's bar showing only the repeat sign                                                 |
+| S-57 | `en/grid-editing/tuplets.png`             | Grid view of a quintuplet with a triplet nested in its third slot                                           |
 | S-39 | `en/playback/play-focus.png`              | Play focus on bars 2 and 3, mixer legend below                                                              |
 | S-42 | `en/presentation/notification-center.png` | History panel with one message and the do-not-disturb control                                               |
 | S-44 | `en/print/preview-controls.png`           | Layout and print detail bars: orientation, borders, scale, tracks                                           |
@@ -203,6 +205,8 @@ All P3 motives are captured.
 | S-35  | P3  | Paste mismatch warning           | Notification with an instrument mismatch message                        | staff editing                       | `en/staff-editing/paste-warning.png`      |
 | S-36  | —   | Grid radial note menu (removed)  | Not captured: the grid uses the shared note style bar                   | —                                   | —                                         |
 | S-37  | P2  | Grid note cells                  | Two bars of grid view with accent and ghost variants visible            | grid editing                        | `en/grid-editing/grid-cells.png`          |
+| S-56  | P2  | Simile in the grid view          | One track's bar shows the repeat sign, the others keep their notes      | grid editing                        | `en/grid-editing/simile.png`              |
+| S-57  | P2  | Nested tuplet in the grid view   | A quintuplet of five slots, the third one split into a triplet          | grid editing                        | `en/grid-editing/tuplets.png`             |
 | S-38  | P2  | Playback bar                     | Playback bar with BPM, volume, loop, metronome, count-in                | playback                            | `en/playback/playback-bar.png`            |
 | S-39  | P3  | Play Focus                       | Two bars marked as play range, others not                               | playback                            | `en/playback/play-focus.png`              |
 | S-40  | P2  | Mixer                            | Expanded mixer with focus boost above 100 % and mute legend             | playback, presentation              | `en/playback/mixer.png`                   |

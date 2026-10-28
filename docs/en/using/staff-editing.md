@@ -116,6 +116,10 @@ A subdivision divides a position into a tuplet. `Add subdivision` offers eight r
 
 ![A quintuplet with a triplet nested in its third slot](../../images/notation/tuplets.png)
 
+*The quintuplet carries its label above the group, the triplet nested in its third slot carries one below.*
+
+[Editing in the Grid View](grid-editing.md#subdivisions-in-the-grid) shows the same bar without the labels, where a tuplet shows as narrower slots inside its cell.
+
 The subdivision is one block while it exists: notes inside it are addressed within the tuplet, not in the bar's plain step grid.
 
 Copying a subdivision and pasting it into a different span asks how to apply it:
@@ -163,6 +167,7 @@ The track piece toolbar carries a one-bar repeat (simile) and a clear action:
 - The simile mark stands for the previous bar of the same track. It is not available in the first bar, and the tooltip
   says so.
 - Playback plays the bar the mark stands for.
+- The mark shows in both views; the grid draws the repeat sign across the measure, but offers no way to set it.
 - `Clear track piece` empties the covered bars of that track.
 
 ![A simile bar with the track piece toolbar](../../images/en/staff-editing/simile.png)
