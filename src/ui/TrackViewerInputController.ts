@@ -19,13 +19,6 @@ const noteLengthShortcuts = [
     NoteLength.ThirtySecond,
 ];
 
-/** Where a long press started, to tell a press from a drag. */
-interface ILongPressOrigin {
-    pointerId: number;
-    x: number;
-    y: number;
-}
-
 /**
  * Translates user input into actions of the active measure editor (ADR-0005): pointer and key events
  * become editor actions, and the requisitions of the toolbars are forwarded. The cursor, the entry
@@ -44,21 +37,11 @@ export class TrackViewerInputController {
      */
     public hasEntryModeSwitch = false;
 
-    private static readonly longPressDuration = 500;
-    private static readonly longPressMoveTolerance = 10;
-
-    private longPressTimer?: ReturnType<typeof setTimeout>;
-    private longPressOrigin?: ILongPressOrigin;
-
     public constructor(private readonly eventContainer: HTMLElement) {
     }
 
     public attach(): void {
         this.eventContainer.addEventListener("pointerdown", this.handlePointerDown);
-        this.eventContainer.addEventListener("pointerup", this.handlePointerUp);
-        this.eventContainer.addEventListener("pointercancel", this.handlePointerCancel);
-        this.eventContainer.addEventListener("pointermove", this.handlePointerMove);
-        this.eventContainer.addEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.addEventListener("keydown", this.handleKeyDown);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("selectionCursorChanged", this.handleCursorChanged);
@@ -72,10 +55,6 @@ export class TrackViewerInputController {
 
     public dispose(): void {
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
-        this.eventContainer.removeEventListener("pointerup", this.handlePointerUp);
-        this.eventContainer.removeEventListener("pointercancel", this.handlePointerCancel);
-        this.eventContainer.removeEventListener("pointermove", this.handlePointerMove);
-        this.eventContainer.removeEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("selectionCursorChanged", this.handleCursorChanged);
@@ -85,55 +64,11 @@ export class TrackViewerInputController {
         requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
         requisitions.unregister("articulationChanged", this.handleArticulationChanged);
-        this.clearLongPress();
         this.activeEditor = undefined;
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
-        const editor = this.activeEditor;
-        if (!editor?.hitTest(event.target)) {
-            return;
-        }
-
-        if (event.pointerType === "mouse" && event.button === 2 && editor.hasNoteActionMenu) {
-            editor.openNoteActionMenu();
-            event.preventDefault();
-
-            return;
-        }
-
-        if (event.pointerType === "touch" && editor.hasNoteActionMenu) {
-            this.startLongPress(event);
-        }
-    };
-
-    private handlePointerUp = (event: PointerEvent): void => {
-        this.clearLongPress(event.pointerId);
-    };
-
-    private handlePointerCancel = (event: PointerEvent): void => {
-        this.clearLongPress(event.pointerId);
-    };
-
-    private handlePointerMove = (event: PointerEvent): void => {
-        const origin = this.longPressOrigin;
-        if (origin?.pointerId !== event.pointerId) {
-            return;
-        }
-
-        const movedX = Math.abs(event.clientX - origin.x);
-        const movedY = Math.abs(event.clientY - origin.y);
-        if (movedX > TrackViewerInputController.longPressMoveTolerance
-            || movedY > TrackViewerInputController.longPressMoveTolerance) {
-            this.clearLongPress(event.pointerId);
-        }
-    };
-
-    private handleContextMenu = (event: MouseEvent): void => {
-        const editor = this.activeEditor;
-        if (editor?.hasNoteActionMenu && editor.hitTest(event.target)) {
-            event.preventDefault();
-        }
+        this.activeEditor?.hitTest(event.target);
     };
 
     private handleKeyDown = (event: KeyboardEvent): void => {
@@ -276,28 +211,5 @@ export class TrackViewerInputController {
 
         void requisitions.execute("noteLengthChanged", value);
         event.preventDefault();
-    }
-
-    private startLongPress(event: PointerEvent): void {
-        this.clearLongPress();
-        this.longPressOrigin = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-        this.longPressTimer = setTimeout(() => {
-            this.longPressTimer = undefined;
-            this.longPressOrigin = undefined;
-            this.activeEditor?.openNoteActionMenu();
-        }, TrackViewerInputController.longPressDuration);
-    }
-
-    private clearLongPress(pointerId?: number): void {
-        if (pointerId !== undefined && this.longPressOrigin?.pointerId !== pointerId) {
-            return;
-        }
-
-        if (this.longPressTimer) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = undefined;
-        }
-
-        this.longPressOrigin = undefined;
     }
 }

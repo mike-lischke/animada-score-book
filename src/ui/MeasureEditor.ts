@@ -3,8 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IRadialMenuHost, IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
-import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { AppStorage } from "../core/AppStorage.js";
 import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
@@ -55,9 +53,6 @@ export interface IMeasureEditorInput {
 
     selectionManager: SelectionManager;
     scoreElementRegistry: ScoreElementRegistry;
-
-    /** The menu that shows the note action menu. Views without one leave it undefined. */
-    noteActionMenu?: IRadialMenuHost;
 }
 
 /** A subdivision a selection covers completely, as the deletion needs to address it. */
@@ -97,7 +92,6 @@ export abstract class MeasureEditor {
     protected abstract readonly cursorElementKind: ScoreElementKind;
 
     private readonly eventContainer: HTMLElement;
-    private readonly noteActionMenu?: IRadialMenuHost;
     private currentEntryMode: EditEntryMode = EditEntryMode.Insert;
     private articulation?: Articulation;
 
@@ -107,7 +101,6 @@ export abstract class MeasureEditor {
         this.selectionManager = input.selectionManager;
         this.scoreElementRegistry = input.scoreElementRegistry;
         this.eventContainer = input.eventContainer;
-        this.noteActionMenu = input.noteActionMenu;
         this.noteValue = settings?.entryNoteValue ?? defaultEntryValue;
         this.articulation = settings?.entryArticulation;
     }
@@ -152,15 +145,6 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Whether the view offers a note action menu, which input opens on the secondary button.
-     *
-     * @returns True when the view has a menu.
-     */
-    public get hasNoteActionMenu(): boolean {
-        return this.noteActionMenu !== undefined;
-    }
-
-    /**
      * Resolves the element an input event addresses and makes it the cursor.
      *
      * @param target The event target to resolve.
@@ -180,30 +164,6 @@ export abstract class MeasureEditor {
         this.cursor = position;
 
         return true;
-    }
-
-    /**
-     * Opens the note action menu of the view at the cursor. A view without a menu does nothing, so
-     * the action is safe to send to every view.
-     */
-    public openNoteActionMenu(): void {
-        const menu = this.noteActionMenu;
-        const cursor = this.cursor;
-        if (menu === undefined || cursor === undefined) {
-            return;
-        }
-
-        const element = this.elementAt(cursor);
-        const items = this.noteActionItems();
-        if (element === undefined || items.length === 0) {
-            return;
-        }
-
-        menu.open(element.getBoundingClientRect(), ComponentPlacement.TopCenter, items, 90, {
-            startAngle: 180,
-            angleSpan: items.length <= 5 ? 180 : 360,
-            clockwise: true,
-        });
     }
 
     /**
@@ -837,27 +797,6 @@ export abstract class MeasureEditor {
      */
     protected focusInput(): void {
         this.eventContainer.focus({ preventScroll: true });
-    }
-
-    /**
-     * Returns the items of the note action menu, in the order the menu shows them. The grid builds
-     * them from the addressed instrument; a view without a menu offers no items.
-     *
-     * @returns The menu items.
-     */
-    protected noteActionItems(): IRadialMenuItem[] {
-        return [];
-    }
-
-    /**
-     * Writes the note style an action menu picked at the cursor.
-     *
-     * @param noteStyleId The picked note-style id.
-     *
-     * @returns True when the edit was applied.
-     */
-    protected applyNoteActionStyle(noteStyleId: string): boolean {
-        return this.writeNoteAtCursor(noteStyleId);
     }
 
     /**

@@ -12,7 +12,6 @@ import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBo
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
-import type { IRadialMenuItem, IRadialMenuHost } from "../../src/components/ui/framework/RadialMenu.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
 import type { IMeasureEditorInput } from "../../src/ui/MeasureEditor.js";
 import { ScoreElementKind } from "../../src/ui/ScoreElementRegistry.js";
@@ -692,33 +691,6 @@ describe("GridMeasureEditor input", { concurrent: false }, () => {
 
         // The coordinates come back reduced, so step 2 of 16 cells reads as an eighth.
         expect(SelectionSerializer.coordinatesOf(entries[0]).start).toEqual({ numerator: 1, denominator: 8 });
-    });
-
-    it("opens the note action menu for the addressed cell and writes the picked style", () => {
-        const measure = model.arrangement!.tracks[0].measures[0];
-        setCellNote(model, trackId, 1, 2, "1");
-        const opened: IRadialMenuItem[][] = [];
-        const menu: IRadialMenuHost = {
-            open: (anchorRect, placement, items) => {
-                opened.push(items);
-            },
-        };
-        editor = new GridMeasureEditor(model, { ...input, noteActionMenu: menu });
-        editor.editMode = true;
-        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
-
-        expect(editor.hasNoteActionMenu).toBe(true);
-        expect(editor.hitTest(cells[2])).toBe(true);
-        editor.openNoteActionMenu();
-
-        expect(opened).toHaveLength(1);
-        expect(opened[0].map((item) => {
-            return item.id;
-        })).toEqual(["1", "2"]);
-
-        opened[0][1].onClick?.();
-
-        expect(noteAtStep(measure, 2)).toBe("2");
     });
 
     it("rejects a hit test outside the edit mode", () => {

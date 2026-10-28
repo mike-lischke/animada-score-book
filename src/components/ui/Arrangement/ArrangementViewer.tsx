@@ -30,7 +30,6 @@ import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
 import { Button } from "../framework/Button.js";
 import { DialogResponseClosure } from "../framework/Dialog.js";
-import { RadialMenu } from "../framework/RadialMenu.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { InsertBarsDialog } from "../composites/InsertBarsDialog.js";
@@ -109,7 +108,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private viewerContentHostRef = createRef<HTMLDivElement | null>();
     private insertBarsDialogRef = createRef<InsertBarsDialog | null>();
     private actionBarRef = createRef<ArrangementActionBar | null>();
-    private gridRadialMenuRef = createRef<RadialMenu | null>();
     private trackViewerInputController?: TrackViewerInputController;
     private gridEditor?: GridMeasureEditor;
     private staffEditor?: StaffMeasureEditor;
@@ -202,16 +200,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         contentHost.tabIndex = -1;
         contentHost.style.outline = "none";
 
-        // Both editors share the input environment; only the grid offers a note action menu.
+        // Both editors share the input environment; only the staff editor offers the entry mode switch.
         const editorInput: IMeasureEditorInput = {
             eventContainer: contentHost,
             selectionManager,
             scoreElementRegistry: this.scoreElementRegistry,
         };
-        this.gridEditor = new GridMeasureEditor(dataModel, {
-            ...editorInput,
-            noteActionMenu: this.gridRadialMenuRef.current ?? undefined,
-        });
+        this.gridEditor = new GridMeasureEditor(dataModel, editorInput);
         this.staffEditor = new StaffMeasureEditor(dataModel, editorInput);
 
         this.trackViewerInputController = new TrackViewerInputController(contentHost);
@@ -587,7 +582,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     <div className="viewer-bottom-spacer" />
                     <InsertBarsDialog ref={this.insertBarsDialogRef} />
                 </Container>
-                <RadialMenu ref={this.gridRadialMenuRef} />
             </>
         );
     }

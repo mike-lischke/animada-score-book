@@ -3,10 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { h } from "preact";
-
-import type { IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
-import { NoteStyleSymbolViewer } from "../components/ui/Note/NoteStyleSymbolViewer.js";
 import type {
     ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackPiece, ITiming,
 } from "../core/ScoreBookDataModel.js";
@@ -438,62 +434,6 @@ export class GridMeasureEditor extends MeasureEditor {
 
         return cursor !== undefined
             && this.createSubdivisionAtCursor(this.gridPositionOf(cursor), request.actual, request.normal);
-    }
-
-    /**
-     * Resolves the note styles the action menu shows. The items are built here, so a click goes
-     * straight to the edit it performs.
-     *
-     * @returns The menu items, one per note style of the addressed instrument.
-     */
-    protected override noteActionItems(): IRadialMenuItem[] {
-        const cursor = this.cursor;
-        if (cursor === undefined) {
-            return [];
-        }
-
-        return this.getNoteStyles(cursor.trackId).map((style, index) => {
-            const name = style.symbol?.shortDescription ?? style.id;
-            const tooltip = style.symbol?.description ?? name;
-
-            return {
-                id: style.id,
-                label: name,
-                tooltip: `${tooltip} (${index + 1})`,
-                icon: h(NoteStyleSymbolViewer, { noteStyle: style }),
-                onClick: () => {
-                    if (!this.editMode) {
-                        return;
-                    }
-
-                    this.cursor = cursor;
-                    this.applyNoteActionStyle(style.id);
-                },
-            };
-        });
-    }
-
-    /**
-     * Writes the style the menu picked into the addressed cell, which keeps that cell's length, and
-     * moves the cursor behind it.
-     *
-     * @param noteStyleId The picked note-style id.
-     *
-     * @returns True when the edit was applied.
-     */
-    protected override applyNoteActionStyle(noteStyleId: string): boolean {
-        const cursor = this.cursor;
-        if (cursor === undefined) {
-            return false;
-        }
-
-        const applied = this.setNote(this.gridPositionOf(cursor), noteStyleId);
-
-        this.playNote(applied);
-        this.advanceCursor();
-        this.focusInput();
-
-        return applied !== undefined;
     }
 
     /**
