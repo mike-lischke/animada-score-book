@@ -26,12 +26,12 @@ The backend refuses to start without `JWT_SECRET`. `npm run start-debug` sets it
 
 Development uses two processes:
 
-1. **Backend**: `npm run start` (or `npm run start-debug`), listening on port 3100 by default. It logs `Branch: …`, the effective database, and either the applied migrations or `All migrations already applied.`
+1. **Backend**: `npm run start` (or `npm run start-debug`), listening on port 3100 by default. It logs `Backend connected: …`, and with `AUTO_MIGRATE=true` also `Branch: …`, the effective database, and either the applied migrations or `All migrations already applied.`
 2. **Frontend**: `npm run dev`, serving `https://localhost:5173`. The Vite configuration terminates TLS with the local certificates and proxies `/api` and `/soundLib` to `http://127.0.0.1:3100`, so the browser only ever talks HTTPS.
 
 Open `https://localhost:5173`. The certificate is self-signed, so the browser warns once; VS Code's `Launch` configuration already passes `--allow-insecure-localhost`.
 
-The first start shows the `Initialize Database` dialog, because the database has no tables yet. [Installing Animada Score Book](../administration/installation.md) describes the wizard.
+The first start shows the `Backend Setup` dialog, because the database has no tables yet; the start itself applies no migrations. Choose `Initialize Database` to create the schema. [Installing Animada Score Book](../administration/installation.md) describes the wizard.
 
 ## Commands
 

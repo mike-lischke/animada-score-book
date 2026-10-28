@@ -502,6 +502,16 @@
     #backend-setup-header {
         margin-bottom: 12px;
     }
+
+    .backend-setup-row-label {
+        font-size: 13px;
+        opacity: 0.7;
+    }
+
+    .backend-setup-row-value {
+        font-family: monospace;
+        font-size: 13px;
+    }
 }
 
 .ug-form {

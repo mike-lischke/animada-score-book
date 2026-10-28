@@ -77,7 +77,7 @@ Every folder and score has an owner — the account that created it — and a se
 
 ## Resetting the Database
 
-The `Reset Database` action in the `Initialize Database` dialog drops every table and rebuilds the schema through the migrations. Afterwards the seed data and the shared `anonymous` account are created again, and the `Finish Installation` dialog appears, just as on a fresh installation.
+The `Reset Database` action in the `Backend Setup` dialog drops every table and rebuilds the schema through the migrations. Afterwards the seed data and the shared `anonymous` account are created again, and the `Finish Installation` dialog appears, just as on a fresh installation.
 
 That deletes every user, group, grant, and score. Export the scores you need and take a database backup first; [Backup, Restore and Upgrades](backup-restore-upgrades.md) explains how.
 

@@ -19,12 +19,13 @@ A broken connection during work opens a dialog with `Reconnecting… (attempt <n
 
 ## The Installation Cannot Be Completed
 
-| Message                                                                    | Cause and remedy                                                                                                             |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `Backend configuration is missing or invalid.`                             | `backend-config.json` is unreadable or incomplete. Fix it and restart the process.                                           |
-| `Create a backend-config.json file and restart the server.`                | No configuration file exists yet; copy `backend-config.example.json`.                                                        |
-| `Could not auto-connect: …` followed by `Waiting for setup from frontend…` | The database connection failed. Correct the database block and restart; the browser then offers `Initialize Database` again. |
-| `Port <port> is already in use.`                                           | Another process holds the port. Stop it or change `port`.                                                                    |
+| Message                                                                    | Cause and remedy                                                                                             |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `Backend configuration is missing or invalid.`                             | `backend-config.json` is missing, unreadable, or lacks database settings. Fix it and restart the process.    |
+| `Could not auto-connect: …` followed by `Waiting for setup from frontend…` | The database connection failed. Correct the database block in `backend-config.json` and restart the process. |
+| `backend-config.json is not valid JSON`                                    | The dialog shows the parse error. Repair the JSON in the file and restart the process.                       |
+| `The database schema is incomplete.`                                       | Tables of an older schema, or a half-migrated database. Choose `Reset Database` in the same dialog.          |
+| `Port <port> is already in use.`                                           | Another process holds the port. Stop it or change `port`.                                                    |
 
 ## Login Failures and Lockout
 

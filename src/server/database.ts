@@ -53,7 +53,7 @@ export interface IDatabaseAdapter {
     testConnection(config: IDatabaseConfig): Promise<ITestConnectionResult>;
 
     /**
-     * Initialises the connection pool and creates all required tables.
+     * Initialises the connection pool for the given configuration. The schema is not touched.
      *
      * @param config The database connection configuration.
      */

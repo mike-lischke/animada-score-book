@@ -994,7 +994,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (!health.initialized) {
             await this.setStatePromise({ phase: AppPhase.Setup });
             await this.backendSetupDialogRef.current?.show({
-                mode: BackendSetupMode.Initial,
+                mode: BackendSetupMode.Initialize,
                 dbError: health.dbError,
             });
 
@@ -1008,7 +1008,7 @@ export class App extends UIComponent<{}, IAppState> {
             await this.setStatePromise({ phase: AppPhase.Setup });
 
             const setupResult = await this.backendSetupDialogRef.current?.show({
-                mode: BackendSetupMode.Admin,
+                mode: BackendSetupMode.Reset,
                 dbError: health.dbError,
             });
 

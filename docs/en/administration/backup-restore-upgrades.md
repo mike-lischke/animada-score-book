@@ -97,7 +97,7 @@ A checksum mismatch in development usually means the branch was rebased; droppin
 
 ## Resetting the Database as a Last Resort
 
-`Reset Database` in the `Initialize Database` dialog drops every table and rebuilds the schema. Afterwards the seed data and the shared `anonymous` account exist again, and `Finish Installation` asks for the first administrator.
+`Reset Database` in the `Backend Setup` dialog drops every table and rebuilds the schema. Afterwards the seed data and the shared `anonymous` account exist again, and `Finish Installation` asks for the first administrator.
 
 Everything else is gone: scores, users, groups, grants, and the login audit. Export what you need and take a backup before using it.
 

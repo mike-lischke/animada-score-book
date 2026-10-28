@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { convertErrorToString } from "../core/utils.js";
-import { runMigrations } from "../../build/migration.js";
+import { resolveDatabaseName, runMigrations } from "../../build/migration.js";
 import { Auth } from "./Auth.js";
 
 import { loadConfig, uploadsPath } from "./config.js";
@@ -27,32 +27,46 @@ const main = (): void => {
     auth = new Auth(router.createAdapter());
     router.auth = auth;
 
-    // Try to initialise with saved or default config on startup.
+    // Connect with the saved or default config on startup. The schema stays untouched unless automatic
+    // migrations are switched on; otherwise an empty database waits for the setup dialog in the browser.
     auth.adapter.testConnection(config.database).then((result) => {
-        if (result.success) {
-            return runMigrations(config.database).then((effectiveDb) => {
-                // Use the branch-specific database name.
-                config.database.database = effectiveDb;
+        if (!result.success) {
+            console.log(`Could not auto-connect: ${result.error ?? "unknown reason"}`);
+            console.log("Waiting for setup from frontend…");
 
-                return auth.adapter.initialize(config.database).then(() => {
-                    const { engine, host, port, database } = config.database;
-                    console.log(
-                        `Backend initialised: ${engine} @ ${host}:${port}/${database}`,
-                    );
+            return undefined;
+        }
 
-                    // Both seeding steps are idempotent — the seed data lands only in an empty
-                    // database, the anonymous user only when it is missing.
-                    return router.seedIfExists(auth.adapter).then(() => {
-                        return router.seedAnonymousUser(auth.adapter);
-                    });
-                });
+        if (!config.autoMigrate) {
+            // Keep the branch separation of the migration pipeline, so a checkout does not touch the main data.
+            config.database.database = resolveDatabaseName(config.database.database);
+
+            return auth.adapter.initialize(config.database).then(() => {
+                const { engine, host, port, database } = config.database;
+                console.log(`Backend connected: ${engine} @ ${host}:${port}/${database}`);
+                console.log(
+                    "Automatic migrations are off; the browser offers Initialize Database if the schema is missing.",
+                );
             });
         }
 
-        console.log(`Could not auto-connect: ${result.error ?? "unknown reason"}`);
-        console.log("Waiting for setup from frontend…");
+        return runMigrations(config.database).then((effectiveDb) => {
+            // Use the branch-specific database name.
+            config.database.database = effectiveDb;
 
-        return undefined;
+            return auth.adapter.initialize(config.database).then(() => {
+                const { engine, host, port, database } = config.database;
+                console.log(
+                    `Backend initialised: ${engine} @ ${host}:${port}/${database}`,
+                );
+
+                // Both seeding steps are idempotent — the seed data lands only in an empty
+                // database, the anonymous user only when it is missing.
+                return router.seedIfExists(auth.adapter).then(() => {
+                    return router.seedAnonymousUser(auth.adapter);
+                });
+            });
+        });
     }).catch((e: unknown) => {
         console.warn("Database init failed:", convertErrorToString(e));
         console.log("Waiting for setup from frontend…");

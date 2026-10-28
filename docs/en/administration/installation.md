@@ -46,7 +46,12 @@ There is no installation step: `server.js` carries the backend together with `my
 
 ## Configuring the Backend
 
-Create the configuration file from the template:
+The backend reads `backend-config.json` from the directory it is started in. The file is not optional: it carries
+the database connection, and the backend never creates the database itself. In a hosting environment the database
+and its account are created with the tools of the hoster, which cannot be reached from the application, so these
+values are always supplied by hand.
+
+Create the file from the template:
 
 ```bash
 cp backend-config.example.json backend-config.json
@@ -79,7 +84,7 @@ JWT_SECRET="<long random value>" node server.js
 
 ## Preparing the Database
 
-Create an empty database and a user for it. The backend creates the schema itself on first start, so the database only has to exist.
+Create an empty database and a user for it. The backend creates the schema itself, either when the dialog in the browser initialises the database or, with `"autoMigrate": true`, on start, so the database only has to exist. The account needs the right to create tables, indexes, and foreign keys, but not the database itself.
 
 MySQL or MariaDB:
 
@@ -103,7 +108,7 @@ GRANT ALL PRIVILEGES ON DATABASE animada TO animada;
 JWT_SECRET="<long random value>" node server.js
 ```
 
-The process runs the migrations, imports `build/seed.sql` into an empty database, and then listens. A successful start logs a line like:
+The process connects to the database and then listens; `Backend connected: <engine> @ <host>:<port>/<database>` confirms the connection. With `"autoMigrate": true` the start also applies the migrations and imports `build/seed.sql` into an empty database. A successful start logs a line like:
 
 ```
 Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)
@@ -113,22 +118,24 @@ The first part of the line is the address you can use on the server itself; the 
 
 ## The Installation Wizard
 
-Open the address in a browser. While the database holds no tables, the application shows the `Initialize Database` dialog with the engine, host, port, and database name from your configuration:
+Open the address in a browser. While the database holds no tables, the application shows the `Backend Setup` dialog
+with the engine, host, port, and database name from the configuration:
 
-1. Check the values and choose `Initialize Database`. The dialog reports `Setting up database tables …` and then `Database setup complete.`
+1. Check the values and choose `Initialize Database`. The backend applies the migrations, the dialog reports `Setting
+up database tables …` and then `Database setup complete.`
 2. The `Finish Installation` dialog follows. It asks for the `Admin User` (`Username`, `Password`, `Confirm`, `Display Name`) and an `Initial Group` (`Group Name`).
 3. Afterwards the `Sign In` dialog appears. Log in with the administrator account you just created.
 
 `Reset Database` in the same dialog drops every table and rebuilds the schema. Use it only on a fresh installation or with a backup at hand; see [Backup, Restore and Upgrades](backup-restore-upgrades.md).
 
-If the dialog instead reports `Backend configuration is missing or invalid.`, the backend could not read `backend-config.json`. Fix the file and restart the process.
+When the dialog reports `Backend configuration is missing or invalid.`, the backend could not read `backend-config.json`. The message names what is missing; correct the file and restart the process.
 
 ## Upgrading an Existing Installation
 
 1. Stop the backend.
 2. Unpack the new version into a new directory.
 3. Copy your `backend-config.json` and the `public/uploads` directory from the old installation.
-4. Start the backend with `node server.js`. Pending migrations run automatically.
+4. Start the backend with `node server.js`. `"autoMigrate": true` applies the pending migrations on start; otherwise the browser asks once and `Initialize Database` applies them.
 
 A migration file that was edited after it ran fails the checksum check and blocks the start; the database then has to be rebuilt from a backup. [Backup, Restore and Upgrades](backup-restore-upgrades.md) explains the recovery path.
 
