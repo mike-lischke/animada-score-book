@@ -44,6 +44,7 @@ Links are relative and must resolve on GitHub and in any static-site build:
 
 - From a chapter page (`docs/en/<section>/<page>.md`): `../../images/en/<topic>/<name>.png`
 - From a root page (`docs/en/instruments.md`, `docs/en/index.md`): `../images/notation/<name>.png`
+- From `readme.md` at the repository root: `docs/images/en/<topic>/<name>.png`
 
 Absolute repository URLs (`https://github.com/.../blob/...`) are not used, because they break forks, offline copies, and static-site rendering.
 

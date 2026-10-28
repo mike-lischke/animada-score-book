@@ -22,6 +22,7 @@ const packageContent = [
     "migrations",
     "backend-config.example.json",
     "docs/en",
+    "docs/images",
     "readme.md",
     "release-notes.md",
     "License.txt",

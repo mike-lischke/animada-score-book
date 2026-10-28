@@ -17,6 +17,7 @@ The handbook is edited in this repository and nowhere else. This chapter describ
 | `docs/en/instruments.md`, `docs/en/troubleshooting.md` | Single pages with a fixed heading structure           |
 | `docs/images/`                                         | Screenshots and notation crops                        |
 | `docs/adr/`, `docs/design/`                            | Architecture decisions and design contracts           |
+| `readme.md`                                            | Product overview, entry points, and showcase images    |
 
 Sibling directories such as `docs/de/` or `docs/pt/` are reserved for translations and are created only when a translation exists.
 
@@ -50,11 +51,12 @@ Two rules follow from that split:
 
 1. Walk the changed features against the affected chapters; the coverage checklist in `docs/planning/handbook-2.0/` names a destination for every feature.
 2. Update the affected pages and re-capture the screenshots that show changed interface parts.
-3. Check the [known limitations](../troubleshooting.md) table: removed limitations leave the table, new ones enter it.
-4. Link new decision records from [Architecture and Decisions](architecture.md) when a change introduced one.
-5. Write the release notes in `release-notes.md`, separate from the handbook.
-6. Verify the links and image references of `docs/en/` before tagging the release.
-7. Hand the release tag to the website project.
+3. Update `readme.md` when the feature summary, an entry point, or a showcase image changed. It links into this handbook and repeats no chapter content.
+4. Check the [known limitations](../troubleshooting.md) table: removed limitations leave the table, new ones enter it.
+5. Link new decision records from [Architecture and Decisions](architecture.md) when a change introduced one.
+6. Write the release notes in `release-notes.md`, separate from the handbook.
+7. Verify the links and image references of `docs/en/` and `readme.md` before tagging the release.
+8. Hand the release tag to the website project.
 
 ## Related Chapters
 

@@ -1,6 +1,6 @@
 # Architecture and Decisions
 
-This chapter maps the codebase. The reasoning behind it lives in the [architecture decision records](../../adr/readme.md) and the [design contracts](../../design/app-layout-contract.md); this page points at them instead of repeating them.
+This chapter maps the codebase. The reasoning behind it lives in the [architecture decision records](../../adr/readme.md) and the [design contracts](../../design/app-layout-contract.md); this page points at them instead of repeating them. Both stay in the repository and are not part of the deployment package.
 
 ## Repository Layout
 

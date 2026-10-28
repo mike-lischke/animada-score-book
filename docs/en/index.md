@@ -64,7 +64,7 @@ Choose the path that matches your role:
 
 - [README](../../readme.md) — product overview, installation entry point, and links to this handbook
 - [Release notes](../../release-notes.md) — what changed in each released version
-- [Architecture decision records](../adr/readme.md) — the durable decisions behind the implementation
+- [Architecture decision records](../adr/readme.md) — the durable decisions behind the implementation (repository only, not part of the deployment package)
 - [License](../../License.txt)
 
 ## Editions and Languages

@@ -8,180 +8,110 @@
 
 # Animada Score Book
 
-Animada Score Book is your ensemble's digital home for rhythm — a rich, browser-based score management and playback platform built from the ground up for Samba groups. Browse your entire score library in a beautiful tree view, listen to arrangements come alive with synchronized multi-track audio playback driven by a precision metronome, and export your work as MP3 files or crisp print-ready sheet music. The built-in backend with user accounts, groups, and fine-grained permissions keeps everything secure and collaborative. Whether you're rehearsing, arranging, or archiving, Animada Score Book puts the pulse of your bateria right in the browser.
+Animada Score Book keeps a Samba group's repertoire in one place and makes it playable. It is a browser application with a small backend: the backend stores scores, users, and permissions in a database, and the browser renders, plays, and edits them. One administrator installs the backend; everyone else needs only a browser and the address of that installation.
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/grid-view.png" alt="Grid View" /><br/><em>Grid View</em></td>
-    <td align="center"><img src="docs/staff-view.png" alt="Staff View" /><br/><em>Staff View</em></td>
-  </tr>
-</table>
+A score is written for a bateria. Eleven instrument types, from Agogô 2-Bell to the three surdos, each bring their own note styles, symbols, and samples, and the same score appears both as a note grid and as percussion notation.
+
+![Staff view of Ijexá during playback, the playhead in bar 5](docs/images/en/presentation/staff-view.png)
+
+*Staff view of Ijexá while it plays: the playhead marks the current bar, and the footer names the visible bars.*
 
 ## Features
 
-- **Desktop & Mobile.** Full support for desktops, tablets, and phones with automatic and manual zoom to make the
-  most of your screen real estate.
-- **Dual Display Modes.** Switch on the fly between a grid-based view — perfect for learning — and a true notation
-  view for seasoned players. Toggle anytime, even during playback.
-- **Samba-First Notation.** Purpose-built for percussion and Samba music with a simplified notation system.
-  Special note heads and markings distinguish playing techniques at a glance.
-- **Flexible Playback.** Play the entire song or a selected bar range, once or on loop. Adjust tempo and overall
-  volume on the fly.
-- **Metronome & Count-In.** Toggle the built-in metronome on and off, with an optional count-in to lead you in.
-- **Multi-Track.** View and play back multiple tracks simultaneously — one instrument per track.
-- **Per-Track Mixer.** Fine-tune each track's volume independently with a continuous slider mixer.
-- **Score navigator.** A compact strip in the footer for navigating long scores quickly.
-- **Horizontal Bar Layout.** Bars flow horizontally with smooth automatic scrolling during playback.
-- **MP3 Export.** Export the full arrangement as an MP3 file, respecting all playback settings — tempo, volume,
-  count-in, and more (loop excluded).
-- **Print.** Print the loaded score in either grid or notation view — crisp, rehearsal-ready sheets.
-- **Customizable Theme.** Choose from a range of color schemes to suit your taste and lighting conditions.
-- **Score Management.** A database-backed score library with fine-grained access control: private, group-shared,
-  or world-readable. Full user and group administration included.
-- **BananaDrum Import.** Import scores from BananaDrum URLs to bring your existing repertoire on board.
+| Area | What you get |
+| --- | --- |
+| Score library | A folder tree of every score you can reach, with permission indicators for own, group-shared, and `World` entries, share links, and score locks that keep two people from editing the same score at once. |
+| Two views | A grid view with one symbol per step, for learning and scanning, and a staff view with percussion notation, for playing; switch with `G` and `S`, also during playback. |
+| Notation | Percussion clef, instrument-specific noteheads, accents, ghost and damped notes, crescendo and decrescendo hairpins with `f` markings, tuplets and nested tuplets, repeats, one-bar repeats, and bars of any width. |
+| Editing | Note entry with a note-length toolbar, dotted values, rests, overwrite and insert, note styles, articulations, clipboard, undo and redo, and automatic bar extension; both views edit the same score. |
+| Playback | Transport, tempo, master volume, a per-track mixer with mute and focus, metronome, count-in, looping, `Play Focus` on a bar range, a scrolling playhead, and single-note preview. |
+| Presentation | Seven SMuFL music fonts, thirteen color themes plus `Auto`, zoom from 50 % to 150 %, Zen mode, the score navigator, the notification center, and layouts for phones and tablets. |
+| Export | A print preview with page setup for the browser's PDF output, and an MP3 export of the playback, including tempo, volume, and count-in. |
+| Administration | Users, groups, group login, fine-grained read and write access, brute-force limiting on logins, schema migrations, and documented backup, restore, and upgrade paths. |
 
-> [!IMPORTANT]
-> **Editing is implemented.** It works in both views: notes can be entered, given a note style and an articulation, copied, pasted, subdivided and removed in the grid view and in the staff view; the staff view additionally offers the note length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
+### Editing
 
-### Printing and PDF Export
+Editing is part of the application, not a preview: notes are entered, given a note style and articulations, copied, pasted, subdivided, resized, and removed in both views, and the staff view adds a note-length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
 
-Open **Print** to adjust the paginated preview, then choose **Print / PDF** to open the browser's print dialog. Print scale controls the notation size; preview zoom only changes its on-screen magnification. Closing or canceling the browser dialog returns to the preview with its settings intact.
+![Staff view in edit mode with a note selected and the note style popup open](docs/images/en/staff-editing/edit-mode.png)
 
-For output matching the preview, select **A4** and the same portrait or landscape orientation, use **100% scale**, and disable browser-added **headers and footers**. The document supplies its own margins, title, and page numbers; do not add extra browser margins. Browser and printer-driver settings can still alter the final output.
+*The staff view in edit mode: a selected note, the note style popup of the active track, and the toolbars around the score.*
 
-## Getting Started
+[Editing in the Staff View](docs/en/using/staff-editing.md) and [Editing in the Grid View](docs/en/using/grid-editing.md) describe every control, and the [Instrument and Notation Reference](docs/en/instruments.md) explains what each symbol means.
 
-Animada Score Book consists of two parts that work together: a **backend server** that stores your scores and manages users, and a **frontend** that runs in the browser. The setup is the same whether you install on your own laptop or on a web server — both need Node.js and a database.
+## What It Looks Like
 
-### What You Need
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/en/presentation/zen-mode.png" alt="Zen mode of Ijexá with instrument names only" /><br/><em>Zen mode: the score and the instrument names, nothing else.</em></td>
+    <td align="center"><img src="docs/images/en/library/library-tree.png" alt="Score Library with two opened folders, their scores, and a globe on a shared entry" /><br/><em>The Score Library over the score, with a globe for entries shared with <code>World</code>.</em></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/en/presentation/themes.png" alt="The same bar in Light+, Dark+, Monokai Dimmed, and Solarized Light" /><br/><em>Thirteen color themes plus <code>Auto</code>.</em></td>
+    <td align="center"><img src="docs/images/en/presentation/music-fonts.png" alt="One bar of Ijexá in Bravura, Leipzig, Petaluma, and Sebastian" /><br/><em>Seven SMuFL music fonts draw the notation.</em></td>
+  </tr>
+</table>
 
-- **[Node.js](https://nodejs.org/)** version 20 or later. This powers the backend server — it's required on every machine that runs Animada Score Book, including hosted servers. Download the LTS version from the website and run the installer.
-- **A database** — **MySQL**, **MariaDB**, or **PostgreSQL**. The backend connects to it to store scores, users, and permissions. Most hosting packages include a database; if you're setting up locally, [MariaDB](https://mariadb.org/download/) is a good lightweight choice.
+## Start Here
 
-### Step-by-Step Setup
+| I want to … | Start here |
+| --- | --- |
+| Use the application | [Your First Session](docs/en/getting-started/first-steps.md) — signing in, opening a score, playing it, saving it |
+| Install it on a server | [Installing Animada Score Book](docs/en/administration/installation.md) |
+| Run it from the source | [Development Setup](docs/en/development/setup.md) |
+| Look up a notation symbol | [Instrument and Notation Reference](docs/en/instruments.md) |
+| Fix a problem | [Troubleshooting and Known Limitations](docs/en/troubleshooting.md) |
 
-#### 1. Get the Code
+## Handbook
 
-[Download the latest release](../../releases) and unzip it, or clone the repository:
+The English handbook in [`docs/en/`](docs/en/index.md) is the reference for everything the application does. A published HTML edition is planned in a separate website project; until then, these Markdown pages are the edition.
 
-```bash
-git clone https://github.com/mike-lischke/animada-score-book.git
-cd animada-score-book
-```
+- **Getting Started** — [What Animada Score Book Is](docs/en/getting-started/overview.md) · [Your First Session](docs/en/getting-started/first-steps.md)
+- **Using the Application** — [The Score Library](docs/en/using/score-library.md) · [Reading a Score](docs/en/using/presentation.md) · [Editing in the Staff View](docs/en/using/staff-editing.md) · [Editing in the Grid View](docs/en/using/grid-editing.md) · [Playback and Practice](docs/en/using/playback.md) · [Printing, PDF and MP3 Export](docs/en/using/printing-and-export.md)
+- **Instruments and Notation** — [Instrument and Notation Reference](docs/en/instruments.md) for the eleven instrument types, their note styles, staff positions, and articulations
+- **Administration** — [Installation](docs/en/administration/installation.md) · [Configuring the Backend](docs/en/administration/configuration.md) · [Users, Groups and Permissions](docs/en/administration/users-groups-permissions.md) · [Security Notes](docs/en/administration/security.md) · [Backup, Restore and Upgrades](docs/en/administration/backup-restore-upgrades.md)
+- **Reference** — [Keyboard Shortcuts](docs/en/reference/keyboard-shortcuts.md) · [Glossary](docs/en/reference/glossary.md) · [Troubleshooting and Known Limitations](docs/en/troubleshooting.md)
+- **Development** — [Development Setup](docs/en/development/setup.md) · [Architecture and Decisions](docs/en/development/architecture.md) · [Maintaining This Documentation](docs/en/development/documentation.md)
 
-What changed in each version is documented in the [release notes](release-notes.md).
+## Installation
 
-#### 2. Install Dependencies
+Animada Score Book runs on one server. The backend serves the browser application and talks to MySQL, MariaDB, or PostgreSQL; it needs Node.js 24.15 or 26, a database account that may create tables, indexes, and foreign keys, and HTTPS in front of it, because the session cookie is `Secure`.
+
+Build the deployment package with `npm run package`, unpack it on the server, copy `backend-config.example.json` to `backend-config.json` and fill in the database block, then start it with `JWT_SECRET="<long random value>" node server.js`. A successful start logs `Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)`, and the browser wizard afterwards creates the schema and the first administrator account.
+
+[Installing Animada Score Book](docs/en/administration/installation.md) covers the package contents, database preparation, the first start, HTTPS, and upgrades; [Configuring the Backend](docs/en/administration/configuration.md) documents every key and environment variable.
+
+## Development
+
+The development environment needs the same Node.js and database, plus the local TLS certificates that the HTTPS dev server reads from `~/.ssh/localhost-key.pem` and `~/.ssh/localhost-cert.pem`.
 
 ```bash
 npm install
+cp backend-config.example.json backend-config.json   # then fill in the database block
+npm run start-debug                                  # backend on port 3100, JWT_SECRET="for-debugging"
+npm run dev                                          # frontend on https://localhost:5173
 ```
 
-#### 3. Configure the Backend
+The dev server terminates TLS itself and proxies `/api` and `/soundLib` to the backend, so the browser only ever talks HTTPS; the self-signed certificate warns once.
 
-This is the central step. Create a file named `backend-config.json` in the project folder with the following content — adjust the values to match your database:
+| Command | What it does |
+| --- | --- |
+| `npm run check` | Type-checks all TypeScript source and test files |
+| `npm run lint` | Runs ESLint across the codebase |
+| `npm run test` | Runs the Vitest unit and integration tests |
+| `npm run test:e2e` | Runs the Playwright end-to-end tests against a production build |
+| `npm run build` | Builds fonts and themes, bundles the client, and checks the bundle budget |
+| `npm run package` | Writes `dist-package/animada-score-book-<version>.tar.gz` |
 
-```json
-{
-    "host": "127.0.0.1",
-    "port": 3100,
-    "database": {
-        "engine": "mysql",
-        "host": "127.0.0.1",
-        "port": 3306,
-        "database": "animada_score_book",
-        "user": "root",
-        "password": "your-password-here"
-    },
-    "soundLibPath": "public/sounds"
-}
-```
+The project is written in TypeScript with Preact for the UI, SCSS and Tailwind for styling, and DaisyUI for components; the backend is a plain Node.js HTTP server with MySQL, MariaDB, and PostgreSQL adapters. [Development Setup](docs/en/development/setup.md) covers the toolchain, the branch-specific databases, and debugging in VS Code, and [Architecture and Decisions](docs/en/development/architecture.md) maps the codebase.
 
-- **`host` / `port`** — the address and port the backend listens on. `3100` is the default; change it if that port is already in use.
-- **`database.engine`** — `"mysql"`, `"mariadb"`, or `"postgres"`. For PostgreSQL, also change `"port"` to `5432`.
-- **`database.host` / `port`** — where your database server is reachable. On the same machine this is `127.0.0.1`; your hosting provider will give you the address for remote databases.
-- **`database.database`** — the name of the database. The server creates the database automatically if it doesn't exist yet, so all you need to provide is a name.
-- **`database.user` / `password`** — the login credentials for the database.
-- **`soundLibPath`** — where the server looks for instrument sound files. The default `public/sounds` points to the built-in sound library that ships with the repository. Only change this if you store your sounds elsewhere.
+## Support
 
-The backend also needs a secret key to secure user logins. Set it before starting:
+Found a problem? [Open an issue](../../issues) and describe what you were doing, what you expected, and what happened instead; screenshots and the browser console help. [Troubleshooting and Known Limitations](docs/en/troubleshooting.md) covers the common cases first.
 
-```bash
-# macOS / Linux:
-export JWT_SECRET="pick-a-long-random-string-here"
+## Releases, License and Architecture
 
-# Windows (PowerShell):
-$env:JWT_SECRET = "pick-a-long-random-string-here"
-```
-
-Pick a long, random string and keep it safe — this key is what keeps your users' accounts secure.
-
-#### 4. Start the Backend
-
-```bash
-npm run start
-```
-
-Keep this terminal open. The server will confirm it's running — you'll see something like `Server running on http://0.0.0.0:3100`.
-
-#### 5. Build and Serve the Frontend
-
-```bash
-npm run build
-```
-
-This creates a `dist/` folder with everything the browser needs. Serve that folder with any static web server — nginx, Apache, Caddy, or even a simple file server. The frontend automatically talks to the backend on the same domain, so point both to the same address and you're done. The build checks the bundle budget before it finishes and fails when the initial load or a single file outgrows it (see [Build Output Contract](docs/design/build-output-contract.md)).
-
-> **First run:** When you open the app in your browser for the first time, a setup wizard will guide you through creating an admin account and connecting to the backend. No further manual steps needed.
-
-## Contributing & Development
-
-### Reporting Bugs
-
-Found a problem? Please [open an issue](../../issues) on GitHub. Include as much detail as you can: what you were doing, what you expected to happen, and what happened instead. Screenshots and browser console logs are incredibly helpful.
-
-### Development Setup
-
-To work on the code itself, you need the same basics as a regular installation — Node.js 20+, a database, and the `backend-config.json` file. Once that's in place, here's what a development session looks like:
-
-**Terminal 1 — Backend:**
-
-```bash
-npm run start-with-dummy-secret
-```
-
-which uses a simple secret just for development. Don't use that in production (on your hosting server).
-
-**Terminal 2 — Frontend dev server** (with hot reload):
-
-```bash
-npm run dev
-```
-
-This opens the app at `http://localhost:5173` and updates automatically as you edit files.
-
-**Useful commands while developing:**
-
-| Command            | What it does                                     |
-| ------------------ | ------------------------------------------------ |
-| `npm run check`    | Type-checks all TypeScript source and test files |
-| `npm run lint`     | Runs ESLint across the codebase                  |
-| `npm run test`     | Runs the unit test suite (Vitest)                |
-| `npm run test:e2e` | Runs end-to-end browser tests (Playwright)       |
-
-The project is written in **TypeScript** with **Preact** for the UI, **SCSS** and **Tailwind** for styling, and **DaisyUI** for components. The backend is a plain Node.js HTTP server with MySQL/MariaDB/PostgreSQL adapters.
-
-### Database Migrations
-
-Schema changes are managed through timestamped SQL migration files in the `migrations/` directory. The migration runner executes automatically on server startup — no manual steps needed.
-
-**Branch-specific databases:** When working on a feature branch, the server automatically creates and uses a branch-specific copy of the main database (named `<database>__<branch>`). This isolates schema changes during development. The main branch and release branches always use the base database name.
-
-**After rebasing** onto an updated `main` branch, restart the backend server. The migration runner will detect and apply any new migrations from `main`, then re-apply your branch's migrations on the updated schema.
-
-**Cleaning up:** Run `npm run db:cleanup` to scan for orphaned branch databases (branches that have been deleted locally) and get instructions for dropping them.
-
-**Migration files** use `-- @mysql` and `-- @postgres` markers to include engine-specific DDL in the same file. Only DDL statements belong in migrations — no data manipulation.
-
-### VS Code ###
-This project ist developed in VS Code and already has a launch configuration you can use to start a debugging session.
+- [Releases](../../releases) — the deployment packages and source archives of every version.
+- [Release notes](release-notes.md) — what changed in each released version, newest first.
+- [License](License.txt) — MIT.
+- [Architecture decision records](docs/adr/readme.md) — the durable decisions behind the implementation; they stay in the repository and are not part of the deployment package.

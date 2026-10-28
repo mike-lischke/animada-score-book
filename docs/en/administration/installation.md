@@ -31,9 +31,12 @@ The package is built from the repository with `npm run package`. It writes `dist
 | `migrations/`                                              | The schema and its migrations                                   |
 | `package.json`                                             | A manifest with a single `start` script and no dependencies     |
 | `backend-config.example.json`                              | Template for the configuration file                             |
-| `docs/en/`, `readme.md`, `release-notes.md`, `License.txt` | Offline documentation and licence                               |
+| `docs/en/`, `docs/images/`                                 | The English handbook with the screenshots it shows              |
+| `readme.md`, `release-notes.md`, `License.txt`             | Product overview, version history, and licence                  |
 
 The archive never contains `backend-config.json`, `.env` files, `node_modules`, TypeScript sources, or a lock file.
+
+The architecture decision records in `docs/adr/` and the design contracts in `docs/design/` stay in the repository. They describe the implementation rather than the operation of an installation, and the [Architecture and Decisions](../development/architecture.md) chapter of the handbook links to them there.
 
 ## Unpacking
 
