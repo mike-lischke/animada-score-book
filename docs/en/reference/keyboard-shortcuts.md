@@ -52,5 +52,5 @@ The grid view always works in overwrite mode, so `O` and `I` have no effect ther
 ## Related Chapters
 
 - [Editing in the Staff View](../using/staff-editing.md) explains the workflows behind the score input keys.
-- [Editing in the Grid View](../using/grid-editing.md) covers the raster and the radial note menu.
+- [Editing in the Grid View](../using/grid-editing.md) covers the raster and the note style bar.
 - [Reading a Score](../using/presentation.md) describes the views the `G` and `S` shortcuts switch between.

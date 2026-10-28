@@ -46,6 +46,10 @@ Every score has two presentations:
 
 Both views show the same data and both can be edited. You can switch at any time, including during playback, and the position in the score is kept. [Reading a Score](../using/presentation.md) explains when each view helps.
 
+![Staff notation of Ijexá with the playhead in bar 5](../../images/en/presentation/staff-view.png)
+
+*Animada Score Book shows a score as percussion notation while it plays; the same score is available as a note grid.*
+
 ## Where Your Data Lives
 
 Animada Score Book has two storage locations, and the difference matters when you work with a score:

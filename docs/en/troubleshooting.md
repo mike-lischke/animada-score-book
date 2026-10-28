@@ -17,6 +17,22 @@ The process exits immediately when the port is taken: `Port <port> is already in
 
 A broken connection during work opens a dialog with `Reconnecting… (attempt <n>)`. The application retries every three seconds and closes the dialog shortly after the backend answers again. Unsaved changes stay in the browser and are not lost; save once the connection is back.
 
+![The reconnecting dialog with the database error](../images/en/troubleshooting/connection-lost.png)
+
+*`Backend Connection Lost` with the underlying error underneath; the spinner is the reconnect attempt that runs every three seconds.*
+
+## An Unexpected Error
+
+When a view fails while rendering, the application replaces the whole interface with an error page instead of leaving a blank window:
+
+![The error page with its recovery actions and the collapsed technical details](../images/en/troubleshooting/error-page.png)
+
+*An unexpected error replaces the application with this page: `Retry` renders the view again, `Reload app` restarts the application, and `Technical details` holds the message and stack trace for a report.*
+
+- `Retry` renders the view again, which often is enough after a temporary problem. `Reload app` restarts the application; unsaved changes may be lost.
+- `Still not working?` links to the GitHub issue tracker. Mention what you were doing and which score was open.
+- `Technical details` holds the application version, the error message, and the stack trace, with `Copy details` to put them on the clipboard. Bearer tokens, passwords, and tokens in URLs are masked before they are shown.
+
 ## The Installation Cannot Be Completed
 
 | Message                                                                    | Cause and remedy                                                                                             |

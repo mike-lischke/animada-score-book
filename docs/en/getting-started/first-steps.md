@@ -26,6 +26,10 @@ Your session stays open while you work, and the backend renews it in the backgro
 
 To end the session, open the user menu in the header and choose `Sign Out`.
 
+![The Sign In dialog on the User tab](../../images/en/getting-started/login.png)
+
+*The `Sign In` dialog: the `User` and `Group` tabs, the two fields, and `Continue Anonymously` beside `Log In`.*
+
 ## Opening a Score
 
 1. Press the `Score Library` button in the header. The library opens as a drawer over the score area.

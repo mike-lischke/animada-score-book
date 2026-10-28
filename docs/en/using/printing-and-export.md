@@ -6,6 +6,10 @@ Two outputs leave the application: paper, through the browser's print dialog, an
 
 `Print` in the header (tooltip `Print / Export to PDF`) opens the preview in place of the score. `Ctrl`/`Cmd`+`P` does the same and replaces the browser's own print dialog. `Escape` closes the preview and returns to the score with its settings intact.
 
+![Print preview of I-Break showing two pages](../../images/en/print/print-preview.png)
+
+*The preview of I-Break: pages as they will be printed, with the layout, print, and display controls above them.*
+
 ## Page Setup
 
 The preview controls arrange the sheet:
@@ -20,6 +24,10 @@ The preview controls arrange the sheet:
 The print scale decides how large the notation appears on paper. Negative border values are intentional: they let a page use more of the paper than the printer's own margin would allow, which some printers accept.
 
 `Reset the print settings` restores the defaults, and `Close the preview (ESC)` leaves it.
+
+![The preview control bars](../../images/en/print/preview-controls.png)
+
+*`Layout` carries orientation and the four border values, `Print details` the scale and the track selection.*
 
 ## Bar Widths in the Preview
 
@@ -46,6 +54,10 @@ Preview zoom affects only what you see on screen; the printed result follows the
 
 Choosing the PDF printer in that dialog produces the PDF file. The application does not generate a PDF itself, so the result depends on the browser's print engine.
 
+![The first printed page of I-Break](../../images/en/print/printed-page.png)
+
+*The first sheet at `Fit page`: title block, bar numbers, instrument names, and the page number in the corner.*
+
 ## Exporting an MP3
 
 `Export` in the header (tooltip `Export as MP3`) renders the current playback state to a file named `<score title>.mp3`:
@@ -56,6 +68,10 @@ Choosing the PDF printer in that dialog produces the PDF file. The application d
 - On phones the file is offered through the system's share sheet; everywhere else the browser downloads it.
 - If the browser cannot encode MP3, or rendering fails, the application reports `The MP3 could not be exported. Please
   try again.`
+
+![The export dialog with its progress bar](../../images/en/print/mp3-export.png)
+
+*The dialog stays open while the whole score is rendered; `Export` in the header stays disabled until then.*
 
 ## What the Output Cannot Do
 

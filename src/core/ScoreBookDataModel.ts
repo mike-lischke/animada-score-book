@@ -219,7 +219,7 @@ export enum NoteDisplayType {
     /** A filled square for hand-struck instruments (e.g. Repinique de mão, Conga). */
     Square,
 
-    /** A hollow equilateral triangle for shaken instruments (e.g. Chocalho, Ganzá). */
+    /** A filled equilateral triangle for shaken instruments (e.g. Chocalho, Ganzá). */
     Triangle,
 }
 

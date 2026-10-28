@@ -62,7 +62,7 @@
 | C-10 | Notification center: toasts, 15-second auto-hide, history, DND, clear   | Footer bell               | `using/presentation.md` | S-42       | Also used for errors and lock conflicts                    |
 | C-11 | Version display and release notes dialog                                | Footer version button     | `using/presentation.md` | S-53       | Links to `release-notes.md`                                |
 | C-12 | Header layout, overflow menu at ≤ 900 px                                | Header                    | `using/presentation.md` | S-01       | Do not document pixel values; describe behaviour           |
-| C-13 | Mobile: compact header, collapsed playback controls, touch long-press   | ≤ 600 px layout           | `using/presentation.md` | S-47       | Long-press opens the grid note menu                        |
+| C-13 | Mobile: compact header, collapsed controls, responsive layout           | ≤ 600 px layout           | `using/presentation.md` | S-47       | Both views stay usable on a phone                          |
 | C-14 | Tablet landscape layout                                                 | Medium width              | `using/presentation.md` | S-49       | Implicit through the layout description                    |
 | C-15 | Editing the score title in edit mode                                    | Header identity           | `using/presentation.md` | S-20       | Also mentioned in staff editing                            |
 | C-16 | Mixer column: instrument icons, names, volume sliders                   | Left column               | `using/presentation.md` | S-40       | Playback behaviour in chapter 8                            |
@@ -109,7 +109,7 @@
 | ---- | ---------------------------------------------------------- | ----------- | ----------------------- | ----- | ---------------------------------------------------- |
 | E-01 | The grid raster: fixed steps per bar, one cell per step    | Grid view   | `using/grid-editing.md` | S-02  | Raster differs from free staff fractions             |
 | E-02 | Enter and remove notes in the grid                         | Grid cells  | `using/grid-editing.md` | S-37  | Same keys as staff where applicable                  |
-| E-03 | Radial note-style menu by right-click or long-press        | Grid cell   | `using/grid-editing.md` | S-36  | Fan of the instrument's styles                       |
+| E-03 | Note styles come from the shared note style bar            | Grid cell   | `using/grid-editing.md` | S-21  | The radial note menu was removed                     |
 | E-04 | Toolbar availability in grid mode (no note length toolbar) | Toolbar     | `using/grid-editing.md` | S-21  | Unavailable controls are hidden                      |
 | E-05 | Selection and rectangle selection in the grid              | Grid view   | `using/grid-editing.md` | —     | Granularity differs from staff                       |
 | E-06 | Subdivisions shown inside grid cells                       | Grid view   | `using/grid-editing.md` | S-37  | Sub-step notes appear as synthetic subdivision       |

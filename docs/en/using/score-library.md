@@ -8,6 +8,16 @@ Press the `Score Library` button in the header. The library opens over the score
 
 The drawer's title row carries the `Add New Folder` button, which creates a folder at the top level.
 
+![Score Library with two opened folders and their scores](../../images/en/library/library-tree.png)
+
+*The drawer over the score: folders, their scores, and the globe that marks an entry shared with `World`.*
+
+On a phone the drawer takes most of the width, and the score stays dimmed behind it:
+
+![The Score Library on a phone](../../images/en/library/mobile-library.png)
+
+*The library on a 390 pixel wide screen: the title row, the folders, and the row menus stay reachable.*
+
 ## Browsing Folders and Scores
 
 Every row shows an icon, the entry name, a permission indicator when the entry is special, and a menu button at its right end:
@@ -15,6 +25,10 @@ Every row shows an icon, the entry name, a permission indicator when the entry i
 - **Folders** have a closed or open folder icon and hold other folders and scores.
 - **Scores** have a music icon.
 - Rows in a loading state show a progress indicator until their contents arrive.
+
+![The row menu of a score](../../images/en/library/score-menu.png)
+
+*The menu of a score row: `Load Score`, `Copy Score URL`, `Remove Score`, and `Group Access`.
 
 Double-click a score, or choose `Load Score` from its menu, to open it. The drawer closes and the score replaces the one currently loaded.
 
@@ -39,6 +53,10 @@ Both open the `Add New Folder` dialog with a single `Name` field. An empty name 
 
 The dialog remembers the time signature, tempo, bar count, and instrument selection per browser. `Create` starts the new score in edit mode.
 
+![The New Song dialog with three instruments selected](../../images/en/library/new-score.png)
+
+*`New Song` with `Tamborim`, `Repinique`, and `Caixa` selected; `Create` starts the score, `Cancel` leaves the current one untouched.*
+
 A new score exists only in your browser at this point. The first `Save Score` creates the entry in the library, at the top level, and from then on the score is served by the backend like any other.
 
 `New Score` is disabled while edit mode is active, because leaving edit mode is what saves and unlocks the current score.
@@ -46,6 +64,10 @@ A new score exists only in your browser at this point. The first `Save Score` cr
 ## Importing a Score
 
 A folder's menu opens `Import Score` with a single `Score URL` field. It accepts a BananaDrum share link (`https://<host-name>/?t=...`) and is pre-filled from the clipboard when the clipboard holds a URL. The import creates a new score inside that folder, named after the link's `t` parameter, or `Imported Score` when the parameter is missing.
+
+![The Import Score dialog](../../images/en/library/import-score.png)
+
+*`Import Score` asks for one URL; `OK` imports it into the folder the menu belongs to.*
 
 ## Sharing a Score
 
@@ -82,6 +104,10 @@ Owners and administrators get a `Group Access` tooltip on the indicator and can 
 - `Write` always includes read access, and the editor keeps the `World` group read-only.
 - `Reset Children`, available on folders, removes the explicit permissions of every folder and score below that folder,
   so all of them inherit again. The folder itself keeps its own permissions.
+
+![The Group Access editor with World in Read](../../images/en/library/group-access.png)
+
+*`Read` holds `World`, `Write` is still empty, and the remaining groups wait on the right to be dragged in.*
 
 [Users, Groups and Permissions](../administration/users-groups-permissions.md) explains the underlying model, group passwords, and the `Admins` and `World` groups.
 

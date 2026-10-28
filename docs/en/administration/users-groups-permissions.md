@@ -26,6 +26,10 @@ The `Edit` dialog holds:
 
 `Reset Password` asks for a `New Password` with the same minimum length. Deleting an account removes it and its group memberships; the last member of `Admins` cannot be deleted.
 
+![The users list of the Users and Groups dialog](../../images/en/administration/users.png)
+
+*The users list: display name, `@user` handle, the `admin` badge where it applies, and `Edit`, `Reset Password`, and `Delete` per row.*
+
 ## Groups
 
 The `Groups` tab lists the groups with their member counts. `+` creates one; each row offers `Edit Group` and `Delete Group`. The dialog holds:
@@ -39,6 +43,10 @@ The `Groups` tab lists the groups with their member counts. `+` creates one; eac
 
 A group administrator may manage that group without being an administrator of the installation.
 
+![The groups list of the Users and Groups dialog](../../images/en/administration/groups.png)
+
+*The groups list with the administrator chip per group: `Bateria Central` and `Bloco da Praia` have one, `Admins` and `World` cannot get one.*
+
 ## Group Login
 
 When a group has a shared password, the `Sign In` dialog's `Group` tab accepts the group name and that password. This is meant for a shared device or a rehearsal room where nobody wants to type a personal password.
@@ -48,6 +56,10 @@ Behind the scenes three rules matter:
 - A group login uses the shared `anonymous` account, so all group logins look like the same user to the backend.
 - The session carries only that group, plus `World`; other group memberships of the account do not apply.
 - Each account row holds one refresh token, so a new group login on the same server ends the previous group session.
+
+![The Sign In dialog on the Group tab](../../images/en/administration/group-login.png)
+
+*The `Group` tab asks for a group and its shared password. The dropdown reads `No groups available` while no group has a password.*
 
 ## The `Admins` and `World` Groups
 

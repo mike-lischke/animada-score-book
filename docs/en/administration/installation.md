@@ -121,10 +121,17 @@ The first part of the line is the address you can use on the server itself; the 
 Open the address in a browser. While the database holds no tables, the application shows the `Backend Setup` dialog
 with the engine, host, port, and database name from the configuration:
 
-1. Check the values and choose `Initialize Database`. The backend applies the migrations, the dialog reports `Setting
-up database tables …` and then `Database setup complete.`
+1. Check the values and choose `Initialize Database`. The backend applies the migrations, the dialog reports `Setting up database tables …` and then `Database setup complete.`
 2. The `Finish Installation` dialog follows. It asks for the `Admin User` (`Username`, `Password`, `Confirm`, `Display Name`) and an `Initial Group` (`Group Name`).
+
+![The Finish Installation dialog](../../images/en/administration/first-run.png)
+
+*`Finish Installation` creates the first administrator and one group in a single step; `Finish Installation` at the bottom submits both.*
 3. Afterwards the `Sign In` dialog appears. Log in with the administrator account you just created.
+
+![The Backend Setup dialog with engine, host, port and database](../../images/en/administration/backend-setup.png)
+
+*The `Backend Setup` dialog shows the configured connection and offers to create the schema. The database itself has to exist already.*
 
 `Reset Database` in the same dialog drops every table and rebuilds the schema. Use it only on a fresh installation or with a backup at hand; see [Backup, Restore and Upgrades](backup-restore-upgrades.md).
 

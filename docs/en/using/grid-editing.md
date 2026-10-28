@@ -12,6 +12,10 @@ The grid divides every bar into fixed steps:
 
 Because the raster is fixed, a note in the grid always starts on a step and always has a length the raster can express. The staff view has no such limit.
 
+![Two bars of the grid view with accent and ghost cells](../../images/en/grid-editing/grid-cells.png)
+
+*Two bars in the grid: one symbol per step, colored per track. The smaller symbols in the rounded cells are ghost notes and weak strokes.*
+
 ## Entering and Removing Notes
 
 1. Click a cell to place the cursor, or move the cursor with the arrow keys.
@@ -21,15 +25,10 @@ Because the raster is fixed, a note in the grid always starts on a step and alwa
 
 A cell without content shows nothing. `0` turns the cell at the cursor into a rest, and `Delete` or `Backspace` removes the note or rest there.
 
-## The Radial Note Menu
+## Note Styles
 
-Right-click a cell with a mouse, or press and hold it on a touch screen, to open a fan of the instrument's note styles:
-
-- One button per style, labelled with its name.
-- The tooltip names the style and its number, for example `Low bell (1)`.
-- Picking a button applies that style to the cell.
-
-Every view has its own way of offering styles; the radial menu exists only in the grid view. In the staff view the note style section of the toolbar does the same job.
+Both views offer note styles in the same place: the note style section of the toolbar above the score, or the number
+keys for the addressed track. The grid adds no menu of its own, so a right-click on a cell has no action.
 
 ## Which Controls the Grid Offers
 

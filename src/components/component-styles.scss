@@ -1291,8 +1291,10 @@
     min-width: calc(var(--steps-per-bar) * var(--measure-step-width));
     border-right: 2px solid var(--color-base-300);
 
-    /* Keeps the barline of a track piece clear of the column separator, which gets the same room on both sides. */
-    padding: 24px 11px 0 11px;
+    /* Keeps the barline of a track piece clear of the column separator, which gets the same room on both sides.
+       The staff lines run through that room, so the staff of one bar joins the next. */
+    --staff-column-side-padding: 11px;
+    padding: 24px var(--staff-column-side-padding) 0 var(--staff-column-side-padding);
     position: relative;
 
     /* The barline closing the column is the resize handle: an invisible strip centred on the border. */
@@ -1376,6 +1378,13 @@
     /* The prefix row states the same height as the note rows beside it, so their staff lines line up. */
     height: var(--staff-row-height, auto);
     margin: 0 0 20px 0;
+
+    /* The prefix column overlaps the measure column by 8px, whose note rows keep their distance from the barline
+       by `--staff-column-side-padding`. The lines close that distance, so the staff runs on from the clef into
+       the first bar without a break and without drawing over the bar's own lines. */
+    .staff-note-viewer-line {
+        right: calc(8px - var(--staff-column-side-padding, 11px));
+    }
 }
 
 /* The clef and time signature are centred on the staff line, which the row geometry places. */

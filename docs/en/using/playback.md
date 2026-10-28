@@ -6,6 +6,10 @@ The playback bar and the mixer turn a score into a rehearsal: the instruments of
 
 The round button at the left end of the playback bar starts and stops the score; its tooltip reads `Play the score` or `Stop playback`. Stopping returns to the start of the performed range, so the next start begins there.
 
+![The playback bar with play, tempo, loop, metronome, count-in and volume](../../images/en/playback/playback-bar.png)
+
+*The playback bar: play, `BPM` stepper, loop, metronome, count-in, and the master volume; the three switches carry a dot that fills in when they are on.*
+
 ## Tempo
 
 The tempo stepper shows the current tempo in `BPM` and changes it with `-` and `+`:
@@ -30,6 +34,10 @@ The mixer lives in the track column at the left of the score. `Expand mixer` and
 | above `100 %`  | The track is boosted, and the other tracks are attenuated — the right end reads `Focus ▶︎` |
 
 The focus boost is not a solo button: the other tracks stay audible, only quieter. Per-track levels are part of your working state and are saved with the score.
+
+![The expanded mixer with one slider per track](../../images/en/playback/mixer.png)
+
+*The expanded mixer of Ijexá: one slider and one instrument icon per track, `◀ Mute` at the left end and `Focus ▶` at the right.*
 
 ## Metronome and Count-In
 
@@ -56,6 +64,10 @@ Every bar header carries a `Play Focus` button. Marking bars confines playback t
 - The setting is a playback range, not a selection: it does not change the score and is not saved as content.
 
 The same control exists in the grid view and in the staff view.
+
+![Two bars marked as play focus](../../images/en/playback/play-focus.png)
+
+*Bars 2 and 3 focused: their `Play Focus` buttons are active, the neighbours are not, and the mixer sliders show the per-track `Mute` and `Focus` ends.*
 
 ## Playback Order and Repeats
 

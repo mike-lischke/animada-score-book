@@ -25,17 +25,18 @@ A folder is created when its first image is added. The planned images, their cap
 
 ## Capture Conventions
 
-| Aspect         | Convention                                                                                     |
-| -------------- | ---------------------------------------------------------------------------------------------- |
-| Browser        | Chromium, the version used by the Playwright suite                                             |
-| Desktop size   | 1440 × 900 CSS px at device scale factor 2                                                     |
-| Tablet / phone | 1024 × 768 and 390 × 844                                                                       |
-| Theme and font | `Light+` and `Bravura`, unless the image demonstrates themes or music fonts                    |
-| View state     | Playback stopped, no selection, no open menus, dismissed notifications                         |
-| Score content  | The demo scores `Ijexá` and `Beija Flor 2004 - Bossa 2 ("I-Break")`                            |
-| Personal data  | No real member names, e-mail addresses, or private scores                                      |
-| Optimization   | PNG, optimized with `oxipng` or `pngquant`; full-window images below 300 kB, crops below 80 kB |
-| Alt text       | Describes the visible content, never "screenshot of …"                                         |
+| Aspect         | Convention                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| Browser        | Chromium, the version used by the Playwright suite                                                 |
+| Desktop size   | 1440 × 900 CSS px at device scale factor 2                                                         |
+| Tablet / phone | 1024 × 768 and 390 × 844                                                                           |
+| Theme and font | `Light+` and `Bravura`, unless the image demonstrates themes or music fonts                        |
+| Zoom           | 50 % for full-window score views, 100 % for notation crops, 40 % display zoom in the print preview |
+| View state     | Playback stopped, no selection, no open menus, dismissed notifications                             |
+| Score content  | The demo scores `Ijexá` and `Beija Flor 2004 - Bossa 2 ("I-Break")`                                |
+| Personal data  | No real member names, e-mail addresses, or private scores                                          |
+| Optimization   | PNG, optimized with `oxipng` or `pngquant`; full-window images below 300 kB, crops below 80 kB     |
+| Alt text       | Describes the visible content, never "screenshot of …"                                             |
 
 ## Usage in Markdown
 

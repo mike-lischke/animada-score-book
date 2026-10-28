@@ -9,27 +9,158 @@
 
 ## Capture Conventions
 
-| Aspect         | Convention                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| Browser        | Chromium, same version as the Playwright suite                                                                 |
-| Desktop size   | 1440 × 900 CSS px, device scale factor 2, exported at 1440 × 900                                               |
-| Tablet size    | 1024 × 768                                                                                                     |
-| Phone size     | 390 × 844                                                                                                      |
-| Theme          | `Light+` unless the row says otherwise; dark captures use `Dark+`                                              |
-| Music font     | `Bravura` unless the row shows font differences                                                                |
-| Zoom           | 100 %, playback stopped, no selection, Zen mode off — unless the row requires the opposite                     |
-| Chrome         | Header and footer complete, no open menus, except where the row documents a menu, popup or dialog              |
-| Notifications  | Dismissed, so no stale toasts appear in any image                                                              |
-| Score content  | Ijexá for general views, I-Break where a second piece helps, the notation reference score for instrument crops |
-| Personal data  | No real member names, e-mail addresses or private scores; check score titles and user menus before capture     |
-| File naming    | `<topic>-<subject>.png`; instrument crops `<instrument>.png`                                                   |
-| Optimization   | PNG, `oxipng`/`pngquant`; full-window images target < 300 kB, notation crops < 80 kB                           |
-| Alt text       | Describes the visible content ("Staff view of Ijexá with the note style bar open"), never "screenshot of …"    |
-| Record keeping | The capture context column is the record; re-capture from the same score, theme, font and viewport             |
+| Aspect         | Convention                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Browser        | Chromium, same version as the Playwright suite                                                                                      |
+| Desktop size   | 1440 × 900 CSS px, device scale factor 2, exported at 1440 × 900                                                                    |
+| Tablet size    | 1024 × 768                                                                                                                          |
+| Phone size     | 390 × 844                                                                                                                           |
+| Theme          | `Light+` unless the row says otherwise; dark captures use `Dark+`                                                                   |
+| Music font     | `Bravura` unless the row shows font differences                                                                                     |
+| Zoom           | 50 % for full-window score views (a bar is 1280 px wide at 100 %), 100 % for notation crops, print preview at its 40 % display zoom |
+| Chrome         | Header and footer complete, no open menus, except where the row documents a menu, popup or dialog                                   |
+| Notifications  | Dismissed, so no stale toasts appear in any image                                                                                   |
+| Score content  | Ijexá for general views, I-Break where a second piece helps, a score with a single instrument for instrument crops                  |
+| Personal data  | No real member names, e-mail addresses or private scores; check score titles and user menus before capture                          |
+| File naming    | `<topic>-<subject>.png`; instrument crops `<instrument>.png`                                                                        |
+| Optimization   | PNG, `oxipng`/`pngquant`; full-window images target < 300 kB, notation crops < 80 kB                                                |
+| Alt text       | Describes the visible content ("Staff view of Ijexá with the note style bar open"), never "screenshot of …"                         |
+| Record keeping | The capture context column is the record; re-capture from the same score, theme, font and viewport                                  |
+
+## Capture Status
+
+**P1 captured (2026-10-27).** The eight showcase images and the eleven instrument crops exist in `docs/images/`:
+
+| ID      | File                              | Note                                                                 |
+| ------- | --------------------------------- | -------------------------------------------------------------------- |
+| S-01    | `en/presentation/staff-view.png`  | Ijexá, bars 5–7, playhead mid-score, 50 % zoom                       |
+| S-02    | `en/presentation/grid-view.png`   | Same passage in the grid view                                        |
+| S-03    | `en/presentation/zen-mode.png`    | Zen mode, instrument names only                                      |
+| S-04    | `en/library/library-tree.png`     | Drawer with two open folders and the `World` indicators              |
+| S-05    | `en/presentation/themes.png`      | `Light+`, `Dark+`, `Monokai Dimmed`, `Solarized Light`, one bar each |
+| S-06    | `en/presentation/music-fonts.png` | `Bravura`, `Leipzig`, `Petaluma`, `Sebastian`, one bar each          |
+| S-20    | `en/staff-editing/edit-mode.png`  | Edit mode with the note style popup open                             |
+| S-43    | `en/print/print-preview.png`      | I-Break in portrait, two pages at 40 % display zoom                  |
+| S-54a–k | `notation/<instrument>.png`       | One bar per instrument, each from its own single-instrument score    |
+
+Deviations from the plan above, kept for the re-captures:
+
+- Full-window images are captured at 2880 × 1800 (device scale factor 2) and exported at 1440 × 900.
+- The staff lines of a system run from the clef into the first bar: the prefix's lines reach the note rows of the
+  first bar, which keeps a side padding of `--staff-column-side-padding`. The gap at each barline stays, because the
+  bar separator for the width adjustment sits there.
+- The comparison montages show one bar per cell rather than two, because a two-bar cell has to be
+  downscaled so far that the staff lines fade.
+- The print preview is in portrait; in landscape a page holds a single system and looks half empty.
+- The instrument score is created through `New Song` and filled with the number keys, then discarded; it never reaches
+  the database.
+- Each instrument crop comes from **its own** score with a single track. With all eleven instruments in one score the
+  system shrinks so far that the notation is unreadable at 100 % zoom; the percussion clef itself renders correctly at
+  every zoom level (checked at 100 % and 50 %: 2 × 2 staff spaces box, 2 spaces tall ink, nothing clipped).
+- Crop framing for the notation images: left edge 20 px before the prefix column (so clef and time signature are
+  complete), right edge 56 px after the last notehead, 84 px above the topmost and 56 px below the bottommost staff
+  line. Playhead, entry cursor, bar number and track column are hidden.
 
 ## Documentation Example Score
-
 Instrument crops come from one locally created score, **"Instrument Reference"**, containing all eleven instruments as tracks; each track holds one bar in which every note style of that instrument appears once in reading order. It is created through the normal `New Song` dialog, stays in the local database only and is not committed. It contains no personal data and is deleted after the crops are captured.
+
+## P2 capture status
+
+Captured so far, against the demo scores `Ijexá` (10004) and `Full` (10002) unless stated otherwise:
+
+| ID   | File                                 | Note                                                                       |
+| ---- | ------------------------------------ | -------------------------------------------------------------------------- |
+| S-07 | `en/settings/music-font-picker.png`  | Settings dialog with the music font list open, one sample row per font     |
+| S-09 | `en/settings/settings-rows.png`      | All five settings rows down to the permission indicator                    |
+| S-11 | `en/getting-started/login.png`       | Login dialog, user tab, empty fields                                       |
+| S-14 | `en/library/new-score.png`           | Defaults plus three selected instruments (Caixa, Repinique, Tamborim)      |
+| S-16 | `en/library/score-menu.png`          | Library tree with the row menu of `Ijexá` open                             |
+| S-17 | `en/library/group-access.png`        | Group Access popover: owner, read column with world chip, write, groups    |
+| S-21 | `en/staff-editing/note-styles.png`   | Note style bar of the selected Repinique track                             |
+| S-24 | `notation/articulations.png`         | Caixa with accents and a ghost note, Surdo Primeira with a damped note     |
+| S-26 | `notation/tuplets.png`               | Quintuplet with a triplet nested in its third slot, labels above and below |
+| S-28 | `en/staff-editing/selection.png`     | Rectangle selection over two bars, selection popup open                    |
+| S-33 | `en/staff-editing/measure-width.png` | Bar 2 narrowed to 340 px next to bar 3 at full width, resize handles shown |
+| S-34 | `notation/dynamics.png`              | `f` marking plus a selected decrescendo hairpin with both drag handles     |
+| S-36 | —                                    | Not captured: the grid radial note menu was removed                        |
+| S-37 | `en/grid-editing/grid-cells.png`     | Two bars at 50 % zoom, accent and ghost variants in four rows              |
+| S-38 | `en/playback/playback-bar.png`       | Playback bar with BPM, volume, loop, metronome and count-in                |  | S-39 | `en/playback/play-focus.png` | Bars 2 and 3 carry an active `Play Focus`, mixer sliders show `Mute`/`Focus` |  | S-40 | `en/playback/mixer.png` | Ten tracks, Repinique boosted above 100 %, mute/focus legend under each |
+| S-45 | `en/print/printed-page.png`          | First sheet at print scale: title block, two systems, page number          |
+| S-47 | `en/presentation/mobile-staff.png`   | 390 × 844, staff view at 70 % zoom, compact playback bar, Zen off          |
+
+Notes on this batch:
+
+- `S-24` comes from an unsaved `New Song` score with Caixa and Surdo Primeira; `S-33` narrows a bar of `Ijexá` in
+  edit mode and never saves it.
+- `S-36` is dropped: the grid radial note menu was removed in favour of the note style bar both views share.
+- `S-34` uses the `Full` score, which carries a crescendo, a decrescendo and one `f` marking; the crop shows the `f`
+  together with the decrescendo.
+- The Group Access popover is opened from the globe indicator of a library row; the drawer stays out of the crop.
+- On the phone the footer folds zoom and version into a menu, so the zoom comes from the stored UI settings.
+- `S-45` is the first sheet of the print preview at `Fit page`, with the preview bars hidden. It is the same layout
+the PDF carries; the sheet frame is captured instead of rasterising a PDF, because only `qlmanage` is installed.
+- `S-26` is captured from an unsaved `New Song` score: two notes, a quintuplet over both, then a triplet inside the
+  quintuplet's third slot. A range selection has to start on an existing note, otherwise only the cursor moves.
+
+All P2 motives are captured.
+
+## P3 capture status
+
+| ID   | File                                      | Note                                                                                                        |
+| ---- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| S-08 | `en/settings/music-font-info.png`         | Bravura info popup beside the settings rows: version, licence, source                                       |
+| S-12 | `en/administration/group-login.png`       | Login dialog, group tab; the demo backend offers no group logins                                            |
+| S-13 | `en/administration/first-run.png`         | Finish Installation wizard of an empty database: admin user and group                                       |
+| S-15 | `en/library/import-score.png`             | Import dialog with the URL field                                                                            |
+| S-18 | `en/administration/users.png`             | Users list with the admin chips                                                                             |
+| S-19 | `en/administration/groups.png`            | Groups list with the admin chip per group                                                                   |
+| S-22 | `en/staff-editing/note-length.png`        | Note value row with the dotted toggle active                                                                |
+| S-23 | `en/staff-editing/articulations.png`      | Caixa note selected: accent and ghost enabled, the damped variant greyed                                    |
+| S-25 | `en/staff-editing/subdivisions.png`       | Selection card with the ratio list open, down to Octuplet                                                   |
+| S-27 | `en/staff-editing/entry-modes.png`        | Mode bar with `Overwrite` active and `Insert` beside it                                                     |
+| S-29 | `en/staff-editing/selection-actions.png`  | Track piece toolbar of one bar: simile and clear                                                            |
+| S-30 | `en/staff-editing/bar-actions.png`        | Bar action strip above the bars                                                                             |
+| S-31 | `en/staff-editing/track-actions.png`      | Track sidebar kebab open with add, duplicate, clear, delete                                                 |
+| S-32 | `en/staff-editing/simile.png`             | Second bar with the simile sign and the track piece toolbar                                                 |
+| S-35 | `en/staff-editing/paste-warning.png`      | Toast of a refused paste across instruments, in the grid view                                               |
+| S-39 | `en/playback/play-focus.png`              | Play focus on bars 2 and 3, mixer legend below                                                              |
+| S-42 | `en/presentation/notification-center.png` | History panel with one message and the do-not-disturb control                                               |
+| S-44 | `en/print/preview-controls.png`           | Layout and print detail bars: orientation, borders, scale, tracks                                           |
+| S-46 | `en/print/mp3-export.png`                 | Export dialog with the progress bar while the MP3 is rendered                                               |
+| S-48 | `en/library/mobile-library.png`           | 390 × 844, library drawer with an open folder                                                               |
+| S-49 | `en/presentation/tablet-grid.png`         | 1024 × 768, grid view with the mixer expanded                                                               |
+| S-50 | `en/troubleshooting/connection-lost.png`  | Backend Connection Lost dialog with the database error line                                                 |
+| S-51 | `en/troubleshooting/error-page.png`       | Error page of the error boundary: warning title, retry and reload, GitHub link, collapsed technical details |
+| S-52 | `en/administration/backend-setup.png`     | Backend Setup dialog with engine, host, port and database, offering `Initialize Database`                   |
+| S-53 | `en/presentation/release-notes.png`       | Release notes dialog; shows 1.5.0 and needs a re-capture once 2.0.0 is in                                   |
+
+Notes on this batch:
+
+- A track-piece selection (S-29) comes from a rectangle in the gap below a staff row; a rectangle over the notes
+  themselves yields a note selection instead.
+- `S-23` shows the real availability: the Caixa has no muted variant, so the `+` button stays disabled.
+- `S-25` was taken with the card at the top, so the ratio list runs out of window height and Octuplet is cut.
+- The Users & Groups dialog has no tabs: S-18 and S-19 are the two lists of the same dialog.
+- `S-12` shows "No groups available", because the demo backend exposes no group logins.
+- `S-13` needs an empty database; it was taken against the throwaway database `asb_firstrun`, which is deleted again.
+- `S-32` uses the second bar, because the simile action is disabled in the first one.
+- `S-50` was captured with the database server stopped; the dialog names the failed connection, and its
+  spinner is the reconnect attempt. It has no attempt counter to show.
+- `S-39` shows both meanings of focus in one frame: the per-bar `Play Focus` toggles above the bars and the
+  `Mute`/`Focus` sliders of the mixer. The bars are 2 and 3, so the active state differs from the neighbours.
+- `S-35` and `S-42` come from a maintainer screenshot in normal use: a paste across instruments warns in the grid
+  view, and the bell keeps that message in its history. Both were not reproducible from a scripted session.
+- `S-42` holds one message, not the two the storyboard asks for: the history only ever showed the paste warning.
+- `S-51` is a maintainer screenshot: it needs an unhandled render error, which no scripted session produces. The
+  `Technical details` section stays collapsed, which is how the page opens.
+- `S-52` was taken while the health endpoint reported `initialized: false`, the state of a database without the
+  application tables.
+
+All P3 motives are captured.
+
+- `S-41` (footer) and `S-53` (release notes) still show the version `v1.5.0` and the 1.5.0 notes; both are re-captured
+  once 2.0.0 exists. Neither file name carries a version, so a re-capture replaces the image in place. Both are linked
+  from `en/using/presentation.md` already.
 
 ## Storyboard
 
@@ -70,7 +201,7 @@ Instrument crops come from one locally created score, **"Instrument Reference"**
 | S-33  | P2  | Measure width resizing           | One narrow and one wide bar side by side, resize handle visible         | staff editing, printing             | `en/staff-editing/measure-width.png`      |
 | S-34  | P2  | Dynamics                         | Hairpin and forte mark with drag handles                                | staff editing, instruments intro    | `notation/dynamics.png`                   |
 | S-35  | P3  | Paste mismatch warning           | Notification with an instrument mismatch message                        | staff editing                       | `en/staff-editing/paste-warning.png`      |
-| S-36  | P2  | Grid radial note menu            | Grid cell with the radial style fan open                                | grid editing                        | `en/grid-editing/radial-menu.png`         |
+| S-36  | —   | Grid radial note menu (removed)  | Not captured: the grid uses the shared note style bar                   | —                                   | —                                         |
 | S-37  | P2  | Grid note cells                  | Two bars of grid view with accent and ghost variants visible            | grid editing                        | `en/grid-editing/grid-cells.png`          |
 | S-38  | P2  | Playback bar                     | Playback bar with BPM, volume, loop, metronome, count-in                | playback                            | `en/playback/playback-bar.png`            |
 | S-39  | P3  | Play Focus                       | Two bars marked as play range, others not                               | playback                            | `en/playback/play-focus.png`              |

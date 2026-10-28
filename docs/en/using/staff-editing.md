@@ -16,6 +16,10 @@ Edit mode requires write access. Without it, the attempt ends with `You do not h
 
 `Save Score` in the header, or `Ctrl`/`Cmd`+`S`, writes the score to the backend. Leaving edit mode saves first and releases the lock; a failed save keeps you in edit mode so nothing is lost.
 
+![Staff view in edit mode with a note selected and the note style popup open](../../images/en/staff-editing/edit-mode.png)
+
+*Edit mode: the mode bar offers `Entry`, the bar action icons sit above the bars, and a selected note opens the note style popup.*
+
 ## Entering Notes
 
 Notes are entered at the cursor:
@@ -39,6 +43,10 @@ The `Note value / duration` section offers whole, half, quarter, eighth, sixteen
 
 The note length toolbar exists only in the staff view; the grid view works with fixed steps.
 
+![The note value row of the toolbar](../../images/en/staff-editing/note-length.png)
+
+*Whole to thirty-second in the note value row, with the dot toggle at the right in its active state.*
+
 ## Rests
 
 A rest is entered like a note, with `0` or the rest button. Rests keep their length and can be selected and changed like notes. A bar without content shows a whole-bar rest, and a run of rests stays visible and selectable instead of disappearing.
@@ -47,9 +55,17 @@ A rest is entered like a note, with `0` or the rest button. Rests keep their len
 
 Every instrument brings its own list of note styles, and the `Note style & technique` section lists them for the track the cursor is in. A style decides both the sound and the symbol, so choosing `Slap` on a Timbau changes what you hear and what is drawn. [Instrument and Notation Reference](../instruments.md) describes the styles per instrument.
 
+![The note style card of a Repinique track](../../images/en/staff-editing/note-styles.png)
+
+*The card of a Repinique track in bar 3: eight styles, the note value row, and the articulations the instrument offers.*
+
 ## Articulations
 
 The `Articulation` section offers `Accent`, `Damped`, and `Ghost`. Which of them are available depends on the instrument's styles; the marks are drawn next to the notehead without changing the chosen style. The button that is active applies to the notes at the cursor, and choosing another button replaces the mark.
+
+![The articulation section of the toolbar](../../images/en/staff-editing/articulations.png)
+
+*`Accent`, `Damped`, and `Ghost` as buttons; the two the instrument has no variant for stay greyed out.*
 
 ## Overwrite and Insert
 
@@ -62,6 +78,10 @@ The `Entry` section of the mode bar decides what a new note does to the content 
 
 The chosen mode is remembered in your browser. The grid view always works in overwrite mode, because its raster has no room to push.
 
+![The mode bar with Staff and Overwrite active](../../images/en/staff-editing/entry-modes.png)
+
+*The mode bar: `View` switches between grid and staff, `Entry` between overwrite and insert.*
+
 ## Selecting
 
 Selection is the handle for everything that acts on existing content:
@@ -71,13 +91,30 @@ Selection is the handle for everything that acts on existing content:
 - Drag a rectangle to select the note groups it covers.
 - `Escape` clears the selection.
 
+A range selection always starts on an existing note: the first note anchors the selection, and the rectangle or the
+next `Shift`-click only extends it. Starting on an empty cell merely places the entry cursor.
+
 The selection keeps the granularity of the element you touched first: a selection that started on a note stays a note selection, one that started on a whole bar stays a bar selection.
 
 A selection that covers whole bars of a track opens the track piece toolbar with the one-bar repeat and the clear action. A selection of notes opens the toolbar card with note styles, values, articulations, and tuplets.
 
+![Bars 4 and 5 of the Agogô tracks selected](../../images/en/staff-editing/selection.png)
+
+*A selection over two bars of the Agogô tracks; the card for the selected notes opens below.*
+
+![The track piece toolbar of a selected bar](../../images/en/staff-editing/selection-actions.png)
+
+*A whole-bar selection keeps two actions: the one-bar repeat and clear.*
+
 ## Subdivisions and Tuplets
 
-A subdivision divides a position into a tuplet. `Add subdivision` offers eight ratios: Duplet, Triplet, Quadruplet, Quintuplet, Sextuplet, Septuplet, Octuplet, and Nontuplet. Subdivisions can be nested, and their labels are drawn above the group.
+A subdivision divides a position into a tuplet. `Add subdivision` offers eight ratios: Duplet, Triplet, Quadruplet, Quintuplet, Sextuplet, Septuplet, Octuplet, and Nontuplet. Subdivisions can be nested: select a note inside a subdivision and add another one, and the new tuplet sits inside that slot. The label of the outer tuplet is drawn above the group, the label of a nested one below it.
+
+![The ratio list of the subdivision button](../../images/en/staff-editing/subdivisions.png)
+
+*`Add subdivision` opens the ratios from a duplet downward; the list continues below the visible part of the card.*
+
+![A quintuplet with a triplet nested in its third slot](../../images/notation/tuplets.png)
 
 The subdivision is one block while it exists: notes inside it are addressed within the tuplet, not in the bar's plain step grid.
 
@@ -101,6 +138,10 @@ The bar action strip above the bars offers, per bar:
 
 Repeat barlines change the order playback uses, not the written order of the score; see [Playback and Practice](playback.md).
 
+![The bar action icons in the mode bar](../../images/en/staff-editing/bar-actions.png)
+
+*Between the mode switches and the tools: insert, clear, delete, duplicate, and the two repeat barlines, all for the selected bar.*
+
 ## Track Actions
 
 The action button on a track row opens the track menu, titled with the instrument's name:
@@ -111,6 +152,10 @@ The action button on a track row opens the track menu, titled with the instrumen
 - Clear all notes and settings from the track.
 - Delete this track and all notes in it.
 
+![The track menu of an Agogô 4-Bell track](../../images/en/staff-editing/track-actions.png)
+
+*The action button of a track row opens add, duplicate, clear, and delete for that track.*
+
 ## One-Bar Repeat
 
 The track piece toolbar carries a one-bar repeat (simile) and a clear action:
@@ -120,9 +165,17 @@ The track piece toolbar carries a one-bar repeat (simile) and a clear action:
 - Playback plays the bar the mark stands for.
 - `Clear track piece` empties the covered bars of that track.
 
+![A simile bar with the track piece toolbar](../../images/en/staff-editing/simile.png)
+
+*The second bar of a track: the simile sign stands for bar 1, and the toolbar offers the repeat and the clear action.*
+
 ## Bar Widths
 
 The closing barline of a bar can be dragged to make that bar narrower or wider, which helps to give a busy bar more room or to fit more bars on a screen. Double-clicking the handle restores the automatic width. The print preview offers the same adjustment.
+
+![Two bars of different width with the resize handle](../../images/en/staff-editing/measure-width.png)
+
+*Bars 2 and 3 with different widths; the grip on the right barline is the resize handle.*
 
 ## Dynamics
 
@@ -139,6 +192,10 @@ Dynamics affect the playback volume over the span they cover; the notes themselv
 - Content that does not fit the target is refused with a message instead of being pasted wrongly: `Cannot paste: at
   least one instrument does not match.`, `Cannot paste: the meter does not match.`, `Cannot paste: the track count does
   not match.`, and a warning about mixing subdivided and plain selections.
+
+![A refused paste reports the instrument mismatch](../../images/en/staff-editing/paste-warning.png)
+
+*The grid view reports a refused paste; the toast disappears, the message stays in the notification center.*
 
 ## Undo and Redo
 
