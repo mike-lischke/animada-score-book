@@ -115,14 +115,13 @@ Owners and administrators get a `Group Access` tooltip on the indicator and can 
 
 The backend decides, not the browser:
 
-- **Read access** lets you open, play, print, and export a score.
-- **Write access** is required to enter edit mode, to save, to remove entries, and to create folders or imports inside a
-  folder.
+- **Read access** lets you open, play, print, and export a score, and it is enough to edit it in this browser.
+- **Write access** is required to save a score, to remove entries, and to create folders or imports inside a folder.
 - **Ownership** adds the `Group Access` editor.
 - **Administrators** may manage and remove every entry and every permission.
 - **Anonymous visitors** see every entry in the `World` group and nothing else.
 
-Trying to edit a score without write access ends the attempt with `You do not have permission to edit this score.` Without a signed-in account — as an anonymous visitor, or with a session that has ended — the application says `Your session has ended. Log in again to edit.` and opens the sign-in dialog instead.
+Editing needs no write access: without a signed-in account you can open edit mode on any score you can read, and the changes stay in this browser. `Save Score` then reports `Sign in to save this score.` A signed-in account without write access is refused when it tries to enter edit mode, with `You do not have permission to edit this score.`
 
 ## Score Locks
 

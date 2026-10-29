@@ -578,7 +578,7 @@ export class SelectionManager {
      * entry closest to the click's centre wins; an equally close one wins when it comes later, which is the
      * element later in the DOM.
      *
-     * @param rect The click rectangle in viewport coordinates.
+     * @param rect The click rectangle in the layout coordinates of the score.
      * @param entries The entries the click touched.
      *
      * @returns The one entry the click addresses, or the entries when it touched at most one.
@@ -1200,7 +1200,7 @@ export class SelectionManager {
      * Collects and resolves hit-test results for a given rectangle.
      * Track-level entries from TrackControls take priority; otherwise the dominant granularity wins.
      *
-     * @param rect The selection rectangle in viewport coordinates.
+     * @param rect The selection rectangle in the layout coordinates of the score.
      *
      * @returns The resolved entries, possibly empty.
      */
@@ -1211,7 +1211,7 @@ export class SelectionManager {
     /**
      * Runs every registered hit tester for the given rectangle.
      *
-     * @param rect The selection rectangle in viewport coordinates.
+     * @param rect The selection rectangle in the layout coordinates of the score.
      *
      * @returns All entries the hit testers reported.
      */

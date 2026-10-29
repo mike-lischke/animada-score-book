@@ -60,6 +60,30 @@ export class ScoreElementRegistry {
     private readonly recordsByStep = new Map<string, Set<IScoreElementRecord>>();
 
     /**
+     * Rects the score elements report are divided by the viewer's CSS zoom, so a rect taken from them has to be
+     * scaled by this factor to reach viewport coordinates, as pointer events and documents shells use them.
+     *
+     * @param element An element the score is drawn with, or any element inside it.
+     *
+     * @returns The zoom the element is drawn under, or 1 when it is not zoomed.
+     */
+    public static zoomScaleOf(element?: HTMLElement | null): number {
+        let current: HTMLElement | null | undefined = element;
+        while (current && !current.style.zoom) {
+            current = current.parentElement;
+        }
+
+        if (!current) {
+            return 1;
+        }
+
+        const zoom = current.style.zoom.trim();
+        const scale = zoom.endsWith("%") ? (Number.parseFloat(zoom) / 100) : Number.parseFloat(zoom);
+
+        return Number.isFinite(scale) && scale > 0 ? scale : 1;
+    }
+
+    /**
      * Creates a callback ref that keeps the supplied location's registration current.
      *
      * @param location The domain identity to associate with the rendered element.

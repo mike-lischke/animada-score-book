@@ -1,6 +1,11 @@
 # Animada Score Book Release Notes
 
-Version history, newest first. The current release is **2.0.0**.
+Version history, newest first. The current release is **2.0.1**.
+
+## 2.0.1
+
+- Zoom: selecting works at every zoom level. Clicks and drags address the notes, cells, and bars the pointer is on, and the selection card hangs under the content it belongs to, while both used to land on other parts of the score at zoom levels other than 100 %.
+- Visitors without a login: entering `Edit Mode` no longer asks for a session. The score is edited locally and the visitor is told once that the changes stay in this browser. `Save Score` reports `Sign in to save this score.` instead of opening the login dialog, which would reload the score and drop the edits.
 
 ## 2.0.0
 

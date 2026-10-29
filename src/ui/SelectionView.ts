@@ -9,7 +9,7 @@ import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { EditEntryMode } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
-    ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
+    ScoreElementKind, ScoreElementRegistry, type IScoreElementLocation,
 } from "./ScoreElementRegistry.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import {
@@ -178,6 +178,35 @@ export class SelectionView {
         this.verticalScrollHost = vertical;
     }
 
+    /**
+     * @param rect A rectangle in viewport coordinates, as pointer events and document-positioned elements use them.
+     *
+     * @returns The rectangle in the coordinate space the score elements report through
+     *          `getBoundingClientRect()`, which under the viewer's CSS zoom is the viewport space divided by the zoom.
+     */
+    private toScoreRect(rect: DOMRect): DOMRect {
+        const scale = ScoreElementRegistry.zoomScaleOf(this.horizontalScrollHost);
+        if (scale === 1) {
+            return rect;
+        }
+
+        return new DOMRect(rect.left / scale, rect.top / scale, rect.width / scale, rect.height / scale);
+    }
+
+    /**
+     * @param rect A rectangle in the coordinate space the score elements report.
+     * @param scale The zoom the rectangle is drawn under.
+     *
+     * @returns The rectangle in viewport coordinates, as pointer events and the selection rectangle use them.
+     */
+    private toViewportRect(rect: DOMRect, scale: number): DOMRect {
+        if (scale === 1) {
+            return rect;
+        }
+
+        return new DOMRect(rect.left * scale, rect.top * scale, rect.width * scale, rect.height * scale);
+    }
+
     private handlePointerDown = (event: PointerEvent): void => {
         if ((this.zenMode && event.button !== 0) || event.defaultPrevented || this.isFormElement(event.target)) {
             return;
@@ -213,8 +242,8 @@ export class SelectionView {
         }
 
         const half = 2;
-        const clickRect = new DOMRect(event.clientX - half, event.clientY - half,
-            (half * 2) + 1, (half * 2) + 1);
+        const clickRect = this.toScoreRect(new DOMRect(event.clientX - half, event.clientY - half,
+            (half * 2) + 1, (half * 2) + 1));
         this.manager.previewNote(clickRect);
 
         if (!this.showsCursorOnly) {
@@ -245,8 +274,10 @@ export class SelectionView {
 
     private handlePointerMove = (event: PointerEvent): void => {
         if (this.zenMode && this.dragPending) {
-            if (this.horizontalScrollHost) {
-                this.horizontalScrollHost.scrollLeft = this.startScrollLeft + this.startX - event.clientX;
+            const horizontal = this.horizontalScrollHost;
+            if (horizontal) {
+                const scale = ScoreElementRegistry.zoomScaleOf(horizontal);
+                horizontal.scrollLeft = this.startScrollLeft + ((this.startX - event.clientX) / scale);
             }
 
             if (this.verticalScrollHost) {
@@ -268,7 +299,7 @@ export class SelectionView {
         this.updateRectElement(event.clientX, event.clientY);
         this.updateAutoScroll(event.clientX, event.clientY);
 
-        const rect = this.rectElement.getBoundingClientRect();
+        const rect = this.toScoreRect(this.rectElement.getBoundingClientRect());
         if (rect.width > 2 || rect.height > 2) {
             if (this.dragPending) {
                 this.isDragging = true;
@@ -292,8 +323,8 @@ export class SelectionView {
             // Use a small rect (5×5) instead of a single point so the hit-test is as forgiving
             // as a minimal drag (which requires width > 2 || height > 2 before firing).
             const half = 2;
-            const clickRect = new DOMRect(this.startX - half, this.startY - half,
-                (half * 2) + 1, (half * 2) + 1);
+            const clickRect = this.toScoreRect(new DOMRect(this.startX - half, this.startY - half,
+                (half * 2) + 1, (half * 2) + 1));
             this.manager.endSelection(clickRect, this.showsCursorOnly);
         }
 
@@ -322,8 +353,9 @@ export class SelectionView {
 
         const hHost = this.horizontalScrollHost;
         if (hHost && target === hHost) {
-            deltaX = hHost.scrollLeft - this.startScrollLeft;
-            deltaY = hHost.scrollTop - this.startScrollTop;
+            const scale = ScoreElementRegistry.zoomScaleOf(hHost);
+            deltaX = (hHost.scrollLeft - this.startScrollLeft) * scale;
+            deltaY = (hHost.scrollTop - this.startScrollTop) * scale;
             this.startScrollLeft = hHost.scrollLeft;
             this.startScrollTop = hHost.scrollTop;
             handled = true;
@@ -331,7 +363,8 @@ export class SelectionView {
 
         const vHost = this.verticalScrollHost;
         if (vHost && target === vHost) {
-            const verticalDelta = vHost.scrollTop - this.startVerticalScrollTop;
+            const scale = ScoreElementRegistry.zoomScaleOf(vHost);
+            const verticalDelta = (vHost.scrollTop - this.startVerticalScrollTop) * scale;
             deltaY += verticalDelta;
             this.startVerticalScrollTop = vHost.scrollTop;
             handled = true;
@@ -347,7 +380,7 @@ export class SelectionView {
         this.updateRectElement(this.lastPointerX, this.lastPointerY);
 
         if (this.isDragging) {
-            const rect = this.rectElement.getBoundingClientRect();
+            const rect = this.toScoreRect(this.rectElement.getBoundingClientRect());
             void requisitions.execute("selectionRectChanged", { rect });
         }
     };
@@ -807,7 +840,8 @@ export class SelectionView {
 
         // Horizontal auto-scroll on the horizontal host.
         if (this.horizontalScrollHost) {
-            const hostRect = this.horizontalScrollHost.getBoundingClientRect();
+            const hostRect = this.toViewportRect(this.horizontalScrollHost.getBoundingClientRect(),
+                ScoreElementRegistry.zoomScaleOf(this.horizontalScrollHost));
             const distLeft = clientX - hostRect.left;
             const distRight = hostRect.right - clientX;
 
@@ -821,7 +855,8 @@ export class SelectionView {
         // Vertical auto-scroll on the vertical host.
         const verticalHost = this.verticalScrollHost ?? this.horizontalScrollHost;
         if (verticalHost) {
-            const hostRect = verticalHost.getBoundingClientRect();
+            const hostRect = this.toViewportRect(verticalHost.getBoundingClientRect(),
+                ScoreElementRegistry.zoomScaleOf(verticalHost));
             const distTop = clientY - hostRect.top;
             const distBottom = hostRect.bottom - clientY;
 
@@ -837,14 +872,15 @@ export class SelectionView {
 
         if (scrollDX !== 0 || scrollDY !== 0) {
             this.autoScrollTimer ??= setInterval(() => {
-                if (this.autoScrollDX !== 0 && this.horizontalScrollHost) {
-                    this.horizontalScrollHost.scrollBy(this.autoScrollDX, 0);
+                const horizontal = this.horizontalScrollHost;
+                if (this.autoScrollDX !== 0 && horizontal) {
+                    horizontal.scrollBy(this.autoScrollDX / ScoreElementRegistry.zoomScaleOf(horizontal), 0);
                 }
 
                 if (this.autoScrollDY !== 0) {
-                    const vh = this.verticalScrollHost ?? this.horizontalScrollHost;
-                    if (vh) {
-                        vh.scrollBy(0, this.autoScrollDY);
+                    const vertical = this.verticalScrollHost ?? this.horizontalScrollHost;
+                    if (vertical) {
+                        vertical.scrollBy(0, this.autoScrollDY / ScoreElementRegistry.zoomScaleOf(vertical));
                     }
                 }
             }, 16);

@@ -202,6 +202,9 @@ export class App extends UIComponent<{}, IAppState> {
     /** Print settings of the application session, retained while the preview is closed. */
     private printSession = new PrintSession();
 
+    /** Shown once per session: a visitor without a login edits in this browser only. */
+    private localEditingHintShown = false;
+
     private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
@@ -2160,6 +2163,16 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private confirmExitEditMode = async (): Promise<boolean> => {
+        // A visitor without a session keeps the local copy: there is nothing to save and no lock to release.
+        if (!this.dataModel.authenticated) {
+            AppStorage.saveSetting("editMode", false);
+            this.dataModel.lockToken = undefined;
+            this.setState({ editMode: false, lockToken: undefined, lockConflict: undefined });
+            void requisitions.execute("editModeChanged", false);
+
+            return true;
+        }
+
         if (this.undoManager?.canUndo) {
             const actions = {
                 accept: "Save Changes",
@@ -2294,7 +2307,9 @@ export class App extends UIComponent<{}, IAppState> {
                 return Promise.resolve(true);
             }
 
-            if (arrangement.id >= 10000) {
+            // Without a session the score cannot be locked and nothing can be saved. The edits stay in this browser,
+            // which is what a visitor who wants to try the editor expects.
+            if (arrangement.id >= 10000 && this.dataModel.authenticated) {
                 const data = await this.dataModel.lockScore(arrangement.id);
 
                 if (data.success && data.token) {
@@ -2338,12 +2353,19 @@ export class App extends UIComponent<{}, IAppState> {
                 }
             }
 
+            if (!this.dataModel.authenticated && !this.localEditingHintShown) {
+                this.localEditingHintShown = true;
+                void requisitions.execute("showInfo", "Editing locally. Sign in to save your changes.");
+            }
+
             this.setState({ editMode: true });
         } else {
-            // Save before unlocking. Stay in edit mode if save fails.
-            const saved = await this.saveScore();
-            if (!saved) {
-                return Promise.resolve(true);
+            // Save before unlocking. Stay in edit mode if save fails. Without a session there is nothing to save.
+            if (this.dataModel.authenticated) {
+                const saved = await this.saveScore();
+                if (!saved) {
+                    return Promise.resolve(true);
+                }
             }
 
             const { lockToken } = this.state;
@@ -2396,6 +2418,13 @@ export class App extends UIComponent<{}, IAppState> {
 
         if (!this.undoManager?.canUndo) {
             return true;
+        }
+
+        if (!this.dataModel.authenticated) {
+            // Signing in reloads the score, so the prompt stays a hint instead of opening the login dialog here.
+            void requisitions.execute("showWarning", "Sign in to save this score.");
+
+            return false;
         }
 
         try {

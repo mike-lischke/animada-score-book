@@ -136,7 +136,7 @@ export interface ISelectionEntry {
  * rect is what lets a click that touches several elements address the one closest to it.
  */
 export interface ISelectionHitEntry extends ISelectionEntry {
-    /** The rect of the element the entry was found at, in viewport coordinates. */
+    /** The rect of the element the entry was found at, in the layout coordinates of the score. */
     rect: DOMRect;
 }
 
@@ -152,7 +152,7 @@ export interface ISelectionHitTester {
     /**
      * Returns selection entries for all elements that intersect the given rectangle.
      *
-     * @param rect The selection rectangle in viewport coordinates.
+     * @param rect The selection rectangle in the layout coordinates of the score.
      *
      * @returns The entries describing what was hit, each with the rect of its element.
      */
@@ -170,7 +170,7 @@ export interface ISelectionDelta {
 
 /** Published by the SelectionView when the selection rectangle changes during a drag. */
 export interface ISelectionRectChange {
-    /** The selection rectangle in viewport coordinates. */
+    /** The selection rectangle in the layout coordinates of the score, not in viewport coordinates. */
     rect: DOMRect;
 }
 

@@ -37,7 +37,7 @@ docs/en/
 
 ## Versioned Consumption
 
-- The website consumes a released version, identified by the git tag `v2.0.0` (or its commit SHA), never the moving
+- The website consumes a released version, identified by the git tag `v2.0.1` (or its commit SHA), never the moving
   `main` branch.
 - The consumed version is displayed on the site, so a reader can tell which application release the text describes.
 - A new handbook version is taken over only after the matching application release is tagged. The update procedure is
