@@ -1,12 +1,12 @@
 # Tastaturkürzel
 
-Die Anwendung hört auf einen kleinen Satz von Tasten, und jede gehört zu einem Kontext. Tippen in einem Textfeld gewinnt immer; die Tasten für den Score wirken nur, solange der Score-Bereich den Fokus hat.
+Die Anwendung hört auf einen kleinen Satz von Tasten, und jede gehört zu einem Kontext. Tippen in einem Textfeld gewinnt immer; die Tasten für die Partitur (englisch: score) wirken nur, solange der Partiturbereich den Fokus hat.
 
 ## Globale Kürzel
 
 | Taste                    | Aktion                                                                                               | Verfügbar                              |
 | ------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `Ctrl`/`Cmd`+`S`         | Den Score speichern                                                                                  | Im edit mode                           |
+| `Ctrl`/`Cmd`+`S`         | Die Partitur speichern                                                                               | Im edit mode                           |
 | `Ctrl`/`Cmd`+`P`         | Die print preview statt des Druckdialogs des Browsers öffnen                                         | Immer                                  |
 | `Ctrl`/`Cmd`+`C`         | Die Auswahl kopieren                                                                                 | Immer                                  |
 | `Ctrl`/`Cmd`+`X`         | Die Auswahl ausschneiden                                                                             | Im edit mode                           |
@@ -20,7 +20,7 @@ Die Anwendung hört auf einen kleinen Satz von Tasten, und jede gehört zu einem
 
 `G` und `S` reagieren nur auf die nackte Taste, ohne `Ctrl`, `Cmd`, `Alt` oder `Shift`, sodass sie nicht mit Browser-Kürzeln kollidieren. `Ctrl`+`Y` wird bewusst nicht mit `Cmd` akzeptiert: Safari und Chrome verbinden eine eigene Bedeutung damit.
 
-## Eingabe im Score
+## Eingabe in der Partitur
 
 | Taste                             | Aktion                                                              | Ansicht    |
 | --------------------------------- | ------------------------------------------------------------------- | ---------- |
@@ -54,4 +54,4 @@ Die grid view arbeitet immer im Modus Overwrite, `O` und `I` haben dort also kei
 
 - [Bearbeiten in der staff view](../using/staff-editing.md) erklärt die Abläufe hinter den Eingabetasten.
 - [Bearbeiten in der grid view](../using/grid-editing.md) behandelt das Raster und die Leiste der note styles.
-- [Einen Score lesen](../using/presentation.md) beschreibt die Ansichten, zwischen denen `G` und `S` wechseln.
+- [Eine Partitur lesen](../using/presentation.md) beschreibt die Ansichten, zwischen denen `G` und `S` wechseln.

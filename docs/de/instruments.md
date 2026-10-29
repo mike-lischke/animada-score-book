@@ -17,7 +17,7 @@ Diese Regeln gelten für alle Instrumente:
   der Zelle; im System erscheint er als Form des Notenkopfs und, bei manchen Techniken, als Zeichen neben der Note.
 - Eine **articulation** ändert, wie eine Note eines gegebenen style angeschlagen wird: `Accent` zeichnet einen Akzent
   unter die Note, `Ghost` setzt die Note in Klammern und `Damped` ergänzt ein Pluszeichen.
-- **Dynamics** (`Crescendo`, `Decrescendo`, `Forte`) spannen über mehrere bars und ändern die Wiedergabelautstärke.
+- **Dynamics** (`Crescendo`, `Decrescendo`, `Forte`) spannen über mehrere Takte (englisch: bar) und ändern die Wiedergabelautstärke.
 - Farbe und Instrumentensymbol eines track kennzeichnen ihn im mixer und im System, sodass mehrere Instrumente
   unterscheidbar bleiben.
 
@@ -33,7 +33,7 @@ Articulations existieren nur dort, wo ein Instrument eine passende Variante dess
 
 ## Die Notenköpfe
 
-Jedes Symbol im Score entsteht aus einem kleinen Satz von Notenköpfen. Ein Kopf sagt, *wie* der Klang erzeugt wird, nicht *welches* Instrument ihn erzeugt, sodass derselbe Kopf über Instrumente hinweg erscheint: das Quadrat steht für einen Anschlag mit der Hand, etwa auf dem Repinique, dem Timbau oder mit der freien Hand eines Surdo, und das Oval für jeden Anschlag, der nachklingt.
+Jedes Symbol in der Partitur (englisch: score) entsteht aus einem kleinen Satz von Notenköpfen. Ein Kopf sagt, *wie* der Klang erzeugt wird, nicht *welches* Instrument ihn erzeugt, sodass derselbe Kopf über Instrumente hinweg erscheint: das Quadrat steht für einen Anschlag mit der Hand, etwa auf dem Repinique, dem Timbau oder mit der freien Hand eines Surdo, und das Oval für jeden Anschlag, der nachklingt.
 
 | Kopf                                                                                 | Name             | Bedeutung                                                                           |
 | ------------------------------------------------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------- |
@@ -140,9 +140,9 @@ Die Leittrommel der bateria, mit einem Stick und mit der Hand gespielt.
 
 **System:** eine Linie. Die Stockanschläge nutzen meist einen ovalen Notenkopf; `Rim` nutzt ein Kreuz, und die beiden Handanschläge nutzen ein Quadrat.
 
-![Notation von Repinique: alle sieben note styles in einer bar](../images/notation/repinique.png)
+![Notation von Repinique: alle sieben note styles in einem Takt](../images/notation/repinique.png)
 
-*Alle sieben styles in der Reihenfolge der bar: `Center`, `Outer Area`, `Rimshot`, `Rim`, `Buzz`, `Open`, `Slap`.*
+*Alle sieben styles in der Reihenfolge des Taktes: `Center`, `Outer Area`, `Rimshot`, `Rim`, `Buzz`, `Open`, `Slap`.*
 
 | note style   | Symbol                               | Bedeutung                              |
 | ------------ | ------------------------------------ | -------------------------------------- |

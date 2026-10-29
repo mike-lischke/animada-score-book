@@ -1,20 +1,20 @@
 # Bearbeiten in der grid view
 
-Die grid view ist die schnelle Spur für Rhythmus: eine Zelle pro Schritt, ein Symbol pro Zelle. Sie ist die bessere Ansicht, um Muster schnell einzugeben, und die staff view die bessere für Details. Beide bearbeiten denselben Score.
+Die grid view ist die schnelle Spur für Rhythmus: eine Zelle pro Schritt, ein Symbol pro Zelle. Sie ist die bessere Ansicht, um Muster schnell einzugeben, und die staff view die bessere für Details. Beide bearbeiten dieselbe Partitur (englisch: score).
 
 ## Das Raster
 
-Die grid view teilt jede bar in feste Schritte:
+Die grid view teilt jeden Takt (englisch: bar) in feste Schritte:
 
-- Ein in der Anwendung angelegter Score verwendet 16 Schritte pro bar in 4/4, 6 in 6/8, 10 in 5/4 und 7 in 7/8.
+- Eine in der Anwendung angelegte Partitur verwendet 16 Schritte pro Takt in 4/4, 6 in 6/8, 10 in 5/4 und 7 in 7/8.
 - Eine Zelle deckt genau einen Schritt ab und hält höchstens eine Note oder Pause.
 - Jede Zelle zeichnet das Symbol ihres note style, eingefärbt mit der Farbe des track.
 
 Weil das Raster fest ist, beginnt eine Note in der grid view immer auf einem Schritt und hat immer eine Länge, die das Raster ausdrücken kann. Die staff view hat keine solche Grenze.
 
-![Zwei bars der grid view mit Akzent- und Ghost-Zellen](../../images/en/grid-editing/grid-cells.png)
+![Zwei Takte der grid view mit Akzent- und Ghost-Zellen](../../images/en/grid-editing/grid-cells.png)
 
-*Zwei bars in der grid view: ein Symbol pro Schritt, pro track eingefärbt. Die kleineren Symbole in den abgerundeten Zellen sind Ghost-Noten und leichte Anschläge.*
+*Zwei Takte in der grid view: ein Symbol pro Schritt, pro track eingefärbt. Die kleineren Symbole in den abgerundeten Zellen sind Ghost-Noten und leichte Anschläge.*
 
 ## Noten eingeben und entfernen
 
@@ -28,7 +28,7 @@ Eine Zelle ohne Inhalt zeigt nichts. `0` macht die Zelle am Cursor zu einer Paus
 
 ## note styles
 
-Beide Ansichten bieten note styles an derselben Stelle: der note style-Abschnitt der Werkzeugleiste über dem Score, oder die Zifferntasten für den adressierten track. Die grid view fügt kein eigenes Menü hinzu, ein Rechtsklick auf eine Zelle hat also keine Aktion.
+Beide Ansichten bieten note styles an derselben Stelle: der note style-Abschnitt der Werkzeugleiste über der Partitur, oder die Zifferntasten für den adressierten track. Die grid view fügt kein eigenes Menü hinzu, ein Rechtsklick auf eine Zelle hat also keine Aktion.
 
 ## Welche Bedienelemente die grid view bietet
 
@@ -61,7 +61,7 @@ Eine subdivision belegt eine Zelle und zeigt ihre Teilschritte darin. Daraus fol
 
 ![Ein Quintuplet mit einem in seinen dritten Slot verschachtelten Triplet, in der grid view gezeichnet](../../images/en/grid-editing/tuplets.png)
 
-*Dasselbe verschachtelte tuplet wie in der staff view: Das Quintuplet füllt die erste Hälfte der bar, sodass seine fünf Slots schmaler sind als die Zellen drumherum, und das Triplet im dritten Slot wird zu drei eigenen Slots.*
+*Dasselbe verschachtelte tuplet wie in der staff view: Das Quintuplet füllt die erste Hälfte des Taktes, sodass seine fünf Slots schmaler sind als die Zellen drumherum, und das Triplet im dritten Slot wird zu drei eigenen Slots.*
 
 [Bearbeiten in der staff view](staff-editing.md) erklärt die Verhältnisse, die Verschachtelung und die drei Arten, eine kopierte subdivision einzufügen.
 
@@ -70,25 +70,25 @@ Eine subdivision belegt eine Zelle und zeigt ihre Teilschritte darin. Daraus fol
 Einige Dinge existieren nur in der staff view, weil sie mehr Platz brauchen als eine Zelle:
 
 - Freie Notenwerte, die nicht ins Raster passen.
-- bar-Breiten, die durch Ziehen eines Taktstrichs angepasst werden.
+- Taktbreiten, die durch Ziehen eines Taktstrichs angepasst werden.
 - Dynamics wie Crescendo, Decrescendo und Forte.
-- Das Setzen einer Wiederholung über eine bar (simile): Das Zeichen gehört zu einem track piece, und die grid view wählt
+- Das Setzen einer Wiederholung über einen Takt (simile): Das Zeichen gehört zu einem track piece, und die grid view wählt
   keine track pieces aus. Ein in der staff view gesetztes simile erscheint in der grid view als Wiederholungszeichen über
   diesem Takt.
 
-![Eine simile-bar in der grid view: ein track zeigt nur das Wiederholungszeichen, während die anderen tracks ihre Noten behalten](../../images/en/grid-editing/simile.png)
+![Ein Takt mit simile-Zeichen in der grid view: ein track zeigt nur das Wiederholungszeichen, während die anderen tracks ihre Noten behalten](../../images/en/grid-editing/simile.png)
 
-*bar 4 eines track: Das simile steht für bar 3, sodass die grid view das Wiederholungszeichen anstelle der Zellen dieses track zeichnet.*
+*Takt 4 eines track: Das simile steht für Takt 3, sodass die grid view das Wiederholungszeichen anstelle der Zellen dieses track zeichnet.*
 
-Wenn eine Änderung eines davon braucht, wechsle in die staff view und wieder zurück; beide Ansichten zeigen denselben Score.
+Wenn eine Änderung eines davon braucht, wechsle in die staff view und wieder zurück; beide Ansichten zeigen dieselbe Partitur.
 
 ## Die Ansicht während einer Sitzung wechseln
 
-`Grid` und `Staff` in der mode bar oder die Tasten `G` und `S` wechseln jederzeit. Die Wiedergabe läuft weiter, der Score bleibt geladen, und ungespeicherte Änderungen bleiben ungespeichert — nichts geht verloren, wenn du den Score von der anderen Seite betrachtest.
+`Grid` und `Staff` in der mode bar oder die Tasten `G` und `S` wechseln jederzeit. Die Wiedergabe läuft weiter, die Partitur bleibt geladen, und ungespeicherte Änderungen bleiben ungespeichert — nichts geht verloren, wenn du die Partitur von der anderen Seite betrachtest.
 
 ## Verwandte Kapitel
 
 - [Bearbeiten in der staff view](staff-editing.md) behandelt Notenwerte, articulations, subdivisions, dynamics und das
   Clipboard.
-- [Einen Score lesen](presentation.md) erklärt, wofür welche Ansicht gut ist.
+- [Eine Partitur lesen](presentation.md) erklärt, wofür welche Ansicht gut ist.
 - [Wiedergabe und Üben](playback.md) erklärt Play Focus, den die grid view ebenfalls nutzt.

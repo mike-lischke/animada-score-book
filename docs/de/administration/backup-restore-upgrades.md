@@ -4,12 +4,12 @@ Alles, was sich nicht neu erzeugen lässt, liegt in der Datenbank oder in den Da
 
 ## Was wo liegt
 
-| Ort                | Inhalt                                                                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Datenbank          | Ordner, Scores und ihr Inhalt, Benutzer, Gruppen, Gruppenmitgliedschaften, Berechtigungsfreigaben, die Migrationshistorie und das Login-Audit |
-| `public/uploads`   | Dateien, die über den Endpunkt für Instrumentenbilder hochgeladen wurden                                                                      |
-| Browser            | Oberflächeneinstellungen, der aktuelle Score als lokale Kopie und die Auswahl                                                                 |
-| deployment package | Anwendung, Musikfonts, Klangsamples und Migrationen — jederzeit ersetzbar                                                                     |
+| Ort                | Inhalt                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Datenbank          | Ordner, Partituren (englisch: score) und ihr Inhalt, Benutzer, Gruppen, Gruppenmitgliedschaften, Berechtigungsfreigaben, die Migrationshistorie und das Login-Audit |
+| `public/uploads`   | Dateien, die über den Endpunkt für Instrumentenbilder hochgeladen wurden                                                                                            |
+| Browser            | Oberflächeneinstellungen, die aktuelle Partitur als lokale Kopie und die Auswahl                                                                                    |
+| deployment package | Anwendung, Musikfonts, Klangsamples und Migrationen — jederzeit ersetzbar                                                                                           |
 
 Die Browser-Kopie ist eine Bequemlichkeit, kein Backup: Sie gehört zu einem Browserprofil und einem Gerät, und das Löschen der Websitedaten entfernt sie.
 
@@ -50,8 +50,8 @@ tar -czf animada-uploads-$(date +%F).tar.gz public/uploads
 3. Stelle `public/uploads` neben der Anwendung wieder her.
 4. Starte das Backend und prüfe das Protokoll: `All migrations already applied.` bedeutet, dass der Dump zur Version des
    Codes passt.
-5. Prüfe das Ergebnis: Melde dich an, öffne einen Score, prüfe eine Gruppenfreigabe im Berechtigungseditor und spiele eine
-   bar.
+5. Prüfe das Ergebnis: Melde dich an, öffne eine Partitur, prüfe eine Gruppenfreigabe im Berechtigungseditor und spiele einen
+   Takt (englisch: bar).
 
 Eine Wiederherstellung in eine Datenbank, die bereits Tabellen enthält, scheitert an der ersten doppelten Tabelle. Lösche die Datenbank vorher und lege sie neu an, oder stelle in einen neuen Namen wieder her und lasse `backend-config.json` darauf zeigen.
 
@@ -77,7 +77,7 @@ Migration "<file>" was modified after it was applied.
 Drop the branch database and restart the server to re-apply all migrations.
 ```
 
-Es gibt keine Down-Migrationen und keinen Reparaturschritt. Die einzigen Wege vorwärts sind das Wiederherstellen eines Backups, das zum Code passt, oder ein Neuaufbau der Datenbank, der jeden Benutzer und jeden Score verliert. Deshalb wird `migrations/` als append-only behandelt.
+Es gibt keine Down-Migrationen und keinen Reparaturschritt. Die einzigen Wege vorwärts sind das Wiederherstellen eines Backups, das zum Code passt, oder ein Neuaufbau der Datenbank, der jeden Benutzer und jede Partitur verliert. Deshalb wird `migrations/` als append-only behandelt.
 
 ## Zwischen Releases aktualisieren
 
@@ -108,7 +108,7 @@ Eine Abweichung der Checksumme in der Entwicklung bedeutet meist, dass der Branc
 
 `Reset Database` im Dialog `Backend Setup` löscht jede Tabelle und baut das Schema neu auf. Danach existieren die Seed-Daten und das geteilte Konto `anonymous` wieder, und `Finish Installation` fragt nach dem ersten Administrator.
 
-Alles andere ist weg: Scores, Benutzer, Gruppen, Freigaben und das Login-Audit. Exportiere, was du brauchst, und lege ein Backup an, bevor du es nutzt.
+Alles andere ist weg: Partituren, Benutzer, Gruppen, Freigaben und das Login-Audit. Exportiere, was du brauchst, und lege ein Backup an, bevor du es nutzt.
 
 ## Verwandte Kapitel
 

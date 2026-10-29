@@ -10,10 +10,10 @@ Dieses Kapitel kartiert den Code. Die Begründung dahinter liegt in den [Archite
 | `src/core/serialisation/`       | Snapshot-Formate, Packen für URL und Speicher, Migration älterer Arrangements                                                  |
 | `src/player/`                   | Wiedergabe-Engine: `ArrangementPlayer`, `TrackPlayer`, Metronom, Zeitkoordination                                              |
 | `src/supplement/`               | Hilfsmittel: der typisierte Event-Bus, Escape-Stack, Semaphore, MP3-Export                                                     |
-| `src/components/ui/`            | Feature-Komponenten: Arrangement, bars in beiden Ansichten, Noten, tracks, Header, Footer, Bibliothek, Druck                   |
+| `src/components/ui/`            | Feature-Komponenten: Arrangement, Takte (englisch: bar) in beiden Ansichten, Noten, tracks, Header, Footer, Bibliothek, Druck  |
 | `src/components/ui/framework/`  | Die eigene UI-Komponentenbibliothek: Basisklasse, Container, Dialog, Menü, Tree Grid, Tab View, Popup                          |
 | `src/ui/`                       | Top-Level-Module: Score Library, Settings, Login, Auswahl- und Modus-Manager, Editoren                                         |
-| `src/server/`                   | Backend: Einstiegspunkt, Router, Authentifizierung, Score- und Admin-Routen, statische Dateien, Datenbankadapter               |
+| `src/server/`                   | Backend: Einstiegspunkt, Router, Authentifizierung, Partitur- und Admin-Routen, statische Dateien, Datenbankadapter            |
 | `src/assets/`, `src/generated/` | Icons und Instrumentenbilder; generierte Font-Metriken und Theme-CSS                                                           |
 | `build/`                        | Build- und Wartungsskripte: Font-Metriken, Themes, Migrationen, Packaging, Seed-Daten                                          |
 | `migrations/`                   | Das Datenbankschema als geordnete SQL-Dateien                                                                                  |
@@ -32,7 +32,7 @@ Drei Muster erklären den größten Teil des Codes:
 - **Requisitions statt direkter Aufrufe.** Die Kommunikation zwischen Komponenten läuft über einen typisierten Event-Bus
   (`src/supplement/Requisitions.ts`). Komponenten registrieren sich für Themen wie `settingsChanged`,
   `playerStateChanged` oder `selectionChanged`, statt Referenzen aufeinander zu halten.
-- **Eine Ansicht, zwei Darstellungen.** grid view und staff view rendern denselben Score, und jede hat ihren eigenen
+- **Eine Ansicht, zwei Darstellungen.** grid view und staff view rendern dieselbe Partitur (englisch: score), und jede hat ihren eigenen
   measure editor. Beide implementieren denselben Vertrag für Hit-Testing, Auswahl und Tastatureingabe funktionieren
   also in beiden Ansichten.
 
@@ -40,7 +40,7 @@ Die Oberfläche baut auf einer eigenen Komponentenbibliothek (`src/components/ui
 
 ## Die Wiedergabe-Engine
 
-Die Wiedergabe plant Audio gegen die Uhr des `AudioContext` mit einer Look-ahead-Schleife statt mit Timern pro Note (ADR-0001). `ArrangementPlayer` besitzt den Transport und koordiniert einen `TrackPlayer` pro track plus das Metronom; `TimeCoordinator` rechnet zwischen Score-Zeit und Echtzeit für Playhead, Loop und den Play Focus-Bereich um. Wiederholungstaktstriche werden vor der Wiedergabe aufgelöst, die gespielte Reihenfolge unterscheidet sich also von der geschriebenen (ADR-0017).
+Die Wiedergabe plant Audio gegen die Uhr des `AudioContext` mit einer Look-ahead-Schleife statt mit Timern pro Note (ADR-0001). `ArrangementPlayer` besitzt den Transport und koordiniert einen `TrackPlayer` pro track plus das Metronom; `TimeCoordinator` rechnet zwischen Partiturzeit und Echtzeit für Playhead, Loop und den Play Focus-Bereich um. Wiederholungstaktstriche werden vor der Wiedergabe aufgelöst, die gespielte Reihenfolge unterscheidet sich also von der geschriebenen (ADR-0017).
 
 ## Das Backend
 
@@ -60,7 +60,7 @@ Der [Index der Decision Records](../../adr/readme.md) listet jede akzeptierte En
 - [ADR-0004](../../adr/0004-requisitions-for-cross-module-state.md) — Requisitions als Kanal für Zustand
 - [ADR-0005](../../adr/0005-per-view-measure-editors.md) und [ADR-0012](../../adr/0012-execute-input-through-active-measure-editor.md) — Editoren pro Ansicht und Weiterleitung der Eingabe
 - [ADR-0009](../../adr/0009-measure-widths-and-staff-window.md) — measure widths und das gerenderte Fenster
-- [ADR-0014](../../adr/0014-smulf-font-for-standard-score-symbols.md) — SMuFL-Fonts für Score-Symbole
+- [ADR-0014](../../adr/0014-smulf-font-for-standard-score-symbols.md) — SMuFL-Fonts für Partitursymbole
 - [ADR-0020](../../adr/0020-single-mutation-and-measure-layout-signals.md) — ein Mutationssignal pro Änderung
 
 Zwei Design Contracts dokumentieren Vereinbarungen statt Entscheidungen:

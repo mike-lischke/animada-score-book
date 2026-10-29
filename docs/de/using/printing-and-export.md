@@ -4,7 +4,7 @@ Zwei Ergebnisse verlassen die Anwendung: Papier über den Druckdialog des Browse
 
 ## Die print preview öffnen
 
-`Print` im Header (Tooltip `Print / Export to PDF`) öffnet die Vorschau anstelle des Score. `Ctrl`/`Cmd`+`P` bewirkt dasselbe und ersetzt den Druckdialog des Browsers. `Escape` schließt die Vorschau und kehrt mit unveränderten Einstellungen zum Score zurück.
+`Print` im Header (Tooltip `Print / Export to PDF`) öffnet die Vorschau anstelle der Partitur (englisch: score). `Ctrl`/`Cmd`+`P` bewirkt dasselbe und ersetzt den Druckdialog des Browsers. `Escape` schließt die Vorschau und kehrt mit unveränderten Einstellungen zur Partitur zurück.
 
 ![print preview von I-Break mit zwei Seiten](../../images/en/print/print-preview.png)
 
@@ -29,9 +29,9 @@ Die Druckskalierung entscheidet, wie groß die Notation auf dem Papier erscheint
 
 *`Layout` enthält die Ausrichtung und die vier Randwerte, `Print details` die Skalierung und die track-Auswahl.*
 
-## bar-Breiten in der Vorschau
+## Taktbreiten in der Vorschau
 
-Die Vorschau zeigt dieselben bar-Breiten wie die staff view. Ziehen an einem Griff am Taktstrich ändert, wie breit diese bar gedruckt wird; der Tooltip liest `Drag to change the printed width. Double-click to restore the score width.` `Reset widths` stellt alle auf einmal wieder her.
+Die Vorschau zeigt dieselben Taktbreiten wie die staff view. Ziehen an einem Griff am Taktstrich ändert, wie breit dieser Takt (englisch: bar) gedruckt wird; der Tooltip liest `Drag to change the printed width. Double-click to restore the score width.` `Reset widths` stellt alle auf einmal wieder her.
 
 ## Vorschau-Zoom und Seiten
 
@@ -56,7 +56,7 @@ Die Wahl des PDF-Druckers in diesem Dialog erzeugt die PDF-Datei. Die Anwendung 
 
 ![Die erste gedruckte Seite von I-Break](../../images/en/print/printed-page.png)
 
-*Das erste Blatt bei `Fit page`: Titelkopf, bar-Nummern, Instrumentnamen und die Seitenzahl in der Ecke.*
+*Das erste Blatt bei `Fit page`: Titelkopf, Taktnummern, Instrumentnamen und die Seitenzahl in der Ecke.*
 
 ## Einen MP3 exportieren
 
@@ -72,7 +72,7 @@ Die Wahl des PDF-Druckers in diesem Dialog erzeugt die PDF-Datei. Die Anwendung 
 
 ![Der Exportdialog mit seinem Fortschrittsbalken](../../images/en/print/mp3-export.png)
 
-*Der Dialog bleibt offen, während der ganze Score gerendert wird; `Export` im Header bleibt bis dahin deaktiviert.*
+*Der Dialog bleibt offen, während die ganze Partitur gerendert wird; `Export` im Header bleibt bis dahin deaktiviert.*
 
 ## Was die Ausgabe nicht kann
 
@@ -85,6 +85,6 @@ Die Wahl des PDF-Druckers in diesem Dialog erzeugt die PDF-Datei. Die Anwendung 
 
 ## Verwandte Kapitel
 
-- [Einen Score lesen](presentation.md) erklärt Musikfonts und Zoom.
+- [Eine Partitur lesen](presentation.md) erklärt Musikfonts und Zoom.
 - [Wiedergabe und Üben](playback.md) erklärt Tempo, mixer und Count-in, die der MP3-Export nutzt.
-- [Bearbeiten in der staff view](staff-editing.md) behandelt bar-Breiten im Score selbst.
+- [Bearbeiten in der staff view](staff-editing.md) behandelt Taktbreiten in der Partitur selbst.

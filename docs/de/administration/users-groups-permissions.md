@@ -1,6 +1,6 @@
 # Benutzer, Gruppen und Berechtigungen
 
-Konten entscheiden, wer einen Score lesen und ändern darf. Der Verwaltungsbereich dafür ist der Dialog `Users & Groups`, erreichbar über das Überlaufmenü im Header. Ein Benutzer, der kein Administrator ist, sieht denselben Dialog mit dem Titel `My Groups`, ohne den Tab `Users`, und kann nur die Gruppen ändern, die er administriert.
+Konten entscheiden, wer eine Partitur (englisch: score) lesen und ändern darf. Der Verwaltungsbereich dafür ist der Dialog `Users & Groups`, erreichbar über das Überlaufmenü im Header. Ein Benutzer, der kein Administrator ist, sieht denselben Dialog mit dem Titel `My Groups`, ohne den Tab `Users`, und kann nur die Gruppen ändern, die er administriert.
 
 ## Der erste Administrator
 
@@ -71,11 +71,11 @@ Beide Gruppen existieren immer und verhalten sich anders als gewöhnliche Gruppe
   Gruppe lässt sich nicht löschen, kann kein Passwort bekommen, und der letzte verbleibende Administrator lässt sich
   nicht entfernen.
 - `World` ist die öffentliche Gruppe. Jeder Benutzer und jeder anonyme Besucher ist automatisch Mitglied, ein mit `World`
-  geteilter Score ist also öffentlich lesbar. Die Gruppe selbst lässt sich weder bearbeiten noch löschen.
+  geteilte Partitur ist also öffentlich lesbar. Die Gruppe selbst lässt sich weder bearbeiten noch löschen.
 
 ## Eigentum und geerbter Zugriff
 
-Jeder Ordner und jeder Score hat einen Eigentümer — das Konto, das ihn angelegt hat — und eine Reihe von Gruppenfreigaben. Der Zugriff wird in dieser Reihenfolge aufgelöst:
+Jeder Ordner und jede Partitur hat einen Eigentümer — das Konto, das den Eintrag angelegt hat — und eine Reihe von Gruppenfreigaben. Der Zugriff wird in dieser Reihenfolge aufgelöst:
 
 1. Administratoren haben vollen Zugriff auf alles.
 2. Der Eigentümer eines Eintrags hat Lese- und Schreibzugriff darauf.
@@ -88,17 +88,17 @@ Jeder Ordner und jeder Score hat einen Eigentümer — das Konto, das ihn angele
 
 ## Der Group Access-Editor
 
-`Group Access` im Menü einer Zeile der Score Library öffnet den Editor für diesen Eintrag. Er zeigt den Eigentümer, die Gruppen mit `Read` und `Write` und die übrigen Gruppen zum Hineinziehen. [Die Score Library](../using/score-library.md) beschreibt die Bedienung; dieses Kapitel beschreibt die Regeln dahinter.
+`Group Access` im Menü einer Zeile die Partitur Library öffnet den Editor für diesen Eintrag. Er zeigt den Eigentümer, die Gruppen mit `Read` und `Write` und die übrigen Gruppen zum Hineinziehen. [Die Score Library](../using/score-library.md) beschreibt die Bedienung; dieses Kapitel beschreibt die Regeln dahinter.
 
 ## Geerbten Zugriff zurücksetzen
 
-`Reset Children`, verfügbar auf Ordnern im Berechtigungseditor, entfernt die ausdrücklichen Freigaben jedes Ordners und jedes Score unterhalb dieses Ordners. Alle erben wieder von ihren übergeordneten Ordnern, während der Ordner selbst seine Freigaben behält. Verwende es nach dem Umsortieren eines Ordnerbaums, wenn verschobene Einträge sonst veraltete Freigaben mit sich tragen würden.
+`Reset Children`, verfügbar auf Ordnern im Berechtigungseditor, entfernt die ausdrücklichen Freigaben jedes Ordners und jeder Partitur unterhalb dieses Ordners. Alle erben wieder von ihren übergeordneten Ordnern, während der Ordner selbst seine Freigaben behält. Verwende es nach dem Umsortieren eines Ordnerbaums, wenn verschobene Einträge sonst veraltete Freigaben mit sich tragen würden.
 
 ## Die Datenbank zurücksetzen
 
 Die Aktion `Reset Database` im Dialog `Backend Setup` löscht jede Tabelle und baut das Schema über die Migrationen neu auf. Danach werden die Seed-Daten und das geteilte Konto `anonymous` erneut angelegt, und der Dialog `Finish Installation` erscheint, wie bei einer frischen Installation.
 
-Das löscht jeden Benutzer, jede Gruppe, jede Freigabe und jeden Score. Exportiere die Scores, die du brauchst, und lege zuerst ein Datenbank-Backup an; [Backup, Restore und Upgrades](backup-restore-upgrades.md) erklärt wie.
+Das löscht jeden Benutzer, jede Gruppe, jede Freigabe und jede Partitur. Exportiere die Partituren, die du brauchst, und lege zuerst ein Datenbank-Backup an; [Backup, Restore und Upgrades](backup-restore-upgrades.md) erklärt wie.
 
 ## Bekannte Grenzen
 

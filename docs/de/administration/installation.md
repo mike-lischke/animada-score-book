@@ -22,17 +22,17 @@ Das Backend selbst liefert reines HTTP und konfiguriert kein eigenes TLS. HTTPS 
 
 Das Paket wird im Repository mit `npm run package` gebaut. Es schreibt `dist-package/animada-score-book-<version>.tar.gz` und enthält:
 
-| Pfad                                           | Zweck                                                                    |
-| ---------------------------------------------- | ------------------------------------------------------------------------ |
-| `dist/`                                        | Die gebaute Browser-Anwendung                                            |
-| `server.js`                                    | Das Backend, mit allen Abhängigkeiten in eine Datei gebündelt            |
-| `public/`                                      | Musikfonts, Klangsamples, Logos und hochgeladene Dateien                 |
-| `build/seed.sql`                               | Anfängliche Ordner und Scores, in eine leere Datenbank importiert        |
-| `migrations/`                                  | Das Schema und seine Migrationen                                         |
-| `package.json`                                 | Ein Manifest mit einem einzigen `start`-Skript und keinen Abhängigkeiten |
-| `backend-config.example.json`                  | Vorlage für die Konfigurationsdatei                                      |
-| `docs/en/`, `docs/images/`                     | Das englische Handbuch mit den Screenshots, die es zeigt                 |
-| `readme.md`, `release-notes.md`, `License.txt` | Produktübersicht, Versionshistorie und Lizenz                            |
+| Pfad                                           | Zweck                                                                                   |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `dist/`                                        | Die gebaute Browser-Anwendung                                                           |
+| `server.js`                                    | Das Backend, mit allen Abhängigkeiten in eine Datei gebündelt                           |
+| `public/`                                      | Musikfonts, Klangsamples, Logos und hochgeladene Dateien                                |
+| `build/seed.sql`                               | Anfängliche Ordner und Partituren (englisch: score), in eine leere Datenbank importiert |
+| `migrations/`                                  | Das Schema und seine Migrationen                                                        |
+| `package.json`                                 | Ein Manifest mit einem einzigen `start`-Skript und keinen Abhängigkeiten                |
+| `backend-config.example.json`                  | Vorlage für die Konfigurationsdatei                                                     |
+| `docs/en/`, `docs/images/`                     | Das englische Handbuch mit den Screenshots, die es zeigt                                |
+| `readme.md`, `release-notes.md`, `License.txt` | Produktübersicht, Versionshistorie und Lizenz                                           |
 
 Das Archiv enthält nie `backend-config.json`, `.env`-Dateien, `node_modules`, TypeScript-Quellen oder eine Lock-Datei.
 

@@ -1,8 +1,8 @@
 # Handbuch zu Animada Score Book
 
-Animada Score Book ist eine browserbasierte Score-Bibliothek und Wiedergabe-Anwendung für Samba-Gruppen. Sie speichert dein Repertoire, zeigt jeden Score als Notenraster oder als Notenschrift, spielt ihn mit einem mixer pro track ab und druckt oder exportiert ihn. Dieses Handbuch dokumentiert Version 2.0.1.
+Animada Score Book ist eine browserbasierte Partiturbibliothek und Wiedergabe-Anwendung für Samba-Gruppen. Sie speichert dein Repertoire, zeigt jede Partitur (englisch: score) als Notenraster oder als Notenschrift, spielt sie mit einem mixer pro track ab und druckt oder exportiert sie. Dieses Handbuch dokumentiert Version 2.0.1.
 
-Dies ist die deutsche Ausgabe. Maßgeblich bleibt das [englische Handbuch](../en/index.md): Es wird zuerst aktualisiert, und die Anwendung selbst ist durchgehend englisch, sodass Fachbegriffe wie score, track, bar, grid view, staff view und note style auch hier englisch bleiben. Alle Beschriftungen, Tooltips und Meldungen der Oberfläche werden unverändert zitiert.
+Dies ist die deutsche Ausgabe. Maßgeblich bleibt das [englische Handbuch](../en/index.md): Es wird zuerst aktualisiert, und die Anwendung selbst ist durchgehend englisch, sodass Fachbegriffe wie score, track, grid view, staff view und note style auch hier englisch bleiben; übersetzt sind nur die beiden Wörter Takt (englisch: bar) und Partitur. Alle Beschriftungen, Tooltips und Meldungen der Oberfläche werden unverändert zitiert.
 
 Wähle den Weg, der zu deiner Rolle passt:
 
@@ -17,18 +17,18 @@ Wähle den Weg, der zu deiner Rolle passt:
 | Kapitel                                                   | Inhalt                                                                                                                             |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | [Was Animada Score Book ist](getting-started/overview.md) | Die Produktidee, die im Handbuch verwendeten Begriffe, Anforderungen an Browser und Gerät und wie der anonyme Zugriff funktioniert |
-| [Deine erste Sitzung](getting-started/first-steps.md)     | Anmelden, einen Score öffnen, Wiedergabe, Ansichten wechseln, Zoom, Zen mode, Speichern und wo die Settings liegen                 |
+| [Deine erste Sitzung](getting-started/first-steps.md)     | Anmelden, eine Partitur öffnen, Wiedergabe, Ansichten wechseln, Zoom, Zen mode, Speichern und wo die Settings liegen               |
 
 ## Die Anwendung benutzen
 
-| Kapitel                                                     | Inhalt                                                                                                                                 |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| [Die Score Library](using/score-library.md)                 | Den Baum der Bibliothek durchsuchen, Ordner und Scores anlegen, importieren, öffnen, teilen und Berechtigungen                         |
-| [Einen Score lesen](using/presentation.md)                  | grid view und staff view, Musikfonts, Farbschemata, Zoom, der score navigator, Zen mode, Telefone und Tablets, das notification center |
-| [Bearbeiten in der staff view](using/staff-editing.md)      | Noteneingabe, Notenwerte, Pausen, note styles, articulations, subdivisions und tuplets, Auswahl, Clipboard, Undo und Redo              |
-| [Bearbeiten in der grid view](using/grid-editing.md)        | Das Rastermodell, Noteneingabe, note styles, Auswahlen und die Unterschiede zum Bearbeiten in der staff view                           |
-| [Wiedergabe und Üben](using/playback.md)                    | Transport, Tempo, mixer, Metronom, Count-in, Play Focus, Looping, der Playhead und das Vorhören von Noten                              |
-| [Drucken, PDF und MP3-Export](using/printing-and-export.md) | Die print preview, Layout-Steuerelemente, PDF-Ausgabe des Browsers und der MP3-Export                                                  |
+| Kapitel                                                     | Inhalt                                                                                                                                   |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [Die Score Library](using/score-library.md)                 | Den Baum der Bibliothek durchsuchen, Ordner und Partituren anlegen, importieren, öffnen, teilen und Berechtigungen                       |
+| [Eine Partitur lesen](using/presentation.md)                | grid view und staff view, Musikfonts, Farbschemata, Zoom, der Partiturnavigator, Zen mode, Telefone und Tablets, das notification center |
+| [Bearbeiten in der staff view](using/staff-editing.md)      | Noteneingabe, Notenwerte, Pausen, note styles, articulations, subdivisions und tuplets, Auswahl, Clipboard, Undo und Redo                |
+| [Bearbeiten in der grid view](using/grid-editing.md)        | Das Rastermodell, Noteneingabe, note styles, Auswahlen und die Unterschiede zum Bearbeiten in der staff view                             |
+| [Wiedergabe und Üben](using/playback.md)                    | Transport, Tempo, mixer, Metronom, Count-in, Play Focus, Looping, der Playhead und das Vorhören von Noten                                |
+| [Drucken, PDF und MP3-Export](using/printing-and-export.md) | Die print preview, Layout-Steuerelemente, PDF-Ausgabe des Browsers und der MP3-Export                                                    |
 
 ## Instrument- und Notationsreferenz
 
@@ -38,13 +38,13 @@ Wähle den Weg, der zu deiner Rolle passt:
 
 ## Administration
 
-| Kapitel                                                                            | Inhalt                                                                                              |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [Animada Score Book installieren](administration/installation.md)                  | Anforderungen, deployment package, Vorbereitung der Datenbank, erster Start, HTTPS und Upgrades     |
-| [Das Backend konfigurieren](administration/configuration.md)                       | Jeder Konfigurationsschlüssel und jede Umgebungsvariable mit Standardwert und Wirkung               |
-| [Benutzer, Gruppen und Berechtigungen](administration/users-groups-permissions.md) | Konten, Gruppen, Gruppen-Login, Eigentum, Lese- und Schreibzugriff und der Group Access-Editor      |
-| [Sicherheitshinweise](administration/security.md)                                  | Passwortspeicherung, Sitzungen, Brute-Force-Begrenzung, Score-Locks und eine Checkliste zur Härtung |
-| [Backup, Restore und Upgrades](administration/backup-restore-upgrades.md)          | Was wo liegt, Verfahren für Backup und Restore, Migrationen und Upgrades                            |
+| Kapitel                                                                            | Inhalt                                                                                                  |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [Animada Score Book installieren](administration/installation.md)                  | Anforderungen, deployment package, Vorbereitung der Datenbank, erster Start, HTTPS und Upgrades         |
+| [Das Backend konfigurieren](administration/configuration.md)                       | Jeder Konfigurationsschlüssel und jede Umgebungsvariable mit Standardwert und Wirkung                   |
+| [Benutzer, Gruppen und Berechtigungen](administration/users-groups-permissions.md) | Konten, Gruppen, Gruppen-Login, Eigentum, Lese- und Schreibzugriff und der Group Access-Editor          |
+| [Sicherheitshinweise](administration/security.md)                                  | Passwortspeicherung, Sitzungen, Brute-Force-Begrenzung, Partitursperren und eine Checkliste zur Härtung |
+| [Backup, Restore und Upgrades](administration/backup-restore-upgrades.md)          | Was wo liegt, Verfahren für Backup und Restore, Migrationen und Upgrades                                |
 
 ## Referenz
 

@@ -34,7 +34,7 @@ Weitere Sprachverzeichnisse wie `docs/pt/` sind für Übersetzungen reserviert u
 - UI-Beschriftungen erscheinen in Backticks, genau wie die Anwendung sie schreibt, zum Beispiel `Save Score` oder
   `Group Access`.
 - Englisch als Quellsprache. Die Strings der Oberfläche bleiben auch in der deutschen Ausgabe englisch, und Fachbegriffe
-  werden nicht eingedeutscht.
+  werden nicht eingedeutscht. Ausnahmen sind bar und score: Die deutsche Ausgabe schreibt dafür Takt (englisch: bar) und Partitur (englisch: score).
 
 ## Bilder
 

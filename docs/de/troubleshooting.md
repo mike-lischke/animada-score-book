@@ -50,7 +50,7 @@ Scheitert eine Ansicht beim Rendern, ersetzt die Anwendung die ganze Oberfläche
 *Ein unerwarteter Fehler ersetzt die Anwendung durch diese Seite: `Retry` rendert die Ansicht erneut, `Reload app` startet die Anwendung neu, und `Technical details` enthält Meldung und Stacktrace für eine Meldung.*
 
 - `Retry` rendert die Ansicht erneut, was nach einem vorübergehenden Problem oft genügt. `Reload app` startet die Anwendung neu; ungespeicherte Änderungen können verloren gehen.
-- `Still not working?` verlinkt auf den GitHub-Issue-Tracker. Nenne, was du gerade getan hast und welcher Score geöffnet war.
+- `Still not working?` verlinkt auf den GitHub-Issue-Tracker. Nenne, was du gerade getan hast und welche Partitur (englisch: score) geöffnet war.
 - `Technical details` enthält die Version der Anwendung, die Fehlermeldung und den Stacktrace, mit `Copy details`, um sie in die Zwischenablage zu legen. Bearer-Tokens, Passwörter und Tokens in URLs werden maskiert, bevor sie angezeigt werden.
 
 ## Die Installation lässt sich nicht abschließen
@@ -74,12 +74,12 @@ Scheitert eine Ansicht beim Rendern, ersetzt die Anwendung die ganze Oberfläche
 ## Berechtigungsfehler
 
 - `You do not have permission to edit this score.` und `You do not have permission to save this score.` bedeuten, dass dem Konto der Schreibzugriff fehlt. Nötig ist der Eigentümer, eine Gruppenfreigabe oder ein Administrator; [Benutzer, Gruppen und Berechtigungen](administration/users-groups-permissions.md) erklärt, wie Zugriff aufgelöst wird.
-- `You do not have permission to save this score.` erscheint auch, wenn ein Score über einen Link geöffnet wurde und das Konto ihn nur lesen darf.
+- `You do not have permission to save this score.` erscheint auch, wenn eine Partitur über einen Link geöffnet wurde und das Konto sie nur lesen darf.
 - Ohne angemeldetes Konto funktioniert das Bearbeiten selbst: Die Änderungen bleiben im Browser, und `Save Score` meldet `Sign in to save this score.`
 
-## Ein Score ist gesperrt
+## Eine Partitur ist gesperrt
 
-`Score is being edited by <user> (since <date and time>)` bedeutet, dass jemand anderes bei diesem Score im edit mode ist:
+`Score is being edited by <user> (since <date and time>)` bedeutet, dass jemand anderes bei dieser Partitur im edit mode ist:
 
 - Die Sperre dauert 30 Minuten und wird freigegeben, wenn der andere Bearbeiter speichert oder den edit mode verlässt.
 - Warten ist heute die einzige Option; es gibt keine Möglichkeit, eine Sperre über die Oberfläche zu brechen.
@@ -93,7 +93,7 @@ Scheitert eine Ansicht beim Rendern, ersetzt die Anwendung die ganze Oberfläche
 ## Probleme beim Export
 
 - `The MP3 could not be exported. Please try again.` erscheint, wenn der Browser kein MP3 kodieren kann oder das Rendern scheitert. Getestet ist der Export mit Chromium-basierten Browsern.
-- Ein MP3 enthält den ganzen Score: Looping wird ignoriert, und ein Play Focus-Bereich wird nicht exportiert.
+- Ein MP3 enthält die ganze Partitur: Looping wird ignoriert, und ein Play Focus-Bereich wird nicht exportiert.
 - PDF-Ausgabe kommt aus dem Druckdialog des Browsers; die Anwendung erzeugt selbst keine PDF-Dateien.
 
 ## Die Druckausgabe weicht von der Vorschau ab
@@ -107,25 +107,25 @@ Vergleiche diese Einstellungen:
 
 ## Bekannte Einschränkungen
 
-| Bereich           | Einschränkung                                                                                                                    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Zoom              | Nur manuell, 50 % bis 150 %; kein Pinch- oder Radzoom. `Fit width` und `Fit page` gibt es nur in der print preview               |
-| Dynamics          | Nur in der staff view im edit mode setzbar                                                                                       |
-| Instrumente       | Im Code definiert; es gibt keine Instrumentenverwaltung und keine Oberfläche für eine Klangbibliothek pro Installation           |
-| Auditierung       | `login_audit` wird geschrieben, aber von keiner Ansicht gelesen                                                                  |
-| Konten            | Kein Self-Service-Passwortwechsel und keine Verwaltung von Sitzungen oder Geräten                                                |
-| Backups           | Keine Backup- oder Restore-Werkzeuge in der Anwendung; `build/dump-seed.ts` deckt nur Ordner und Scores ab                       |
-| Datenbank-Engines | Kein Migrationspfad von MySQL nach PostgreSQL oder zurück                                                                        |
-| Score-Historie    | Scores werden pro Speichern als ein Block abgelegt; keine Versionshistorie, und gleichzeitige Speicherungen sind last-write-wins |
-| Sitzungen         | Undo-Historie und Wiedergabeposition gelten nur für die Sitzung                                                                  |
-| PDF               | Keine PDF-Erzeugung in der Anwendung                                                                                             |
-| MP3               | Braucht die MP3-Kodierung des Browsers; kein Loop- und kein Bereichsexport                                                       |
-| Gruppen-Login     | Gruppen-Logins teilen das Konto `anonymous`, und ein neuer Gruppen-Login beendet die vorherige Gruppensitzung                    |
-| Score-Locks       | 30 Minuten, kein Heartbeat, nur beim Speichern oder Verlassen des edit mode freigegeben                                          |
-| Anonymer Zugriff  | Anonyme Besucher sehen jeden Score, der mit `World` geteilt ist                                                                  |
-| Listen            | Benutzer- und Gruppenlisten sind nicht seitenweise aufgeteilt                                                                    |
-| HTTPS             | Das Backend selbst liefert HTTP; das Cookie zur Sitzungserneuerung braucht TLS davor                                             |
-| Migrationsdateien | Eine nach ihrem Lauf geänderte Migrationsdatei blockiert den Start; es gibt keine Down-Migrationen                               |
+| Bereich           | Einschränkung                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Zoom              | Nur manuell, 50 % bis 150 %; kein Pinch- oder Radzoom. `Fit width` und `Fit page` gibt es nur in der print preview                   |
+| Dynamics          | Nur in der staff view im edit mode setzbar                                                                                           |
+| Instrumente       | Im Code definiert; es gibt keine Instrumentenverwaltung und keine Oberfläche für eine Klangbibliothek pro Installation               |
+| Auditierung       | `login_audit` wird geschrieben, aber von keiner Ansicht gelesen                                                                      |
+| Konten            | Kein Self-Service-Passwortwechsel und keine Verwaltung von Sitzungen oder Geräten                                                    |
+| Backups           | Keine Backup- oder Restore-Werkzeuge in der Anwendung; `build/dump-seed.ts` deckt nur Ordner und Partituren ab                       |
+| Datenbank-Engines | Kein Migrationspfad von MySQL nach PostgreSQL oder zurück                                                                            |
+| Partiturhistorie  | Partituren werden pro Speichern als ein Block abgelegt; keine Versionshistorie, und gleichzeitige Speicherungen sind last-write-wins |
+| Sitzungen         | Undo-Historie und Wiedergabeposition gelten nur für die Sitzung                                                                      |
+| PDF               | Keine PDF-Erzeugung in der Anwendung                                                                                                 |
+| MP3               | Braucht die MP3-Kodierung des Browsers; kein Loop- und kein Bereichsexport                                                           |
+| Gruppen-Login     | Gruppen-Logins teilen das Konto `anonymous`, und ein neuer Gruppen-Login beendet die vorherige Gruppensitzung                        |
+| Partitursperren   | 30 Minuten, kein Heartbeat, nur beim Speichern oder Verlassen des edit mode freigegeben                                              |
+| Anonymer Zugriff  | Anonyme Besucher sehen jede Partitur, die mit `World` geteilt ist                                                                    |
+| Listen            | Benutzer- und Gruppenlisten sind nicht seitenweise aufgeteilt                                                                        |
+| HTTPS             | Das Backend selbst liefert HTTP; das Cookie zur Sitzungserneuerung braucht TLS davor                                                 |
+| Migrationsdateien | Eine nach ihrem Lauf geänderte Migrationsdatei blockiert den Start; es gibt keine Down-Migrationen                                   |
 
 ## Verwandte Kapitel
 

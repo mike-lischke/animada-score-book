@@ -54,9 +54,9 @@ Die Endpunkte `login` und `groupLogin` zählen Fehlversuche pro Schlüssel — `
 
 Die Client-IP kommt aus der Verbindung, solange `trustProxy` nicht aktiviert ist — siehe [Das Backend konfigurieren](configuration.md).
 
-## Score-Locks
+## Partitursperren
 
-Das Betreten des edit mode sperrt den Score für 30 Minuten, ohne Heartbeat. Die Sperre wird freigegeben, wenn der Score gespeichert oder der edit mode verlassen wird, und läuft von selbst ab. Ihr Zweck ist, einen zweiten Bearbeiter zu warnen, nicht Speicherungen zu serialisieren:
+Das Betreten des edit mode sperrt die Partitur (englisch: score) für 30 Minuten, ohne Heartbeat. Die Sperre wird freigegeben, wenn die Partitur gespeichert oder der edit mode verlassen wird, und läuft von selbst ab. Ihr Zweck ist, einen zweiten Bearbeiter zu warnen, nicht Speicherungen zu serialisieren:
 
 - Der Update-Endpunkt prüft die Sperre nur, wenn der Client das Sperr-Token sendet, eine gezielt gebaute Anfrage kann
   sie also umgehen.
@@ -82,7 +82,7 @@ Das Betreten des edit mode sperrt den Score für 30 Minuten, ohne Heartbeat. Die
 2. Gib `JWT_SECRET` einen langen Zufallswert und halte ihn im Dienstmanager, nicht in `backend-config.json`.
 3. Lass `trustProxy` aus, solange der vorgelagerte Endpunkt nicht den ursprünglichen Host und das Protokoll weiterreicht.
 4. Beschränke den Datenbankzugriff auf den Backend-Host und nutze ein eigenes Datenbankkonto.
-5. Vergib `World` nur an Scores, die öffentlich sein dürfen; alles andere bleibt bei Eigentümern und benannten Gruppen.
+5. Vergib `World` nur an Partituren, die öffentlich sein dürfen; alles andere bleibt bei Eigentümern und benannten Gruppen.
 6. Lege regelmäßig Datenbank-Backups an und teste eine Wiederherstellung.
 7. Halte das deployment package aktuell und prüfe dieses Kapitel nach einem Upgrade erneut.
 

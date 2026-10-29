@@ -1,6 +1,6 @@
 # Bearbeiten in der staff view
 
-Die staff view ist der Ort, an dem Noten geschrieben werden. Bearbeiten braucht den edit mode, der den Score für andere Bearbeiter sperrt, und jede Änderung zählt als ein Undo-Schritt und markiert den Score als ungespeichert.
+Die staff view ist der Ort, an dem Noten geschrieben werden. Bearbeiten braucht den edit mode, der die Partitur (englisch: score) für andere Bearbeiter sperrt, und jede Änderung zählt als ein Undo-Schritt und markiert die Partitur als ungespeichert.
 
 Dieses Kapitel folgt einer Sitzung: den edit mode betreten, Noten setzen, sie formen und Struktur um sie herum legen.
 
@@ -8,31 +8,31 @@ Dieses Kapitel folgt einer Sitzung: den edit mode betreten, Noten setzen, sie fo
 
 Der Umschalter `Edit Mode` im Header liest `Editing`, wenn der edit mode aktiv ist. In diesem Moment passieren drei Dinge:
 
-- Der Score wird gesperrt, sodass einem zweiten Bearbeiter `Score is being edited by <user> (since <date and time>)`
+- Die Partitur wird gesperrt, sodass einem zweiten Bearbeiter `Score is being edited by <user> (since <date and time>)`
   gemeldet wird.
-- Der Editor ergänzt einen sichtbaren Cursor, einen Streifen mit bar-Aktionen über den bars und eine Aktionsschaltfläche
+- Der Editor ergänzt einen sichtbaren Cursor, einen Streifen mit Taktaktionen über den Takten (englisch: bar) und eine Aktionsschaltfläche
   auf jeder track-Zeile.
 - Die mode bar erhält einen Abschnitt `Entry` neben `View`.
 
-Der edit mode braucht nur Lesezugriff. Ohne angemeldetes Konto kannst du den Score bearbeiten, und die Änderungen bleiben in diesem Browser; `Save Score` meldet dann `Sign in to save this score.` Ein angemeldetes Konto ohne Schreibzugriff wird abgewiesen, wenn es den edit mode betreten will, mit `You do not have permission to edit this score.`
+Der edit mode braucht nur Lesezugriff. Ohne angemeldetes Konto kannst du die Partitur bearbeiten, und die Änderungen bleiben in diesem Browser; `Save Score` meldet dann `Sign in to save this score.` Ein angemeldetes Konto ohne Schreibzugriff wird abgewiesen, wenn es den edit mode betreten will, mit `You do not have permission to edit this score.`
 
-`Save Score` im Header oder `Ctrl`/`Cmd`+`S` schreibt den Score ins Backend. Das Verlassen des edit mode speichert zuerst und gibt die Sperre frei; ein gescheitertes Speichern hält dich im edit mode, damit nichts verloren geht.
+`Save Score` im Header oder `Ctrl`/`Cmd`+`S` schreibt die Partitur ins Backend. Das Verlassen des edit mode speichert zuerst und gibt die Sperre frei; ein gescheitertes Speichern hält dich im edit mode, damit nichts verloren geht.
 
 ![staff view im edit mode mit ausgewählter Note und geöffnetem note style-Popup](../../images/en/staff-editing/edit-mode.png)
 
-*Edit mode: die mode bar bietet `Entry`, die Symbole für bar-Aktionen sitzen über den bars, und eine ausgewählte Note öffnet das Popup für den note style.*
+*Edit mode: die mode bar bietet `Entry`, die Symbole für Taktaktionen sitzen über den Takten, und eine ausgewählte Note öffnet das Popup für den note style.*
 
 ## Noten eingeben
 
 Noten werden am Cursor eingegeben:
 
-1. Klicke auf eine Position im Score oder bewege den Cursor mit den Pfeiltasten. Der Cursor wandert über bars und tracks
+1. Klicke auf eine Position in der Partitur oder bewege den Cursor mit den Pfeiltasten. Der Cursor wandert über Takte und tracks
    und läuft an den Enden um.
 2. Wähle einen note style. Die Tasten `1` bis `9` geben den style an dieser Position der Instrumentenliste ein, und der
    Abschnitt für note styles in der Werkzeugleiste tut dasselbe nach Namen.
 3. Wähle einen Notenwert vor oder nach der Eingabe; die Länge gilt für die Note am Cursor.
 
-`0` gibt eine Pause ein, `Delete` und `Backspace` entfernen die Note oder Pause am Cursor. Notenwerte, Balken, Fähnchen und Halsrichtungen folgen den eingegebenen Werten und der Gruppierung, die die bar ergibt.
+`0` gibt eine Pause ein, `Delete` und `Backspace` entfernen die Note oder Pause am Cursor. Notenwerte, Balken, Fähnchen und Halsrichtungen folgen den eingegebenen Werten und der Gruppierung, die der Takt ergibt.
 
 ## Notenwerte und Punkte
 
@@ -51,7 +51,7 @@ Die Werkzeugleiste für Notenlängen existiert nur in der staff view; die grid v
 
 ## Pausen
 
-Eine Pause wird wie eine Note eingegeben, mit `0` oder der Pausen-Schaltfläche. Pausen behalten ihre Länge und lassen sich wie Noten auswählen und ändern. Eine bar ohne Inhalt zeigt eine Pause über die ganze bar, und eine Folge von Pausen bleibt sichtbar und auswählbar, statt zu verschwinden.
+Eine Pause wird wie eine Note eingegeben, mit `0` oder der Pausen-Schaltfläche. Pausen behalten ihre Länge und lassen sich wie Noten auswählen und ändern. Ein Takt ohne Inhalt zeigt eine Pause über den ganzen Takt, und eine Folge von Pausen bleibt sichtbar und auswählbar, statt zu verschwinden.
 
 ## note styles und Spieltechniken
 
@@ -59,7 +59,7 @@ Jedes Instrument bringt seine eigene Liste von note styles mit, und der Abschnit
 
 ![Die note style-Karte eines Repinique-track](../../images/en/staff-editing/note-styles.png)
 
-*Die Karte eines Repinique-track in bar 3: acht styles, die Zeile der Notenwerte und die articulations, die das Instrument bietet.*
+*Die Karte eines Repinique-track in Takt 3: acht styles, die Zeile der Notenwerte und die articulations, die das Instrument bietet.*
 
 ## Articulations
 
@@ -95,17 +95,17 @@ Auswahl ist der Griff für alles, was auf vorhandenen Inhalt wirkt:
 
 Eine Bereichsauswahl beginnt immer auf einer vorhandenen Note: Die erste Note verankert die Auswahl, und das Rechteck oder der nächste `Shift`+Klick erweitert sie nur. Ein Start auf einer leeren Zelle setzt lediglich den Eingabecursor.
 
-Die Auswahl behält die Granularität des zuerst berührten Elements: Eine Auswahl, die auf einer Note begann, bleibt eine Notenauswahl, eine, die auf einer ganzen bar begann, bleibt eine bar-Auswahl.
+Die Auswahl behält die Granularität des zuerst berührten Elements: Eine Auswahl, die auf einer Note begann, bleibt eine Notenauswahl, eine, die auf einem ganzen Takt begann, bleibt eine Taktauswahl.
 
-Eine Auswahl, die ganze bars eines track bedeckt, öffnet die Werkzeugleiste für track pieces mit der Wiederholung über eine bar und der Aktion zum Leeren. Eine Auswahl von Noten öffnet die Karte mit note styles, Werten, articulations und tuplets.
+Eine Auswahl, die ganze Takte eines track bedeckt, öffnet die Werkzeugleiste für track pieces mit der Wiederholung über einen Takt und der Aktion zum Leeren. Eine Auswahl von Noten öffnet die Karte mit note styles, Werten, articulations und tuplets.
 
-![bars 4 und 5 der Agogô-tracks ausgewählt](../../images/en/staff-editing/selection.png)
+![Takte 4 und 5 der Agogô-tracks ausgewählt](../../images/en/staff-editing/selection.png)
 
-*Eine Auswahl über zwei bars der Agogô-tracks; die Karte für die ausgewählten Noten öffnet sich darunter.*
+*Eine Auswahl über zwei Takte der Agogô-tracks; die Karte für die ausgewählten Noten öffnet sich darunter.*
 
-![Die track piece-Werkzeugleiste einer ausgewählten bar](../../images/en/staff-editing/selection-actions.png)
+![Die track piece-Werkzeugleiste eines ausgewählten Taktes](../../images/en/staff-editing/selection-actions.png)
 
-*Eine Auswahl über eine ganze bar behält zwei Aktionen: die Wiederholung über eine bar und das Leeren.*
+*Eine Auswahl über einen ganzen Takt behält zwei Aktionen: die Wiederholung über einen Takt und das Leeren.*
 
 ## Subdivisions und tuplets
 
@@ -119,9 +119,9 @@ Eine subdivision unterteilt eine Position in ein tuplet. `Add subdivision` biete
 
 *Das Quintuplet trägt seine Beschriftung über der Gruppe, das im dritten Slot verschachtelte Triplet eine darunter.*
 
-[Bearbeiten in der grid view](grid-editing.md#subdivisions-in-der-grid-view) zeigt dieselbe bar ohne die Beschriftungen, wo ein tuplet als schmalere Slots innerhalb seiner Zelle erscheint.
+[Bearbeiten in der grid view](grid-editing.md#subdivisions-in-der-grid-view) zeigt denselben Takt ohne die Beschriftungen, wo ein tuplet als schmalere Slots innerhalb seiner Zelle erscheint.
 
-Die subdivision ist ein Block, solange sie existiert: Noten darin werden innerhalb des tuplet adressiert, nicht im einfachen Schritt-Raster der bar.
+Die subdivision ist ein Block, solange sie existiert: Noten darin werden innerhalb des tuplet adressiert, nicht im einfachen Schritt-Raster des Taktes.
 
 Das Kopieren einer subdivision und das Einfügen in einen anderen Abschnitt fragt, wie sie angewendet werden soll:
 
@@ -131,21 +131,21 @@ Das Kopieren einer subdivision und das Einfügen in einen anderen Abschnitt frag
 | `Tile Subdivision`     | Das kopierte Muster wiederholt sich, bis der ausgewählte Abschnitt gefüllt ist              |
 | `Dissolve Subdivision` | Die Noten werden über den ausgewählten Abschnitt verteilt, ohne tuplet                      |
 
-## bar-Aktionen
+## Taktaktionen
 
-Der Streifen mit bar-Aktionen über den bars bietet pro bar:
+Der Streifen mit Taktaktionen über den Takten bietet pro Takt:
 
 - `Insert bars to the left` und `Insert bars to the right`
-- `Clear bar`, das die bar leert, sie aber behält
-- `Delete bar`, das die bar aus dem Score entfernt
+- `Clear bar`, das den Takt leert, ihn aber behält
+- `Delete bar`, das den Takt aus der Partitur entfernt
 - `Duplicate bar`
 - `Repeat start` und `Repeat end`, die Wiederholungstaktstriche setzen
 
-Wiederholungstaktstriche ändern die Reihenfolge, die die Wiedergabe nutzt, nicht die geschriebene Reihenfolge des Score; siehe [Wiedergabe und Üben](playback.md).
+Wiederholungstaktstriche ändern die Reihenfolge, die die Wiedergabe nutzt, nicht die geschriebene Reihenfolge der Partitur; siehe [Wiedergabe und Üben](playback.md).
 
-![Die Symbole für bar-Aktionen in der mode bar](../../images/en/staff-editing/bar-actions.png)
+![Die Symbole für Taktaktionen in der mode bar](../../images/en/staff-editing/bar-actions.png)
 
-*Zwischen den Modus-Umschaltern und den Werkzeugen: Einfügen, Leeren, Löschen, Duplizieren und die beiden Wiederholungstaktstriche, alles für die ausgewählte bar.*
+*Zwischen den Modus-Umschaltern und den Werkzeugen: Einfügen, Leeren, Löschen, Duplizieren und die beiden Wiederholungstaktstriche, alles für den ausgewählten Takt.*
 
 ## track-Aktionen
 
@@ -161,28 +161,28 @@ Die Aktionsschaltfläche einer track-Zeile öffnet das track-Menü, benannt nach
 
 *Die Aktionsschaltfläche einer track-Zeile öffnet Hinzufügen, Duplizieren, Leeren und Löschen für diesen track.*
 
-## Wiederholung über eine bar
+## Wiederholung über einen Takt
 
-Die Werkzeugleiste für track pieces trägt eine Wiederholung über eine bar (simile) und eine Aktion zum Leeren:
+Die Werkzeugleiste für track pieces trägt eine Wiederholung über einen Takt (simile) und eine Aktion zum Leeren:
 
-- Das simile-Zeichen steht für die vorherige bar desselben track. In der ersten bar ist es nicht verfügbar, und der
+- Das simile-Zeichen steht für den vorherigen Takt desselben track. Im ersten Takt ist es nicht verfügbar, und der
   Tooltip sagt das auch.
-- Die Wiedergabe spielt die bar, für die das Zeichen steht.
+- Die Wiedergabe spielt den Takt, für den das Zeichen steht.
 - Das Zeichen erscheint in beiden Ansichten; die grid view zeichnet das Wiederholungszeichen über den Takt, bietet aber
   keine Möglichkeit, es zu setzen.
-- `Clear track piece` leert die bedeckten bars dieses track.
+- `Clear track piece` leert die bedeckten Takte dieses track.
 
-![Eine simile-bar mit der track piece-Werkzeugleiste](../../images/en/staff-editing/simile.png)
+![Ein Takt mit simile-Zeichen und der track piece-Werkzeugleiste](../../images/en/staff-editing/simile.png)
 
-*Die zweite bar eines track: das simile-Zeichen steht für bar 1, und die Werkzeugleiste bietet die Wiederholung und die Aktion zum Leeren.*
+*Der zweite Takt eines track: das simile-Zeichen steht für Takt 1, und die Werkzeugleiste bietet die Wiederholung und die Aktion zum Leeren.*
 
-## bar-Breiten
+## Taktbreiten
 
-Der abschließende Taktstrich einer bar lässt sich ziehen, um diese bar schmaler oder breiter zu machen, was hilft, einer vollen bar mehr Raum zu geben oder mehr bars auf einen Bildschirm zu bringen. Ein Doppelklick auf den Griff stellt die automatische Breite wieder her. Die print preview bietet dieselbe Anpassung.
+Der abschließende Taktstrich eines Taktes lässt sich ziehen, um diesen Takt schmaler oder breiter zu machen, was hilft, einem vollen Takt mehr Raum zu geben oder mehr Takte auf einen Bildschirm zu bringen. Ein Doppelklick auf den Griff stellt die automatische Breite wieder her. Die print preview bietet dieselbe Anpassung.
 
-![Zwei bars unterschiedlicher Breite mit dem Griff zum Ziehen](../../images/en/staff-editing/measure-width.png)
+![Zwei Takte unterschiedlicher Breite mit dem Griff zum Ziehen](../../images/en/staff-editing/measure-width.png)
 
-*bars 2 und 3 mit unterschiedlichen Breiten; der Griff am rechten Taktstrich ist der Griff zum Ziehen.*
+*Takte 2 und 3 mit unterschiedlichen Breiten; der Griff am rechten Taktstrich ist der Griff zum Ziehen.*
 
 ## Dynamics
 
@@ -192,7 +192,7 @@ Dynamics wirken auf die Wiedergabelautstärke über den Abschnitt, den sie bedec
 
 ## Clipboard
 
-`Ctrl`/`Cmd`+`C`, `X` und `V` kopieren, schneiden und fügen Score-Inhalt ein:
+`Ctrl`/`Cmd`+`C`, `X` und `V` kopieren, schneiden und fügen Partiturinhalt ein:
 
 - Kopieren funktioniert in jedem Modus. Schneiden und Einfügen brauchen den edit mode.
 - Das Einfügen in einen anderen track kann einen track anlegen, wenn die Quelle dort noch nicht existiert.
@@ -215,11 +215,11 @@ Die Schaltflächen für Rückgängig und Wiederholen im Header nutzen dieselbe H
 | `Ctrl`/`Cmd`+`Shift`+`Z` | Wiederholen               |
 | `Ctrl`+`Y`               | Wiederholen unter Windows |
 
-Eine Änderung ist ein Undo-Schritt. Das Ziehen einer bar-Breite oder einer dynamic wird einmal aufgezeichnet, wenn die Geste endet, nicht pro Pixel. Ein Neuladen der Anwendung beendet die Historie.
+Eine Änderung ist ein Undo-Schritt. Das Ziehen einer Taktbreite oder einer dynamic wird einmal aufgezeichnet, wenn die Geste endet, nicht pro Pixel. Ein Neuladen der Anwendung beendet die Historie.
 
 ## Automatisches Verlängern
 
-Mit aktivierter Einstellung `Add a bar when notes run past the last one` — dem Standard — hängt die Eingabe von Noten hinter der letzten bar eine bar an, statt die Note zu verwerfen. Das Abschalten der Einstellung hält die Länge des Score fest.
+Mit aktivierter Einstellung `Add a bar when notes run past the last one` — dem Standard — hängt die Eingabe von Noten hinter dem letzten Takt einen Takt an, statt die Note zu verwerfen. Das Abschalten der Einstellung hält die Länge der Partitur fest.
 
 ## Verwandte Kapitel
 
