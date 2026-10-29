@@ -23,7 +23,10 @@ interface ISplitSliderProperties extends ICommonUIProperties {
 
 /** Slider with a visual split marker that divides the track into two zones. */
 export class SplitSlider extends UIComponent<ISplitSliderProperties> {
-    private trackRef = createRef<HTMLDivElement>();
+    /** Distance in px from the split marker within which the pointer gives exactly the marker's value. */
+    private static readonly snapRadiusPx = 6;
+
+    private trackRef = createRef<HTMLDivElement | null>();
 
     public render(): ComponentChild {
         const {
@@ -53,11 +56,10 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
                 aria-valuenow={value}
                 aria-disabled={disabled}
                 tabIndex={disabled ? -1 : 0}
-                ref={this.trackRef}
                 onPointerDown={this.handlePointerDown}
                 onKeyDown={disabled ? undefined : this.handleKeyDown}
             >
-                <div className="slider-split-track">
+                <div className="slider-split-track" ref={this.trackRef}>
                     <div
                         className="slider-split-zone-left"
                         style={{ width: `${splitPercent}%` }}
@@ -114,27 +116,37 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
     };
 
     private updateValueFromPointer(e: PointerEvent): void {
-        const { min = 0, max = 100, step, onChange } = this.props;
+        const { min = 0, max = 100, step, splitPoint, onChange } = this.props;
         const track = this.trackRef.current;
         if (!track) {
             return;
         }
 
         const rect = track.getBoundingClientRect();
-        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        let newValue = min + (ratio * (max - min));
+        const offset = e.clientX - rect.left;
+        const splitOffset = ((splitPoint - min) / (max - min)) * rect.width;
 
-        if (step !== undefined && step > 0) {
-            newValue = Math.round(newValue / step) * step;
+        let newValue: number;
+        if (splitPoint >= min && splitPoint <= max && Math.abs(offset - splitOffset) <= SplitSlider.snapRadiusPx) {
+            // The marker is the setting the slider returns to, so the pointer gives exactly its value near it.
+            newValue = splitPoint;
+        } else {
+            const ratio = Math.max(0, Math.min(1, offset / rect.width));
+            newValue = min + (ratio * (max - min));
+
+            if (step !== undefined && step > 0) {
+                newValue = Math.round(newValue / step) * step;
+            }
+
+            newValue = Math.max(min, Math.min(max, newValue));
         }
 
-        newValue = Math.max(min, Math.min(max, newValue));
         onChange?.(newValue);
     }
 
     private handleKeyDown = (e: KeyboardEvent): void => {
         const { min = 0, max = 100, value, step = 1, onChange } = this.props;
-        let newValue = value;
+        let newValue: number;
 
         if (e.key === "ArrowRight" || e.key === "ArrowUp") {
             newValue = Math.min(max, value + step);

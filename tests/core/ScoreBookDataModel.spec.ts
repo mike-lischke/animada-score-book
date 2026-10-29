@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
+import { Arrangement } from "../../src/core/Arrangement.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
@@ -76,7 +77,7 @@ const noteSpans = (measure: ISbDmTrackPiece): string[] => {
     });
 };
 
-describe.sequential("ScoreBookDataModel — Auth State", () => {
+describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let authChangedCalls: number;
     let authChangedHandler: () => Promise<boolean>;
@@ -239,7 +240,7 @@ describe.sequential("ScoreBookDataModel — Auth State", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel track actions", () => {
+describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let mutatedCalls: number;
 
@@ -397,16 +398,19 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         model.setNoteAt(track.id, 1, stepStart(0), stepDuration, "1");
 
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].start).toEqual({ numerator: 0, denominator: 1 });
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
         expect(measure.events[1].start).toEqual({ numerator: 1, denominator: 16 });
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[2].noteStyleId).toBeUndefined();
-        expect(measure.events[2].start).toEqual({ numerator: 13, denominator: 16 });
-        expect(measure.events[2].duration).toEqual({ numerator: 3, denominator: 16 });
+        expect(measure.events[2].start).toEqual({ numerator: 1, denominator: 8 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 8 });
+        expect(eventList(measure)).toEqual([
+            "0/1+1/16:1", "1/16+1/16:-", "1/8+1/8:-", "1/4+1/4:-", "1/2+1/2:-",
+        ]);
     });
 
     it("setNoteAt preserves a note that spans a pulse boundary", () => {
@@ -441,11 +445,12 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 4 }, "1")).toBe(true);
 
-        expect(measure.events).toHaveLength(2);
+        expect(measure.events).toHaveLength(3);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 2 });
     });
 
     it("setNoteAt replaces a same-length note", () => {
@@ -456,11 +461,11 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 16 }, "1");
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
 
         expect(model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 16 }, "2")).toBe(true);
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
         expect(measure.events[0].noteStyleId).toBe("2");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
     });
@@ -500,11 +505,12 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 4 }, "2")).toBe(true);
 
-        expect(measure.events).toHaveLength(2);
+        expect(measure.events).toHaveLength(3);
         expect(measure.events[0].noteStyleId).toBe("2");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 2 });
     });
 
     it("setNoteAt rejects when a following note blocks the span", () => {
@@ -551,7 +557,10 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         const changed = model.insertEventsWithShift([{
             measure: track.measures[0],
             from: rest,
-            to: rest,
+            to: track.measures[0].events.reduce((last, event) => {
+                return event.noteStyleId === undefined && event.start.numerator / event.start.denominator < 1 / 2
+                    ? event : last;
+            }, rest),
             events: [
                 {
                     start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 },
@@ -578,8 +587,12 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         })).toEqual([
             { numerator: 1, denominator: 16 },
             { numerator: 1, denominator: 16 },
-            { numerator: 3, denominator: 4 },
+            { numerator: 1, denominator: 16 },
             { numerator: 1, denominator: 8 },
+            { numerator: 1, denominator: 4 },
+            { numerator: 1, denominator: 4 },
+            { numerator: 1, denominator: 8 },
+            { numerator: 1, denominator: 16 },
         ]);
 
         const quarter = track.measures[0].events.find((event) => {
@@ -840,7 +853,10 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         const changed = model.insertEventsWithShift([{
             measure: track.measures[0],
             from: rest,
-            to: rest,
+            to: track.measures[0].events.reduce((last, event) => {
+                return event.noteStyleId === undefined && event.start.numerator / event.start.denominator < 1 / 2
+                    ? event : last;
+            }, rest),
             events: [
                 {
                     start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 },
@@ -869,7 +885,8 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         // The two notes that no longer fit continue in the next measure, followed by rests.
         expect(eventList(track.measures[1])).toEqual([
-            "0/1+1/16:2", "1/16+1/16:2", "1/8+3/4:-", "7/8+1/8:-",
+            "0/1+1/16:2", "1/16+1/16:2", "1/8+1/16:-", "3/16+1/8:-", "5/16+1/4:-", "9/16+1/4:-",
+            "13/16+1/8:-", "15/16+1/16:-",
         ]);
     });
 
@@ -922,7 +939,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(eventList(track.measures[0])).toEqual([
             "0/1+1/4:1",
             "1/4+1/4:3",
-            "1/2+1/2:-",
+            "1/2+1/4:-", "3/4+1/4:-",
         ]);
     });
 
@@ -940,7 +957,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(eventList(track.measures[0])).toEqual([
             "0/1+1/4:1",
             "1/4+1/4:2",
-            "1/2+1/2:-",
+            "1/2+1/4:-", "3/4+1/4:-",
         ]);
     });
 
@@ -1002,7 +1019,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
             "0/1+1/4:1",
             "1/4+1/8:-",
             "3/8+1/8:2",
-            "1/2+1/2:-",
+            "1/2+1/8:-", "5/8+1/4:-", "7/8+1/8:-",
         ]);
     });
 
@@ -1176,7 +1193,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
             "1/4+1/12:-",
             "1/3+1/12:-",
             "5/12+1/12:-",
-            "1/2+1/2:-",
+            "1/2+1/8:-", "5/8+1/4:-", "7/8+1/8:-",
         ]);
     });
 
@@ -1278,14 +1295,15 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         expect(cleared).toBe(true);
         // The cleared steps become a combined rest; the surrounding notes keep their durations.
-        expect(track.measures[0].events).toHaveLength(4);
+        expect(track.measures[0].events).toHaveLength(9);
         expect(track.measures[0].events[0].noteStyleId).toBe("1");
         expect(track.measures[0].events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(track.measures[0].events[1].noteStyleId).toBeUndefined();
-        expect(track.measures[0].events[1].duration).toEqual({ numerator: 1, denominator: 8 });
-        expect(track.measures[0].events[2].noteStyleId).toBe("1");
-        expect(track.measures[0].events[2].duration).toEqual({ numerator: 1, denominator: 16 });
-        expect(track.measures[0].events[3].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[1].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(track.measures[0].events[2].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[3].noteStyleId).toBe("1");
+        expect(track.measures[0].events[3].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(track.measures[0].events[4].noteStyleId).toBeUndefined();
         expect(mutatedCalls).toBe(1);
     });
 
@@ -1395,7 +1413,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         expect(cleared).toBe(true);
         expect(measure.subdivisions).toEqual([{ startIndex: 2, actual: 3, normal: 2, isTuplet: true }]);
-        expect(measure.events).toHaveLength(6);
+        expect(measure.events).toHaveLength(10);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
@@ -1575,11 +1593,11 @@ const sixteenthNotes = (): IMeasureEvent[] => {
     });
 };
 
-describe.sequential("ScoreBookDataModel measure widths", () => {
+describe("ScoreBookDataModel measure widths", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let widths: Map<number, number>;
     let mutatedCalls: number;
-    let changedCalls: number;
+    let layoutCalls: number;
 
     const mutatedSpy = (): Promise<boolean> => {
         mutatedCalls++;
@@ -1587,8 +1605,8 @@ describe.sequential("ScoreBookDataModel measure widths", () => {
         return Promise.resolve(true);
     };
 
-    const changedSpy = (): Promise<boolean> => {
-        changedCalls++;
+    const layoutSpy = (): Promise<boolean> => {
+        layoutCalls++;
 
         return Promise.resolve(true);
     };
@@ -1597,22 +1615,22 @@ describe.sequential("ScoreBookDataModel measure widths", () => {
         vi.restoreAllMocks();
         model = new ScoreBookDataModel();
         mutatedCalls = 0;
-        changedCalls = 0;
+        layoutCalls = 0;
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         widths = model.arrangement!.measureWidths!;
         requisitions.register("arrangementMutated", mutatedSpy);
-        requisitions.register("arrangementChanged", changedSpy);
+        requisitions.register("measureLayoutChanged", layoutSpy);
     });
 
     afterEach(() => {
         requisitions.unregister("arrangementMutated", mutatedSpy);
-        requisitions.unregister("arrangementChanged", changedSpy);
+        requisitions.unregister("measureLayoutChanged", layoutSpy);
     });
 
     it("stores a width and refreshes the layout without recording an undo step", () => {
         expect(model.setMeasureWidth(1, 2000)).toBe(true);
         expect(widths.get(1)).toBe(2000);
-        expect(changedCalls).toBe(1);
+        expect(layoutCalls).toBe(1);
         expect(mutatedCalls).toBe(0);
     });
 
@@ -1672,7 +1690,7 @@ describe.sequential("ScoreBookDataModel measure widths", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
+describe("ScoreBookDataModel one-bar repeat (simile)", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let trackId: number;
     let mutatedCalls: number;
@@ -1758,7 +1776,7 @@ describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel repeat barlines", () => {
+describe("ScoreBookDataModel repeat barlines", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let mutatedCalls: number;
 
@@ -1810,7 +1828,7 @@ describe.sequential("ScoreBookDataModel repeat barlines", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel — Range Articulations", () => {
+describe("ScoreBookDataModel — Range Articulations", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let mutatedCalls: number;
 
@@ -2172,5 +2190,144 @@ describe.sequential("ScoreBookDataModel — Range Articulations", () => {
         model.clearTrack(model.arrangement!.tracks[0]);
         expect(markings()).toHaveLength(0);
         expect(mutatedCalls).toBe(1);
+    });
+});
+
+/**
+ * @param status The HTTP status the backend answers with.
+ * @param body The JSON body the backend answers with.
+ *
+ * @returns A response the model can read, so a test states the status it exercises.
+ */
+const responseOf = (status: number, body: unknown = {}): Response => {
+    return {
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: "",
+        json: () => {
+            return Promise.resolve(body);
+        },
+    } as unknown as Response;
+};
+
+describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () => {
+    let model: ScoreBookDataModel;
+    let authChangedCalls: number;
+    let authChangedHandler: () => Promise<boolean>;
+
+    /** What the backend answers a login with, for an account that may edit scores. */
+    const sessionBody = {
+        token: "test-token",
+        user: { id: 1, username: "u", displayName: "U", isAdmin: false },
+        capabilities: {
+            canEditScores: true, canManageUsers: false, canManageInstruments: false, canExportMP3: false,
+        },
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("a", 0, 0)]);
+
+        // A DB-backed id, which puts the model on its "update an existing score" path.
+        (model.arrangement as Arrangement).id = 10996;
+
+        authChangedCalls = 0;
+        authChangedHandler = () => {
+            authChangedCalls++;
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("authChanged", authChangedHandler);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("authChanged", authChangedHandler);
+    });
+
+    it("answers the stored content when the backend accepts the save", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(200, { success: true }));
+
+        const content = await model.saveArrangement();
+
+        expect(content).toBeTruthy();
+    });
+
+    it("claims the missing permission when the backend refuses the save with 403", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(403, { error: "Forbidden" }));
+
+        await expect(model.saveArrangement()).rejects.toThrow(/permission/i);
+    });
+
+    it("states an ended session when the backend refuses the save with 401", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(401, { error: "Authentication required." }));
+
+        await expect(model.saveArrangement()).rejects.toThrow(/log in again/i);
+    });
+
+    it("states the backend's own reason when the save fails for another status", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(500, { error: "Database is gone" }));
+
+        await expect(model.saveArrangement()).rejects.toThrow(/Database is gone/);
+    });
+
+    it("reports the status the backend refused a lock with", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(401, { error: "Authentication required." }));
+
+        const result = await model.lockScore(10996);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(401);
+    });
+
+    it("answers a refused request with a token from the refresh cookie", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
+            .mockResolvedValueOnce(responseOf(200, { token: "fresh-token" }))
+            .mockResolvedValueOnce(responseOf(200, { authenticated: true, ...sessionBody }))
+            .mockResolvedValueOnce(responseOf(200, { success: true, token: "lock-token" }));
+
+        const result = await model.lockScore(10996);
+
+        expect(result.success).toBe(true);
+        expect(result.token).toBe("lock-token");
+        expect(model.authenticated).toBe(true);
+    });
+
+    it("ends a session the refresh cookie cannot renew", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(responseOf(200, sessionBody));
+        await model.login("u", "p");
+        expect(model.authenticated).toBe(true);
+
+        authChangedCalls = 0;
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(401, { error: "No refresh token" }));
+
+        const result = await model.lockScore(10996);
+
+        expect(result.status).toBe(401);
+        expect(model.authenticated).toBe(false);
+        expect(authChangedCalls).toBe(1);
+    });
+
+    it("refreshes the session again after a new login", async () => {
+        // A refusal whose refresh fails leaves the model knowing that this path does not work.
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
+            .mockResolvedValueOnce(responseOf(401, { error: "No refresh token" }));
+        await model.lockScore(10996);
+
+        // A login clears that state, so the next refusal is answered with a refresh again.
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, sessionBody))
+            .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
+            .mockResolvedValueOnce(responseOf(200, { token: "fresh-token" }))
+            .mockResolvedValueOnce(responseOf(200, { authenticated: true, ...sessionBody }))
+            .mockResolvedValueOnce(responseOf(200, { success: true, token: "lock-token" }));
+        await model.login("u", "p");
+
+        const result = await model.lockScore(10996);
+
+        expect(result.token).toBe("lock-token");
     });
 });

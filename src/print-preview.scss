@@ -1,0 +1,574 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+@use "grid-shared" as score;
+
+/* The full-window print preview. It is a screen surface; the sheets inside it show the paper. */
+
+.print-preview {
+    /* The bars float outside #appRoot, so they state the tokens the app's floating bars use. */
+    --border-subtle: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+    --control-size: 34px;
+    --radius-frame: 6px;
+    --preview-chip: color-mix(in srgb, var(--color-base-content) 6%, var(--color-base-100));
+
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+
+    background: var(--color-base-200);
+    color: var(--color-base-content);
+}
+
+/* The sheets fill the window; the bars float above them, as the score's floating bars do. */
+.print-preview-document {
+    position: absolute;
+    inset: 0;
+    padding: 96px 24px;
+    overflow: auto;
+}
+
+.print-preview-sheets {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+}
+
+.print-preview-sheet-frame {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+/* A bar reads like the editor's tools bar: one gray surface with an uppercase heading and its controls on it. It
+ * floats above the sheets, their drag handles included, so its buttons stay reachable. */
+.print-preview-bar {
+    position: absolute;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    height: calc(var(--control-size) + 8px);
+    max-width: calc(100vw - 32px);
+    padding: 0 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-base-content) 3%, var(--color-base-100));
+    box-shadow: 0 4px 16px var(--shadow-color);
+
+    .btn {
+        height: calc(var(--control-size) - 4px);
+        min-height: calc(var(--control-size) - 4px);
+    }
+}
+
+.print-preview-bar-layout {
+    left: 16px;
+    top: 16px;
+}
+
+.print-preview-bar-print {
+    right: 16px;
+    top: 16px;
+}
+
+.print-preview-bar-display {
+    left: 16px;
+    bottom: 16px;
+}
+
+.print-preview-bar-actions {
+    right: 16px;
+    bottom: 16px;
+}
+
+.print-preview-heading {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+    user-select: none;
+}
+
+.print-preview-label {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+}
+
+/* The value choosers read at the label size, not in the bar's headline size. */
+.print-preview-bar .value-dropdown-trigger {
+    font-size: 11px;
+}
+
+.print-preview-divider {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 20px;
+    background: var(--border-subtle);
+}
+
+/* The scale reads like a border input: a compact chooser beside its label. */
+.print-preview-scale {
+    gap: 4px;
+}
+
+/* The track chooser is a label of the bar, not a headline: same type as the Scale and Borders labels. */
+.print-preview-tracks > .btn {
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+}
+
+/* Bar actions take the look of the editor's tool buttons: bordered, light surface, tool caption size. */
+.print-preview-tool-button {
+    height: calc(var(--control-size) - 4px);
+    min-height: calc(var(--control-size) - 4px);
+    gap: 6px;
+    padding: 0 12px;
+    border: 1px solid var(--border-subtle);
+    background: var(--color-base-100);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.print-preview-select-all {
+    width: 100%;
+}
+
+/* Print/PDF carries the emphasis the header's export button states: an inverted surface. */
+.print-preview-bar .print-preview-emphasis {
+    border-color: transparent;
+    background: var(--color-base-content);
+    color: var(--color-base-100);
+
+    .icon {
+        color: inherit;
+    }
+}
+
+/* The menu rows carry a checkbox where a dropdown item shows its icon. */
+.print-preview-tracks .du-dropdown .checkbox {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+}
+
+/* The zoom steps read as in the footer: one chip, the value between the two ends. */
+.print-preview-zoom {
+    flex: 0 0 auto;
+    gap: 2px;
+    height: 28px;
+    padding: 0 3px;
+    border-radius: var(--radius-frame);
+    background: var(--preview-chip);
+
+    .btn {
+        width: 21px;
+        min-width: 21px;
+        height: 20px;
+        min-height: 20px;
+        padding: 0;
+        background: transparent;
+
+        .icon {
+            width: 8px;
+            min-width: 8px;
+            height: 8px;
+            min-height: 8px;
+        }
+    }
+}
+
+.print-preview-zoom-value {
+    min-width: 38px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* The margins sit side by side, each field labelled with the side of the paper it states. */
+.print-preview-margins {
+    gap: 10px;
+}
+
+.print-preview-margin-field {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* A dotted sheet whose stated side is drawn through: the icon names the paper margin of its input. */
+.print-preview-margin-icon {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    color: var(--color-base-content);
+
+    .print-preview-margin-icon-frame {
+        fill: none;
+        stroke: color-mix(in srgb, currentColor 45%, transparent);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 1.5;
+    }
+
+    /* The stated side is solid, 1 px thick and fully opaque: it is the part the icon reads as. */
+    .print-preview-margin-icon-side {
+        stroke: currentColor;
+        stroke-width: 1;
+        stroke-linecap: butt;
+    }
+}
+
+.print-preview-margin-unit {
+    font-size: 10px;
+    opacity: 0.5;
+}
+
+/* The pager reads like the zoom steps: one chip with its value between the two ends. */
+.print-preview-pager {
+    flex: 0 0 auto;
+    gap: 2px;
+    height: 28px;
+    padding: 0 3px;
+    border-radius: var(--radius-frame);
+    background: var(--preview-chip);
+
+    .btn {
+        width: 21px;
+        min-width: 21px;
+        height: 20px;
+        min-height: 20px;
+        padding: 0;
+        background: transparent;
+
+        .icon {
+            width: 10px;
+            min-width: 10px;
+            height: 10px;
+            min-height: 10px;
+        }
+    }
+}
+
+.print-preview-pager-label {
+    min-width: 76px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* The warning floats above the bars, so it never takes room from the pages. */
+.print-preview-warning {
+    position: absolute;
+    left: 50%;
+    bottom: 84px;
+    z-index: 4;
+    transform: translateX(-50%);
+
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+
+    max-width: min(640px, 60vw);
+    padding: 8px 14px;
+    border: 1px solid var(--color-warning);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--color-warning) 12%, var(--color-base-100));
+    color: var(--color-warning);
+    box-shadow: 8px 8px 20px var(--shadow-color);
+
+    font-size: 12px;
+
+    .icon {
+        flex: 0 0 auto;
+        margin-top: 2px;
+    }
+}
+
+.print-preview-warning-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* One sheet of paper. It is stated in printed px and zoomed by the preview magnification. */
+.print-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    flex: 0 0 auto;
+    overflow: hidden;
+
+    background: #fff;
+    color: #000;
+    font-family: system-ui, "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 2px 14px rgb(0 0 0 / 0.28);
+
+    @include score.score-grid-rules($useThemeColors: false, $renderBeam: false, $beatNumberTop: 0);
+
+    .print-sheet-guides {
+        position: absolute;
+        pointer-events: none;
+        border: 1px dashed rgb(0 0 0 / 0.25);
+    }
+
+    .print-sheet-header {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        color: #444;
+        font-size: 10pt;
+    }
+
+    .print-sheet-page-number {
+        /* The first page carries no running title, so its page number still sits at the right edge. */
+        margin-left: auto;
+    }
+
+    .print-sheet-running-title {
+        font-weight: 600;
+        color: #000;
+    }
+
+    .print-sheet-title-block {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .print-sheet-title {
+        display: block;
+        margin: 0;
+        color: #000;
+        font-size: 18pt;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .print-sheet-content {
+        position: absolute;
+        overflow: hidden;
+    }
+
+    /* The systems are stated in layout px at 100% zoom, so the content carries the print scale. */
+    .print-sheet-content-scale {
+        position: relative;
+        transform-origin: top left;
+    }
+
+    .print-system {
+        gap: 0;
+    }
+
+    /* The measure a system starts with, stated above the bracket's upper end in the digits of the music font. The
+     * music fonts have no italic face, so the number is leaned the way an oblique face would. */
+    .print-system-measure-number {
+        position: absolute;
+        z-index: 1;
+        display: flex;
+        color: #000;
+        transform: skewX(-12deg);
+        transform-origin: left bottom;
+        pointer-events: none;
+    }
+
+    /* The barline closing a staff measure is where its print width is dragged: the handle is the line itself, so
+     * the measures close up and the page shows what it prints. It covers no more than that line, so the page
+     * around it keeps taking the pointer. Its sizes are stated in screen px, so the print scale never shrinks the
+     * handle into an unhittable target. */
+    .print-system-resize-handle {
+        --handle-scale: var(--print-scale-inverse, 1);
+
+        position: absolute;
+        top: var(--barline-top, 0px);
+        height: var(--barline-height, 100%);
+        z-index: 3;
+        width: calc(9px * var(--handle-scale));
+        margin-left: calc(-4.5px * var(--handle-scale));
+        cursor: col-resize;
+        touch-action: none;
+
+        /* States the width of the dragged measure above the boundary, in the look of the editor's Play Focus
+         * switch. The handle covers only the staves, so the flag climbs back to the top edge of the system. */
+        .print-system-resize-flag {
+            position: absolute;
+            top: calc(-1 * var(--barline-top, 0px));
+            right: calc(11px * var(--handle-scale));
+            display: flex;
+            align-items: center;
+            height: calc(14px * var(--handle-scale));
+            min-height: calc(14px * var(--handle-scale));
+            padding: 0 calc(4.5px * var(--handle-scale));
+            border: 1px solid var(--border-subtle);
+            background: var(--color-base-100);
+            color: var(--color-base-content);
+            font-size: calc(5.5px * var(--handle-scale));
+            white-space: nowrap;
+            pointer-events: none;
+        }
+    }
+
+    /* Groups the rows of one system: the font's bracket ends hang on the band's edges, the line runs between
+     * them. Each end is drawn outside the band, so its arm ends where the band ends. */
+    .print-system-bracket {
+        position: absolute;
+        width: 0;
+        overflow: visible;
+        pointer-events: none;
+    }
+
+    .print-system-bracket-end {
+        position: absolute;
+        left: 0;
+    }
+
+    .print-system-bracket-top {
+        bottom: 100%;
+    }
+
+    .print-system-bracket-bottom {
+        top: 100%;
+    }
+
+    /* The line reaches a pixel into the ends, which have the same thickness, so no seam shows between them. */
+    .print-system-bracket-line {
+        position: absolute;
+        left: 0;
+        top: -1px;
+        bottom: -1px;
+        width: var(--bracket-thickness, 5px);
+        background: #000;
+    }
+
+    .print-system-name {
+        width: 100%;
+        margin-top: calc(var(--staff-centre, 0px) * 2);
+
+        font-size: 16px;
+        line-height: 1.15;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    /* The name column keeps its width while a measure is dragged wider, so only the measures move. */
+    .print-system-names {
+        flex: 0 0 auto;
+    }
+
+    /* Holds the clef column, whose left edge is where the staves open. */
+    .print-system-prefix {
+        position: relative;
+        flex: 0 0 auto;
+    }
+
+    /* The line that opens the measures and ties the staves of a system together. It ends where the clef's ink
+     * ends: the clef is centred on its staff, so what it reaches beyond the outer staff lines is its ink height
+     * less the staff's half height, both stated by the music font. */
+    .print-system-barline {
+        --clef-reach-top: var(--glyph-ink-spaces-top-unpitchedpercussionclef1, 1);
+        --clef-reach-bottom: calc(-1 * var(--glyph-ink-spaces-bottom-unpitchedpercussionclef1, -1));
+        --barline-overhang-top: max(0, var(--clef-reach-top) - var(--barline-half-lines-top));
+        --barline-overhang-bottom: max(0, var(--clef-reach-bottom) - var(--barline-half-lines-bottom));
+
+        position: absolute;
+        left: 8px;
+        top: calc(var(--barline-top) - (var(--barline-overhang-top) * var(--staff-space)));
+        height: calc(var(--barline-height) + ((var(--barline-overhang-top) + var(--barline-overhang-bottom)) * var(--staff-space)));
+        width: var(--barline-thin-thickness, 2px);
+        background: #000;
+        pointer-events: none;
+    }
+
+    /* The prefix rows start where the note rows start, so their staff lines line up. */
+    .print-system.view-staff .staff-prefix-viewer {
+        padding-top: 24px;
+    }
+
+    /* The beat strip and the measure numbers belong to the editor, not to paper. */
+    .grid-measure-beam,
+    .grid-measure-number,
+    .staff-measure-number {
+        display: none;
+    }
+
+    .staff-measure-viewer {
+        min-width: 0;
+        padding-left: 0;
+        padding-right: 0;
+
+        /* The measures of a system close up: the column separator belongs to the editor, not to paper. */
+        border-right: 0;
+    }
+
+    /* The staff lines run through the barlines, so the notes keep their air from the row itself, where the editor
+     * keeps it in the column. */
+    .staff-note-viewer-runs {
+        padding-left: calc(11px + var(--staff-opening-barline-room, 0px));
+        padding-right: calc(11px + var(--staff-closing-barline-room, 0px));
+    }
+
+    .grid-measure-row {
+        min-width: 0 !important;
+        margin-left: 2px;
+        margin-right: 2px;
+    }
+
+    .note-viewer {
+        outline: none !important;
+        border: 0.5px solid #d8d8d8 !important;
+        box-shadow: none !important;
+    }
+
+    /* Staff lines are drawn with a negative z-index, so each row needs its own stacking context. */
+    .staff-note-viewer,
+    .staff-prefix-row {
+        isolation: isolate;
+    }
+
+    /* The staff lines are lighter than the notation they carry, as the score draws them, and stated in a fixed
+     * tone so a printed sheet reads the same whatever theme the application shows. */
+    .staff-note-viewer-line {
+        top: calc(50% + var(--staff-centre, 32px) + var(--staff-line-offset, 0px) - var(--staff-line-thickness, 1px) / 2);
+        height: var(--staff-line-thickness, 1px);
+        border-top: 0;
+        background: #c4c4c4;
+    }
+
+    .staff-note-head-damped-plus,
+    .staff-note-head {
+        color: #000 !important;
+    }
+
+    .staff-note-viewer-articulation {
+        color: #000 !important;
+    }
+
+    .staff-note-head-stem,
+    .staff-note-viewer-custom-stem {
+        background: #000 !important;
+    }
+
+    .staff-note-viewer-beam {
+        color: #000 !important;
+    }
+
+    /* The system's height holds the air between its rows, so the last row needs none below it. */
+    .staff-note-viewer:last-child,
+    .staff-prefix-row:last-child {
+        margin-bottom: 0;
+    }
+}

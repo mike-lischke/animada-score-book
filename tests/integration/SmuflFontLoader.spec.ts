@@ -188,7 +188,7 @@ const loadedFaces: FontFaceStub[] = [];
 /** The faces that were registered in the document. */
 const registeredFaces: FontFaceStub[] = [];
 
-describe.sequential("SmuflFontLoader", () => {
+describe("SmuflFontLoader", { concurrent: false }, () => {
     beforeEach(() => {
         unloadableFamilies.clear();
         loadedFaces.length = 0;

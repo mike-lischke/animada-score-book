@@ -9,6 +9,7 @@ import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel 
     from "../../../../core/ScoreBookDataModel.js";
 import { MeasureLayout, staffSpacePx } from "../../../../core/MeasureLayout.js";
 import { RangeArticulations } from "../../../../core/RangeArticulations.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../../core/StaffRowGeometry.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import {
     MeasureProjection, NoteGroupKind, type INoteGroup, type INotationGrid,
@@ -25,42 +26,37 @@ import {
     type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
+import { Icon } from "../../framework/Icon.js";
+import { UIIcon } from "../../framework/UIIcon.js";
 import { StaffMeasureTrackRow } from "./StaffMeasureTrackRow.js";
 
 /** Tolerance in px around note heads, stems and group markers when a hit region is tested. */
 const hitTolerance = 2;
 
-/**
- * Tests whether a selection rectangle touches a rectangular region.
- *
- * @param selection The selection rectangle in viewport coordinates.
- * @param left Left edge of the region.
- * @param top Top edge of the region.
- * @param right Right edge of the region.
- * @param bottom Bottom edge of the region.
- * @param tolerance Extra px added to the region on all sides.
- *
- * @returns True when the expanded region overlaps the selection rectangle.
- */
-const rectsIntersect = (selection: DOMRect, left: number, top: number, right: number, bottom: number,
-    tolerance: number): boolean => {
-    return right + tolerance >= selection.left && left - tolerance <= selection.right
-        && bottom + tolerance >= selection.top && top - tolerance <= selection.bottom;
-};
+/** Half the thickness a beam stroke's hit zone keeps around the beam line, in px. */
+const beamStrokeHalfHeight = 3;
+
+/** A point on a beam's line, in viewport coordinates. */
+interface IBeamHitPoint {
+    x: number;
+    y: number;
+}
+
+interface IBeamHitSegment {
+    start: IBeamHitPoint;
+    end: IBeamHitPoint;
+}
 
 /**
- * Tests whether the selection rectangle touches a rendered element.
- *
- * @param selection The selection rectangle in viewport coordinates.
- * @param element The element to test.
- *
- * @returns True when the element's bounds overlap the selection rectangle.
+ * The zone a beam group can be selected through, taken from its rendered stroke segments.
  */
-const touchesElement = (selection: DOMRect, element: HTMLElement): boolean => {
-    const bounds = element.getBoundingClientRect();
+interface IBeamBand {
+    /** Every visible segment of every beam level, in viewport coordinates. */
+    segments: IBeamHitSegment[];
 
-    return rectsIntersect(selection, bounds.left, bounds.top, bounds.right, bounds.bottom, hitTolerance);
-};
+    /** Bounds of the group's stems, which a hit entry reports as the marker it was found at. */
+    rect: DOMRect;
+}
 
 /** A note group a hit test found, together with the rect of the marker it was found at. */
 interface INoteGroupHit {
@@ -68,21 +64,12 @@ interface INoteGroupHit {
     rect: DOMRect;
 }
 
-/**
- * Orders the group hits of a measure by the position of their groups.
- *
- * @param hits The hits to order.
- *
- * @returns The hits, earliest group first.
- */
-const groupsInMeasureOrder = (hits: INoteGroupHit[]): INoteGroupHit[] => {
-    return hits.sort((first, second) => {
-        return compareFractions(first.group.start, second.group.start);
-    });
-};
-
 export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     barNumber: number;
+
+    /** The focus switch the measure draws in its head room. */
+    focusButton?: ComponentChild;
+
     arrangement: ISbDmArrangement;
     arrangementPlayer: ArrangementPlayer;
     inEditMode: boolean;
@@ -97,6 +84,15 @@ export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     tracks?: ISbDmTrack[];
 
     /**
+     * The column's layout width in px at 100 % zoom, which the note rows derive their beam slopes from.
+     * The print view states its halved width, so the same engraving rules hold on paper.
+     */
+    measureWidth: number;
+    /** The column width at the default layout, which the bar's outer events keep their places to. */
+    nominalWidth?: number;
+    /** The shared row geometry of every track, so all measures and side controls lay a track out alike. */
+    rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
+    /**
      * True to draw the hairpins and `f` markings of each row. The print view sets this; the screen view leaves it
      * off, because its markings are drawn into the viewer's decoration layer instead.
      */
@@ -110,6 +106,8 @@ interface IStaffMeasureViewerState {
 /** Renders the staff-mode measure column with track rows only. */
 export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IStaffMeasureViewerState>
     implements ISelectionHitTester {
+    private viewerElement?: HTMLDivElement;
+
     public constructor(props: IStaffMeasureViewerProps) {
         super(props);
 
@@ -123,7 +121,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         const { selectionManager } = this.props;
         selectionManager.registerHitTester(this);
 
-        requisitions.register("arrangementChanged", this.handleArrangementChanged);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("arrangementReverted", this.handleArrangementMutated);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IStaffMeasureViewerProps>): void {
@@ -139,7 +138,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         const { selectionManager } = this.props;
         selectionManager.unregisterHitTester(this);
 
-        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("arrangementReverted", this.handleArrangementMutated);
     }
 
     /**
@@ -151,14 +151,19 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      */
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { barNumber, arrangement, arrangementPlayer, scoreElementRegistry } = this.props;
-        const element = this.base as HTMLElement | null;
+        const element = this.viewerElement;
         if (!element) {
             return [];
         }
 
         const elRect = element.getBoundingClientRect();
-        if (rect.right < elRect.left || rect.left > elRect.right
-            || rect.bottom < elRect.top || rect.top > elRect.bottom) {
+
+        // A measure draws its tuplet markers beside the note band, and a marker below the notation reaches
+        // into the room the row keeps for it, which lies outside the measure's own box. A rectangle that
+        // touches only such a marker still addresses the tuplet it belongs to, and nothing else.
+        const insideMeasure = StaffMeasureViewer.rectsIntersect(rect, elRect.left, elRect.top, elRect.right,
+            elRect.bottom, 0);
+        if (!insideMeasure && !StaffMeasureViewer.touchesTupletMarker(rect, element)) {
             return [];
         }
 
@@ -183,15 +188,10 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 return candidate.id === trackId;
             });
             const measure = track?.measures[barNumber - 1];
-            // Notes are translated vertically per staff line, so the note symbol can extend below the
-            // row. Expand the coarse row bounds by the maximum line spread and by the room a note's marks
-            // hang into below its head, so noteheads on the lowest line and a note's accent stay reachable.
-            // The fine-grained checks below do the precise hit-testing.
-            const lineSpread = ((this.maxNoteLineForTrack(trackId) - 1) / 2) * staffSpacePx;
-            const expandedTop = rowRect.top - lineSpread;
-            const expandedBottom = rowRect.bottom + lineSpread + (staffSpacePx * 2);
+            const pieceBottom = rowRect.bottom + (parseFloat(getComputedStyle(row).marginBottom) || 0);
 
-            if (!rectsIntersect(rect, rowRect.left, expandedTop, rowRect.right, expandedBottom, 0)) {
+            // The shared row geometry reserves notation ink; its bottom margin belongs to the track piece.
+            if (!StaffMeasureViewer.rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right, pieceBottom, 0)) {
                 continue;
             }
 
@@ -199,15 +199,13 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 ScoreElementKind.StaffRun, barNumber, trackId,
             ) ?? [];
 
-            let rowHasSoundingNotes = false;
-
             for (const runEl of noteRunElements) {
                 const runLocation = scoreElementRegistry?.getLocation(runEl);
                 if (runLocation?.step === undefined) {
                     continue;
                 }
 
-                let noteHit = false;
+                let hitRect: DOMRect | undefined;
                 const isSoundingNote = runLocation.noteId !== undefined;
 
                 // 1. A note is what it draws: its head, and the marks that hang on the head's wrapper — the
@@ -221,19 +219,19 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                     // A stem reaches up to the beam, which addresses the note group and not the note.
                     const isStem = mark.classList.contains("staff-note-head-stem")
                         || mark.classList.contains("staff-note-viewer-custom-stem");
-                    if (isStem) {
+                    if (isStem || mark.classList.contains("staff-note-head-symbol")) {
                         continue;
                     }
 
                     const mr = mark.getBoundingClientRect();
-                    if (rectsIntersect(rect, mr.left, mr.top, mr.right, mr.bottom, hitTolerance)) {
-                        noteHit = true;
+                    if (StaffMeasureViewer.rectsIntersect(rect, mr.left, mr.top, mr.right, mr.bottom, hitTolerance)) {
+                        hitRect = mr;
                         break;
                     }
                 }
 
                 // 2. Stems carry a note as well, which is what a click beside the head aims at.
-                if (!noteHit) {
+                if (hitRect === undefined) {
                     const headStem = runEl.querySelector<HTMLElement>(
                         ".staff-note-head-stem, .staff-note-viewer-custom-stem",
                     );
@@ -243,38 +241,37 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         // The top of a beamed stem is where its beam sits, so that zone falls through to
                         // the note group check instead: the beam itself, whose thickness the font states,
                         // and two staff spaces of slack below it, where a click aims at the beam.
-                        const beam = runEl.querySelector<HTMLElement>(".staff-note-viewer-beam");
-                        const reserve = beam === null
+                        const strokes = [...runEl.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect")];
+                        const reserve = strokes.length === 0
                             ? 0
-                            : (beam.getBoundingClientRect().bottom - r.top) + (staffSpacePx * 2);
-                        noteHit = rectsIntersect(rect, r.left, r.top + reserve, r.right, r.bottom, hitTolerance);
+                            : (Math.max(...strokes.map((stroke) => {
+                                return stroke.getBoundingClientRect().bottom;
+                            })) - r.top) + (staffSpacePx * 2);
+                        if (StaffMeasureViewer.rectsIntersect(rect, r.left, r.top + reserve, r.right,
+                            r.bottom, hitTolerance)) {
+                            hitRect = new DOMRect(r.left, r.top + reserve, r.width, Math.max(0, r.height - reserve));
+                        }
                     }
                 }
 
-                if (noteHit) {
+                if (hitRect !== undefined) {
                     const target = scoreElementRegistry?.getTarget(runEl);
                     if (target !== undefined && "duration" in target && measure !== undefined) {
                         // A staff run is the whole event, so it is copied with its full duration.
                         noteEntries.push({
                             ...this.eventEntry(measure, target),
-                            rect: runEl.getBoundingClientRect()
+                            rect: hitRect
                         });
                     }
 
-                    if (runLocation.noteId !== undefined) {
-                        rowHasSoundingNotes = true;
-                    }
                 }
             }
 
-            // A track piece owns the room below it: the row's box plus its bottom margin, which is what
-            // separates it from the next piece. The expanded bounds above and below only reach the notes
-            // drawn outside the row, so a rectangle above the piece addresses the measure.
-            const pieceBottom = rowRect.bottom + (parseFloat(getComputedStyle(row).marginBottom) || 0);
-            const hitsTrackPiece = rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right,
+            // A track piece also owns the gap below its row, which separates it from the next piece.
+            const hitsTrackPiece = StaffMeasureViewer.rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right,
                 pieceBottom, 0);
 
-            if (!rowHasSoundingNotes && hitsTrackPiece) {
+            if (hitsTrackPiece) {
                 if (track !== undefined && measure !== undefined) {
                     trackPieceEntries.push({
                         granularity: SelectionGranularity.TrackPiece,
@@ -297,11 +294,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             const measure = arrangement.tracks.find((track) => {
                 return track.id === trackId;
             })?.measures[barNumber - 1];
-            const hasNoteHits = noteEntries.some((entry) => {
-                return SelectionSerializer.trackOf(entry).id === trackId;
-            });
 
-            if (measure === undefined || hasNoteHits) {
+            if (measure === undefined) {
                 continue;
             }
 
@@ -310,29 +304,20 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             }
         }
 
-        if (noteEntries.length > 0) {
-            return noteEntries;
-        }
-
-        if (trackPieceEntries.length > 0) {
-            return trackPieceEntries;
-        }
-
-        const measure = SelectionSerializer.measureOfBar(arrangement, barNumber);
-        if (measure === undefined) {
-            return [];
-        }
-
-        return [{
+        const measure = insideMeasure ? SelectionSerializer.measureOfBar(arrangement, barNumber) : undefined;
+        const measureEntries: ISelectionHitEntry[] = measure === undefined ? [] : [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
             rect: elRect,
         }];
+
+        return [...noteEntries, ...trackPieceEntries, ...measureEntries];
     }
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, scoreElementRegistry, style, showRangeArticulations } = this.props;
+            dataModel, measureWidth, nominalWidth, rowGeometries, scoreElementRegistry, style,
+            showRangeArticulations, focusButton } = this.props;
         const { tracks } = this.state;
 
         // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
@@ -341,54 +326,310 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             resizeHandle = (
                 <div
                     className="staff-measure-resize-handle"
+                    title="Resize measure"
                     onPointerDown={this.handleResizePointerDown}
                     onDblClick={this.handleResizeDoubleClick}
-                />
+                >
+                    <span className="staff-measure-resize-thumb" aria-hidden="true">
+                        <Icon src={UIIcon.Menu} />
+                    </span>
+                </div>
             );
         }
+
+        const registryRef = scoreElementRegistry?.createRef({
+            kind: ScoreElementKind.BarContainer,
+            bar: barNumber,
+            trackId: 0,
+        });
+        const setViewerRef = (element: HTMLDivElement | null): void => {
+            this.viewerElement = element ?? undefined;
+            registryRef?.(element);
+        };
+
+        const trackRows = tracks.map((track) => {
+            const trackPlayer = arrangementPlayer.trackPlayers.get(track);
+            if (!trackPlayer) {
+                return null;
+            }
+
+            const articulations = showRangeArticulations
+                ? (arrangement.rangeArticulations?.all ?? []).filter((articulation) => {
+                    return articulation.trackId === track.id
+                        && RangeArticulations.portionInBar(articulation, barNumber) !== undefined;
+                })
+                : undefined;
+            const rowGeometry = rowGeometries?.get(track.id)
+                ?? StaffRowGeometry.ofTrack(track, arrangement, arrangementPlayer.scoreMetrics);
+
+            return (
+                <StaffMeasureTrackRow
+                    key={track.id}
+                    track={track}
+                    barNumber={barNumber}
+                    timeParams={arrangement.timeParams}
+                    trackPlayer={trackPlayer}
+                    arrangementPlayer={arrangementPlayer}
+                    inEditMode={inEditMode}
+                    dataModel={dataModel}
+                    measureWidth={measureWidth}
+                    nominalWidth={nominalWidth}
+                    rowGeometry={rowGeometry}
+                    scoreElementRegistry={scoreElementRegistry}
+                    articulations={articulations}
+                />
+            );
+        });
 
         return (
             <div
                 className="staff-measure-viewer"
                 style={style}
-                ref={scoreElementRegistry?.createRef({
-                    kind: ScoreElementKind.BarContainer,
-                    bar: barNumber,
-                    trackId: 0,
-                })}
+                ref={setViewerRef}
             >
-                <div className="staff-measure-number">{barNumber}</div>
-                {tracks.map((track) => {
-                    const trackPlayer = arrangementPlayer.trackPlayers.get(track);
-                    if (!trackPlayer) {
-                        return null;
-                    }
-
-                    const articulations = showRangeArticulations
-                        ? (arrangement.rangeArticulations?.all ?? []).filter((articulation) => {
-                            return articulation.trackId === track.id
-                                && RangeArticulations.portionInBar(articulation, barNumber) !== undefined;
-                        })
-                        : undefined;
-
-                    return (
-                        <StaffMeasureTrackRow
-                            key={track.id}
-                            track={track}
-                            barNumber={barNumber}
-                            timeParams={arrangement.timeParams}
-                            trackPlayer={trackPlayer}
-                            arrangementPlayer={arrangementPlayer}
-                            inEditMode={inEditMode}
-                            dataModel={dataModel}
-                            scoreElementRegistry={scoreElementRegistry}
-                            articulations={articulations}
-                        />
-                    );
-                })}
+                <div className="staff-measure-number">
+                    <span className="staff-measure-number-digits">{barNumber}</span>
+                </div>
+                {focusButton}
+                {trackRows}
                 {resizeHandle}
             </div>
         );
+    }
+
+    /**
+     * @param selection The selection rectangle in viewport coordinates.
+     * @param bar The bar element to inspect.
+     *
+     * @returns Whether the rectangle touches a tuplet marker the bar draws, which may sit outside the
+     *          bar's own box in the room a row keeps below its notation.
+     */
+    private static touchesTupletMarker(selection: DOMRect, bar: HTMLElement): boolean {
+        const markers = bar.querySelectorAll<HTMLElement>(
+            ".staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
+        );
+
+        for (const marker of markers) {
+            const number = marker.querySelector<HTMLElement>(".staff-note-viewer-tuplet-text");
+            if (StaffMeasureViewer.touchesElement(selection, marker)
+                || (number !== null && StaffMeasureViewer.touchesElement(selection, number))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Tests whether a selection rectangle touches a rectangular region.
+     *
+     * @param selection The selection rectangle in viewport coordinates.
+     * @param left Left edge of the region.
+     * @param top Top edge of the region.
+     * @param right Right edge of the region.
+     * @param bottom Bottom edge of the region.
+     * @param tolerance Extra px added to the region on all sides.
+     *
+     * @returns True when the expanded region overlaps the selection rectangle.
+     */
+    private static rectsIntersect(selection: DOMRect, left: number, top: number, right: number, bottom: number,
+        tolerance: number): boolean {
+        return right + tolerance >= selection.left && left - tolerance <= selection.right
+            && bottom + tolerance >= selection.top && top - tolerance <= selection.bottom;
+    }
+
+    /**
+     * Tests whether the selection rectangle touches a rendered element.
+     *
+     * @param selection The selection rectangle in viewport coordinates.
+     * @param element The element to test.
+     *
+     * @returns True when the element's bounds overlap the selection rectangle.
+     */
+    private static touchesElement(selection: DOMRect, element: HTMLElement): boolean {
+        const bounds = element.getBoundingClientRect();
+
+        return StaffMeasureViewer.rectsIntersect(selection, bounds.left, bounds.top, bounds.right, bounds.bottom,
+            hitTolerance);
+    }
+
+    /**
+     * Orders the group hits of a measure by the position of their groups.
+     *
+     * @param hits The hits to order.
+     *
+     * @returns The hits, earliest group first.
+     */
+    private static groupsInMeasureOrder(hits: INoteGroupHit[]): INoteGroupHit[] {
+        return hits.sort((first, second) => {
+            return compareFractions(first.group.start, second.group.start);
+        });
+    }
+
+    /**
+     * Tests whether a line segment crosses an axis-aligned rectangle, using the Liang-Barsky clipping.
+     *
+     * @param ax x of the segment's first point.
+     * @param ay y of the segment's first point.
+     * @param bx x of the segment's second point.
+     * @param by y of the segment's second point.
+     * @param left Left edge of the rectangle.
+     * @param top Top edge of the rectangle.
+     * @param right Right edge of the rectangle.
+     * @param bottom Bottom edge of the rectangle.
+     *
+     * @returns True when the segment passes through the rectangle.
+     */
+    private static segmentIntersectsRect(ax: number, ay: number, bx: number, by: number,
+        left: number, top: number, right: number, bottom: number): boolean {
+        const dx = bx - ax;
+        const dy = by - ay;
+        let entry = 0;
+        let exit = 1;
+
+        const clip = (p: number, q: number): boolean => {
+            if (p === 0) {
+                return q >= 0;
+            }
+
+            const ratio = q / p;
+            if (p < 0) {
+                if (ratio > exit) {
+                    return false;
+                }
+
+                entry = Math.max(entry, ratio);
+            } else {
+                if (ratio < entry) {
+                    return false;
+                }
+
+                exit = Math.min(exit, ratio);
+            }
+
+            return true;
+        };
+
+        return clip(-dx, ax - left) && clip(dx, right - ax) && clip(-dy, ay - top) && clip(dy, bottom - ay);
+    }
+
+    /**
+     * Tests whether the selection rectangle touches a beam group's band: the line through its stems,
+     * once per beam level, kept to the stroke's own thickness. The empty room a stroke's bounding box
+     * spans around that line does not address the group.
+     *
+     * @param selection The selection rectangle in viewport coordinates.
+     * @param band The band to test.
+     *
+     * @returns True when the rectangle touches the band at any beam level.
+     */
+    private static touchesBeamBand(selection: DOMRect, band: IBeamBand): boolean {
+        const tolerance = hitTolerance + beamStrokeHalfHeight;
+        const left = selection.left - tolerance;
+        const top = selection.top - tolerance;
+        const right = selection.right + tolerance;
+        const bottom = selection.bottom + tolerance;
+
+        for (const segment of band.segments) {
+            if (StaffMeasureViewer.segmentIntersectsRect(segment.start.x, segment.start.y,
+                segment.end.x, segment.end.y, left, top, right, bottom)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Adds a group hit, once per group and track.
+     *
+     * @param hitsByTrack The hits collected so far, keyed by track id.
+     * @param trackId The track the group belongs to.
+     * @param group The group that was hit.
+     * @param rect The rect of the marker the hit is reported at.
+     */
+    private static addGroupHit(hitsByTrack: Map<number, INoteGroupHit[]>, trackId: number, group: INoteGroup,
+        rect: DOMRect): void {
+        let hits = hitsByTrack.get(trackId);
+        if (hits === undefined) {
+            hits = [];
+            hitsByTrack.set(trackId, hits);
+        }
+
+        if (!hits.some((hit) => {
+            return hit.group === group;
+        })) {
+            hits.push({ group, rect });
+        }
+    }
+
+    /**
+     * Builds the band a beam group can be selected through. Its stems mark the beam line at each note:
+     * a stem's tip is where the group's line runs at that note's horizontal position.
+     *
+     * @param trackId The track the group belongs to.
+     * @param barNumber The one-based measure number of the bar.
+     * @param measure The measure the group belongs to.
+     * @param group The beam group to resolve.
+     * @param registry The element registry the rendered elements are resolved through.
+     *
+     * @returns The group's band, or undefined while the group's runs are not all mounted.
+     */
+    private static beamBand(trackId: number, barNumber: number, measure: ISbDmTrackPiece, group: INoteGroup,
+        registry: ScoreElementRegistry | undefined): IBeamBand | undefined {
+        const runs = registry?.findElements(ScoreElementKind.StaffRun, barNumber, trackId);
+        if (runs === undefined) {
+            return undefined;
+        }
+
+        const runByEvent = new Map<number, HTMLElement>();
+        for (const run of runs) {
+            const target = registry?.getTarget(run);
+            const eventIndex = target !== undefined && "duration" in target ? measure.events.indexOf(target) : -1;
+            if (eventIndex >= 0) {
+                runByEvent.set(eventIndex, run);
+            }
+        }
+
+        const firstRun = runByEvent.get(group.eventIndexes[0]);
+        if (firstRun === undefined) {
+            return undefined;
+        }
+
+        const strokes = firstRun.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect");
+        const segments: IBeamHitSegment[] = [];
+        let left = Infinity;
+        let top = Infinity;
+        let right = -Infinity;
+        let bottom = -Infinity;
+
+        for (const stroke of strokes) {
+            const matrix = stroke.getScreenCTM();
+            if (matrix === null) {
+                continue;
+            }
+
+            // A stroke's box is the band between the beam's edge and its far side, so its top edge is the line a
+            // click aims at.
+            const startX = stroke.x.baseVal.value;
+            const endX = startX + stroke.getBBox().width;
+            const start = new DOMPoint(startX, 0).matrixTransform(matrix);
+            const end = new DOMPoint(endX, 0).matrixTransform(matrix);
+            segments.push({ start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } });
+            left = Math.min(left, start.x, end.x);
+            top = Math.min(top, start.y, end.y);
+            right = Math.max(right, start.x, end.x);
+            bottom = Math.max(bottom, start.y, end.y);
+        }
+
+        if (segments.length === 0) {
+            return undefined;
+        }
+
+        return {
+            segments,
+            rect: new DOMRect(left, top, right - left, bottom - top),
+        };
     }
 
     /**
@@ -454,25 +695,11 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         }
     };
 
-    private maxNoteLineForTrack(trackId: number): number {
-        const { arrangement } = this.props;
-        const track = arrangement.tracks.find((candidate) => {
-            return candidate.id === trackId;
-        });
-        if (!track) {
-            return 1;
-        }
-
-        return Math.max(1, ...Object.values(track.instrument.noteStyles).map((noteStyle) => {
-            return noteStyle.noteLine ?? 1;
-        }));
-    }
-
     /**
-     * Resolves the note groups the markers under the selection rectangle address, per track. A click
-     * resolves to the group of the marker it touched; a rectangle that touches markers of several
-     * groups resolves to all of them, because the rectangle covers markers and not the notes those
-     * groups hold.
+     * Resolves the note groups a selection rectangle addresses, per track. A beam group is addressed
+     * through the band its strokes run through, so a rectangle inside a stroke's bounding box that
+     * misses the stroke itself addresses nothing. A tuplet is addressed through its bracket or the
+     * number the bracket carries.
      *
      * @param bar The bar element the hit test runs on.
      * @param rect The selection rectangle in viewport coordinates.
@@ -487,92 +714,76 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         registry: ScoreElementRegistry | undefined, grid: INotationGrid): Map<number, INoteGroupHit[]> {
         const hitsByTrack = new Map<number, INoteGroupHit[]>();
         const groupsByTrack = new Map<number, INoteGroup[]>();
-        const markers = bar.querySelectorAll<HTMLElement>(
-            ".staff-note-viewer-beam, .staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
-        );
 
-        for (const marker of markers) {
-            // A bracket draws its number outside its own box, so the number counts as part of the
-            // marker: clicking the digit a user aims at must address the tuplet as well.
-            const number = marker.querySelector<HTMLElement>(".staff-note-viewer-tuplet-text");
-            if (!touchesElement(rect, marker) && (number === null || !touchesElement(rect, number))) {
-                continue;
-            }
+        const measureOf = (trackId: number): ISbDmTrackPiece | undefined => {
+            return arrangement.tracks.find((track) => {
+                return track.id === trackId;
+            })?.measures[barNumber - 1];
+        };
 
-            const row = marker.closest<HTMLElement>(".staff-measure-track-row");
-            const trackId = row === null ? undefined : registry?.getLocation(row)?.trackId;
-            const measure = trackId === undefined
-                ? undefined
-                : arrangement.tracks.find((track) => {
-                    return track.id === trackId;
-                })?.measures[barNumber - 1];
-            if (trackId === undefined || measure === undefined) {
-                continue;
-            }
-
+        const groupsOf = (trackId: number, measure: ISbDmTrackPiece): INoteGroup[] => {
             let groups = groupsByTrack.get(trackId);
             if (groups === undefined) {
                 groups = MeasureProjection.noteGroups(measure, grid);
                 groupsByTrack.set(trackId, groups);
             }
 
-            const isBeam = marker.classList.contains("staff-note-viewer-beam");
-            const group = this.markerGroup(marker, measure, groups, registry, isBeam);
-            if (group === undefined) {
+            return groups;
+        };
+
+        for (const row of bar.querySelectorAll<HTMLElement>(".staff-measure-track-row")) {
+            const trackId = registry?.getLocation(row)?.trackId;
+            const measure = trackId === undefined ? undefined : measureOf(trackId);
+            if (trackId === undefined || measure === undefined) {
                 continue;
             }
 
-            let hits = hitsByTrack.get(trackId);
-            if (hits === undefined) {
-                hits = [];
-                hitsByTrack.set(trackId, hits);
+            for (const group of groupsOf(trackId, measure)) {
+                if (group.kind !== NoteGroupKind.Beam) {
+                    continue;
+                }
+
+                const band = StaffMeasureViewer.beamBand(trackId, barNumber, measure, group, registry);
+                if (band !== undefined && StaffMeasureViewer.touchesBeamBand(rect, band)) {
+                    StaffMeasureViewer.addGroupHit(hitsByTrack, trackId, group, band.rect);
+                }
+            }
+        }
+
+        // A bracket draws its number outside its own box, so the number counts as part of the marker:
+        // clicking the digit a user aims at must address the tuplet as well.
+        const markers = bar.querySelectorAll<HTMLElement>(
+            ".staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
+        );
+        for (const marker of markers) {
+            const number = marker.querySelector<HTMLElement>(".staff-note-viewer-tuplet-text");
+            if (!StaffMeasureViewer.touchesElement(rect, marker)
+                && (number === null || !StaffMeasureViewer.touchesElement(rect, number))) {
+                continue;
             }
 
-            if (!hits.some((hit) => {
-                return hit.group === group;
-            })) {
-                hits.push({ group, rect: marker.getBoundingClientRect() });
+            const row = marker.closest<HTMLElement>(".staff-measure-track-row");
+            const trackId = row === null ? undefined : registry?.getLocation(row)?.trackId;
+            const measure = trackId === undefined ? undefined : measureOf(trackId);
+            if (trackId === undefined || measure === undefined) {
+                continue;
+            }
+
+            const subdivision = registry?.getTarget(marker);
+            const group = groupsOf(trackId, measure).find((candidate) => {
+                return candidate.kind === NoteGroupKind.Tuplet && candidate.subdivision === subdivision;
+            });
+            if (group !== undefined) {
+                StaffMeasureViewer.addGroupHit(hitsByTrack, trackId, group, marker.getBoundingClientRect());
             }
         }
 
         const result = new Map<number, INoteGroupHit[]>();
         for (const [trackId, hits] of hitsByTrack) {
-            result.set(trackId, groupsInMeasureOrder(hits));
+            result.set(trackId, StaffMeasureViewer.groupsInMeasureOrder(hits));
         }
 
         return result;
-    }
-
-    /**
-     * Resolves the group a single marker stands for.
-     *
-     * @param marker The beam stroke or tuplet marker that was hit.
-     * @param measure The measure the marker is drawn in.
-     * @param groups The measure's note groups, innermost first.
-     * @param registry The element registry the rendered elements are resolved through.
-     * @param isBeam Whether the marker is a beam stroke.
-     *
-     * @returns The group the marker addresses, or undefined when it stands for none.
-     */
-    private markerGroup(marker: HTMLElement, measure: ISbDmTrackPiece, groups: INoteGroup[],
-        registry: ScoreElementRegistry | undefined, isBeam: boolean): INoteGroup | undefined {
-        if (isBeam) {
-            const run = marker.closest<HTMLElement>(".staff-note-viewer-run");
-            const target = run === null ? undefined : registry?.getTarget(run);
-            const eventIndex = target !== undefined && "duration" in target
-                ? measure.events.indexOf(target)
-                : -1;
-
-            return groups.find((group) => {
-                return group.kind === NoteGroupKind.Beam && group.eventIndexes.includes(eventIndex);
-            });
-        }
-
-        const subdivision = registry?.getTarget(marker);
-
-        return groups.find((group) => {
-            return group.kind === NoteGroupKind.Tuplet && group.subdivision === subdivision;
-        });
     }
 
     /**
@@ -618,12 +829,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         };
     }
 
-    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
+    private handleArrangementMutated = (): Promise<boolean> => {
         const { arrangement, tracks } = this.props;
-
-        if (arrangementId !== arrangement.id) {
-            return Promise.resolve(false);
-        }
 
         this.setState({ tracks: tracks ?? [...arrangement.tracks] });
 

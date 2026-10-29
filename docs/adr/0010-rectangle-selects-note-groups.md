@@ -10,15 +10,11 @@
 
 ## Context
 
-A rectangle over the markers of several groups resolved at note granularity: every event of every covered group
-entered the selection. The rectangle covers markers, not notes, so it selected notes the user never touched — and
-for tuplets nothing at all, as their events were resolved from a span no decoration drew. Clicks and
-Shift-clicks select the group itself, so a drag behaved unlike the gestures beside it.
+A rectangle over the markers of several groups resolved at note granularity: every event of every covered group entered the selection. The rectangle covers markers, not notes, so it selected notes the user never touched — and for tuplets nothing at all, as their events were resolved from a span no decoration drew. Clicks and Shift-clicks select the group itself, so a drag behaved unlike the gestures beside it.
 
 ## Decision
 
-We will keep every group a rectangle covers, as the group it is: each covered marker becomes a group entry of its
-own, exactly as a click on that marker would.
+We will keep every group a rectangle covers, as the group it is: each covered marker becomes a group entry of its own, exactly as a click on that marker would.
 
 ## Invariants
 

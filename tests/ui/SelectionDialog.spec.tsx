@@ -11,13 +11,14 @@ import {
     SelectionDialog, type ISelectionDialogItem, type ISelectionDialogResult
 } from "../../src/components/ui/composites/SelectionDialog.js";
 import { DialogResponseClosure } from "../../src/components/ui/framework/Dialog.js";
+import { requireCurrent } from "../unit-test-helpers.js";
 
 interface IShowOptions {
     multiSelect?: boolean;
     defaultItemId?: string;
 }
 
-describe.sequential("SelectionDialog", () => {
+describe("SelectionDialog", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     const items: ISelectionDialogItem[] = [
@@ -44,7 +45,7 @@ describe.sequential("SelectionDialog", () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current!;
+        return requireCurrent(ref);
     };
 
     const show = (dialog: SelectionDialog, options: IShowOptions = {}): Promise<ISelectionDialogResult | undefined> => {

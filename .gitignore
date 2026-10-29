@@ -9,4 +9,6 @@ src/generated
 playwright-report
 test-results
 .playwright
+dist-package
+dist-server
 backend-config.json

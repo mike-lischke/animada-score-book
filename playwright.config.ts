@@ -1,3 +1,5 @@
+import { env } from "node:process";
+
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
@@ -7,8 +9,7 @@ export default defineConfig({
         timeout: 10_000,
     },
     fullyParallel: true,
-    // eslint-disable-next-line no-restricted-syntax
-    retries: process.env.CI ? 1 : 0,
+    retries: env.CI ? 1 : 0,
     reporter: [["list"], ["html", { open: "never" }]],
     use: {
         baseURL: "http://127.0.0.1:4173",
@@ -18,7 +19,7 @@ export default defineConfig({
         storageState: "tests/e2e/storage-state.json",
     },
     webServer: {
-        command: process.env.CI ? "npm run serve:e2e" : "npm run build && npm run serve:e2e",
+        command: env.CI ? "npm run serve:e2e" : "npm run build && npm run serve:e2e",
         url: "http://127.0.0.1:4173",
         reuseExistingServer: true,
         timeout: 120_000,

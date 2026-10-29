@@ -64,8 +64,8 @@ interface IDialogProperties extends ICommonUIProperties {
  * handled by the underlying Portal.
  */
 export class Dialog extends UIComponent<IDialogProperties> {
-    private portalRef = createRef<Portal>();
-    private dialogRef = createRef<HTMLDivElement>();
+    private portalRef = createRef<Portal | null>();
+    private dialogRef = createRef<HTMLDivElement | null>();
 
     /** When set, suppresses the default onClose mapping in handlePortalClose. */
     private customReturnValue?: string;

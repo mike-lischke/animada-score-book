@@ -30,8 +30,9 @@ const waitForBackend = async (timeoutMs = 30000): Promise<void> => {
     while (Date.now() - start < timeoutMs) {
         try {
             const response = await fetch(`${testBackendUrl}/api?action=health`);
+            const health = await response.json() as { initialized?: boolean; };
 
-            if (response.ok) {
+            if (response.ok && health.initialized) {
                 return;
             }
         } catch {
@@ -84,6 +85,8 @@ test.describe.serial("Setup: real database integration", () => {
                 DB_NAME: testDbName,
                 DB_USER: dbUser,
                 DB_PASSWORD: dbPassword,
+                // The backend keeps the schema untouched unless migrations are switched on.
+                AUTO_MIGRATE: "true",
                 VITEST: "true",
             },
             stdio: "pipe",

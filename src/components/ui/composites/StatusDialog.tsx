@@ -61,7 +61,7 @@ interface IStatusDialogProperties extends ICommonUIProperties {
  * ```
  */
 export class StatusDialog extends UIComponent<IStatusDialogProperties> {
-    private valueDialogRef = createRef<ValueDialog>();
+    private valueDialogRef = createRef<ValueDialog | null>();
     private content: IStatusContent = { icon: UIIcon.Info, title: "", message: "" };
     private closingIntentionally = false;
 

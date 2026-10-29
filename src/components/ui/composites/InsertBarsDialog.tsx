@@ -32,7 +32,7 @@ interface IInsertBarsDialogState {
  * Asks the user how many bars to insert and whether to copy the preceding bar's content.
  */
 export class InsertBarsDialog extends UIComponent<{}, IInsertBarsDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<IInsertBarsResult>;
 
     public constructor(props: {}) {

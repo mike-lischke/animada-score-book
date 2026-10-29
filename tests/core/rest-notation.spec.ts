@@ -51,15 +51,15 @@ describe("rest span decomposition", () => {
             .toEqual([{ numerator: 1, denominator: 1 }]);
     });
 
-    it("keeps a dotted quarter rest as one value wherever it stands", () => {
-        // Only the span decides the split, so a value of one and a half pulses is not broken up.
+    it("decomposes a dotted quarter span into plain values", () => {
         expect(decomposeRestSpan({ numerator: 3, denominator: 8 }))
-            .toEqual([{ numerator: 3, denominator: 8 }]);
+            .toEqual([{ numerator: 1, denominator: 4 }, { numerator: 1, denominator: 8 }]);
     });
 
     it("decomposes a span longer than any single value, largest first", () => {
         expect(decomposeRestSpan({ numerator: 7, denominator: 8 })).toEqual([
-            { numerator: 3, denominator: 4 },
+            { numerator: 1, denominator: 2 },
+            { numerator: 1, denominator: 4 },
             { numerator: 1, denominator: 8 },
         ]);
     });

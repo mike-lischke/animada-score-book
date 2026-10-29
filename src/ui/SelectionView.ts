@@ -3,15 +3,15 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { compareFractions } from "../core/serialisation/numeric-functions.js";
 import { staffSpacePx } from "../core/MeasureLayout.js";
-import { EditEntryMode } from "../core/types/general.js";
+import { compareFractions } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
+import { EditEntryMode } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
-import type { SelectionManager } from "./SelectionManager.js";
 import {
     ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
 } from "./ScoreElementRegistry.js";
+import type { SelectionManager } from "./SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer,
     type ISelectionEntry, type ISelectionTarget, type ISerialisedSelectionEntry,
@@ -83,6 +83,7 @@ export class SelectionView {
 
     private dragPending = false;
     private isDragging = false;
+    private selectionGestureActive = false;
     private startX = 0;
     private startY = 0;
     private startScrollLeft = 0;
@@ -93,9 +94,9 @@ export class SelectionView {
     private autoScrollTimer?: ReturnType<typeof setInterval>;
     private autoScrollDX = 0;
     private autoScrollDY = 0;
-    private editMode: boolean;
+    private requestedEditMode: boolean;
+    private zenMode: boolean;
     private entryMode: EditEntryMode;
-    private selectionDeleteButtonCreated = false;
     private selectionRefreshFrame?: number;
 
     /**
@@ -115,22 +116,33 @@ export class SelectionView {
      * @param editMode The edit mode as remembered by the manager. The view cannot subscribe early
      *                 enough to receive the requisition that announced the current state.
      * @param entryMode The entry mode as remembered by the manager, for the same reason.
+     * @param zenMode Whether editing is suspended by Zen mode.
      */
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
         private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false,
-        entryMode = EditEntryMode.Overwrite) {
-        this.editMode = editMode;
+        entryMode = EditEntryMode.Overwrite, zenMode = false) {
+        this.requestedEditMode = editMode;
+        this.zenMode = zenMode;
         this.entryMode = entryMode;
 
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.register("trackViewModeToggled", this.scheduleOverlayRefresh);
         requisitions.register("trackChanged", this.scheduleOverlayRefresh);
-        requisitions.register("arrangementChanged", this.scheduleOverlayRefresh);
+        requisitions.register("arrangementMutated", this.scheduleOverlayRefresh);
+        requisitions.register("arrangementReverted", this.scheduleOverlayRefresh);
+        requisitions.register("measureLayoutChanged", this.scheduleOverlayRefresh);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
         document.addEventListener("keyup", this.handleKeyUp);
+    }
+
+    private get editMode(): boolean {
+        return this.requestedEditMode && !this.zenMode;
     }
 
     public dispose(): void {
@@ -138,10 +150,15 @@ export class SelectionView {
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.unregister("trackViewModeToggled", this.scheduleOverlayRefresh);
         requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
-        requisitions.unregister("arrangementChanged", this.scheduleOverlayRefresh);
+        requisitions.unregister("arrangementMutated", this.scheduleOverlayRefresh);
+        requisitions.unregister("arrangementReverted", this.scheduleOverlayRefresh);
+        requisitions.unregister("measureLayoutChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
 
         if (this.selectionRefreshFrame !== undefined) {
@@ -162,7 +179,7 @@ export class SelectionView {
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
-        if (event.defaultPrevented || this.isFormElement(event.target)) {
+        if ((this.zenMode && event.button !== 0) || event.defaultPrevented || this.isFormElement(event.target)) {
             return;
         }
 
@@ -187,10 +204,25 @@ export class SelectionView {
         this.lastPointerX = event.clientX;
         this.lastPointerY = event.clientY;
 
+        if (this.zenMode) {
+            this.startScrollLeft = this.horizontalScrollHost?.scrollLeft ?? 0;
+            this.startVerticalScrollTop = this.verticalScrollHost?.scrollTop ?? 0;
+            event.preventDefault();
+
+            return;
+        }
+
         const half = 2;
         const clickRect = new DOMRect(event.clientX - half, event.clientY - half,
             (half * 2) + 1, (half * 2) + 1);
         this.manager.previewNote(clickRect);
+
+        if (!this.showsCursorOnly) {
+            const selectionMode = this.selectionModeFromEvent(event);
+            this.selectionGestureActive = true;
+            void requisitions.execute("selectionGestureChanged", true);
+            this.manager.beginSelection(selectionMode, clickRect);
+        }
 
         if (this.horizontalScrollHost) {
             this.startScrollLeft = this.horizontalScrollHost.scrollLeft;
@@ -212,6 +244,20 @@ export class SelectionView {
     };
 
     private handlePointerMove = (event: PointerEvent): void => {
+        if (this.zenMode && this.dragPending) {
+            if (this.horizontalScrollHost) {
+                this.horizontalScrollHost.scrollLeft = this.startScrollLeft + this.startX - event.clientX;
+            }
+
+            if (this.verticalScrollHost) {
+                this.verticalScrollHost.scrollTop = this.startVerticalScrollTop + this.startY - event.clientY;
+            }
+
+            event.preventDefault();
+
+            return;
+        }
+
         if ((!this.dragPending && !this.isDragging) || !this.rectElement) {
             return;
         }
@@ -225,13 +271,8 @@ export class SelectionView {
         const rect = this.rectElement.getBoundingClientRect();
         if (rect.width > 2 || rect.height > 2) {
             if (this.dragPending) {
-                const selectionMode = event.shiftKey || event.altKey || event.metaKey
-                    ? this.selectionModeFromEvent(event)
-                    : undefined;
-                this.manager.beginSelection(selectionMode);
-
-                this.dragPending = false;
                 this.isDragging = true;
+                this.dragPending = false;
             }
 
             void requisitions.execute("selectionRectChanged", { rect });
@@ -239,6 +280,12 @@ export class SelectionView {
     };
 
     private handlePointerUp = (event: PointerEvent): void => {
+        if (this.zenMode) {
+            this.cancelDrag();
+
+            return;
+        }
+
         if (!this.isDragging && this.dragPending) {
             // The user pressed and released without significant movement — treat as a click.
             // The selection mode is already live on the manager via handleKeyDown/handleKeyUp.
@@ -308,14 +355,16 @@ export class SelectionView {
     private selectionModeFromEvent(event: KeyboardEvent | MouseEvent): SelectionMode {
         if (event.shiftKey) {
             return SelectionMode.Add;
-        } else if (event.altKey || event.metaKey) {
-            return SelectionMode.Invert;
         } else {
             return SelectionMode.New;
         }
     }
 
     private handleKeyDown = (event: KeyboardEvent): void => {
+        if (this.zenMode) {
+            return;
+        }
+
         if (this.handleArrowKey(event)) {
             return;
         }
@@ -343,12 +392,18 @@ export class SelectionView {
             return false;
         }
 
-        const entries = [...this.manager.currentSelection.values()];
-        if (entries.length !== 1 || entries[0].granularity !== SelectionGranularity.Note) {
+        const entries = this.manager.currentCursor === undefined
+            ? [...this.manager.currentSelection.values()] : [this.manager.currentCursor];
+        if (entries.length !== 1) {
             return false;
         }
 
         const entry = entries[0];
+        if (entry.target.granularity !== SelectionGranularity.Note
+            && !(entry.target.granularity === SelectionGranularity.TrackPiece && entry.target.measure.simile)) {
+            return false;
+        }
+
         const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
         if (!contentHost) {
             return false;
@@ -359,10 +414,10 @@ export class SelectionView {
             return false;
         }
 
-        this.manager.selectSingleNote({
-            granularity: SelectionGranularity.Note,
+        this.manager.replaceSelection([{
+            granularity: move.noteTarget.granularity,
             target: move.noteTarget,
-        });
+        }]);
 
         // Bring the newly selected element into view. The staff view renders only a window of measures and decides
         // the horizontal scroll itself, from the measure the cursor moved into: scrolling the element into view
@@ -392,7 +447,7 @@ export class SelectionView {
             return this.arrowMoveFromModel(entry, key);
         }
 
-        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
+        const isStaffMode = this.isStaffView();
         const target = isStaffMode
             ? this.findStaffArrowTarget(noteElement, key)
             : this.findArrowTarget(noteElement, key);
@@ -433,7 +488,8 @@ export class SelectionView {
 
         const direction = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
         const { target } = entry;
-        if (direction === 0 || target.granularity !== SelectionGranularity.Note) {
+        if (direction === 0 || (target.granularity !== SelectionGranularity.Note
+            && target.granularity !== SelectionGranularity.TrackPiece)) {
             return undefined;
         }
 
@@ -445,9 +501,10 @@ export class SelectionView {
         // same measure — the step the cursor takes over rendered runs as well. The cursor's own event is found by
         // the address itself, which is a position in the measure (ADR-0005), not by object identity alone: an undo
         // may well have replaced the events the selection still addresses.
-        const start = target.start ?? target.event.start;
+        const start = target.granularity === SelectionGranularity.Note
+            ? target.start ?? target.event.start : measureStart;
         const index = measure.events.findIndex((candidate) => {
-            return candidate === target.event || compareFractions(candidate.start, start) === 0;
+            return compareFractions(candidate.start, start) === 0;
         });
         const stepIndex = index + direction;
         if (index !== -1 && stepIndex >= 0 && stepIndex < measure.events.length) {
@@ -464,6 +521,18 @@ export class SelectionView {
 
         if (event === undefined) {
             return undefined;
+        }
+
+        if (targetMeasure.simile) {
+            return {
+                bar: targetMeasure.number,
+                noteTarget: {
+                    granularity: SelectionGranularity.TrackPiece,
+                    measure: targetMeasure,
+                    track: targetMeasure.track,
+                },
+                position: measureStart,
+            };
         }
 
         return {
@@ -483,12 +552,17 @@ export class SelectionView {
         return this.eventContainer.querySelector(".staff-measure-viewer") !== null;
     }
 
+    /** @returns True while the entry mode in effect is insert. The grid view always overwrites. */
+    private get insertDrawsCursor(): boolean {
+        return this.editMode && this.entryMode === EditEntryMode.Insert;
+    }
+
     /**
      * @returns True while the staff view runs in insert mode. The cursor is then the only decoration and
      *          nothing can be selected; in the grid view overwrite is always in effect.
      */
     private get showsCursorOnly(): boolean {
-        return this.editMode && this.entryMode === EditEntryMode.Insert && this.isStaffView();
+        return this.insertDrawsCursor && this.isStaffView();
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
@@ -500,7 +574,7 @@ export class SelectionView {
         const navigableRuns = (rowElement: HTMLElement): HTMLElement[] => {
             return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
                 .filter((run) => {
-                    return run.querySelector(
+                    return run.classList.contains("staff-note-viewer-simile") || run.querySelector(
                         ".staff-note-head, .staff-note-viewer-rest-symbol",
                     ) !== null;
                 });
@@ -589,7 +663,7 @@ export class SelectionView {
         }
 
         const cells = (): HTMLElement[] => {
-            return [...row.querySelectorAll<HTMLElement>(".note-viewer")];
+            return [...row.querySelectorAll<HTMLElement>(".note-viewer, .grid-simile-overlay")];
         };
 
         if (key === "ArrowLeft" || key === "ArrowRight") {
@@ -625,7 +699,9 @@ export class SelectionView {
 
             const adjacentRow = rows[adjacentRowIndex];
 
-            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
+            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(
+                ".note-viewer, .grid-simile-overlay",
+            )];
             if (adjacentCells.length === 0) {
                 return undefined;
             }
@@ -657,7 +733,7 @@ export class SelectionView {
 
         const adjacentRow = rows[adjacentRowIndex];
 
-        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
+        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer, .grid-simile-overlay")];
 
         if (adjacentCells.length === 0) {
             return undefined;
@@ -682,6 +758,8 @@ export class SelectionView {
     }
 
     private cancelDrag(): void {
+        const wasSelectionGesture = this.selectionGestureActive;
+        this.selectionGestureActive = false;
         this.isDragging = false;
         this.dragPending = false;
         this.stopAutoScroll();
@@ -703,6 +781,11 @@ export class SelectionView {
             this.captureElement.removeEventListener("pointerup", this.handlePointerUp);
             this.captureElement.removeEventListener("lostpointercapture", this.handlePointerUp);
             this.captureElement = undefined;
+        }
+
+        if (wasSelectionGesture) {
+            this.manager.finishSelection();
+            void requisitions.execute("selectionGestureChanged", false);
         }
     }
 
@@ -836,8 +919,8 @@ export class SelectionView {
     };
 
     /**
-     * Redraws the decoration after rendered notes moved: a track change, or an arrangement mutation, which a
-     * measure resize fires on every frame. The redraw waits a frame, so it reads the laid-out geometry.
+     * Redraws the decoration after rendered notes moved: a track change, a finished edit, a restored snapshot,
+     * or a measure layout change. The redraw waits a frame, so it reads the laid-out geometry.
      *
      * @returns A promise that resolves when the redraw was scheduled.
      */
@@ -855,26 +938,23 @@ export class SelectionView {
     };
 
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
-        this.editMode = enabled;
-        if (!enabled) {
-            const overlayContainer = this.eventContainer.querySelector<HTMLElement>(
-                "#trackViewerDecorationOverlay",
-            );
-            const cursor = overlayContainer?.querySelector<HTMLElement>(`.${selectionCursorClass}`);
-            if (cursor) {
-                cursor.style.display = "none";
-            }
-
-            overlayContainer?.querySelectorAll<HTMLElement>(".selection-delete-button").forEach((button) => {
-                button.remove();
-            });
-            this.selectionDeleteButtonCreated = false;
-        }
-
-        this.updateTrackViewerOverlays();
+        this.requestedEditMode = enabled;
+        this.refreshEditState();
 
         return Promise.resolve(true);
     };
+
+    private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.zenMode = enabled;
+        this.cancelDrag();
+        this.refreshEditState();
+
+        return Promise.resolve(true);
+    };
+
+    private refreshEditState(): void {
+        this.updateTrackViewerOverlays();
+    }
 
     private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
         this.entryMode = mode;
@@ -903,8 +983,6 @@ export class SelectionView {
         overlayContainer.querySelectorAll(`.${selectionOverlayClass}`).forEach((el) => {
             el.remove();
         });
-        this.selectionDeleteButtonCreated = false;
-
         const cursor = this.getSelectionCursor(overlayContainer);
         cursor.style.display = "none";
 
@@ -916,7 +994,7 @@ export class SelectionView {
             });
         }
 
-        if (this.manager.currentSelection.size === 0) {
+        if (this.zenMode || (this.manager.currentSelection.size === 0 && this.manager.currentCursor === undefined)) {
             return;
         }
 
@@ -932,6 +1010,14 @@ export class SelectionView {
         const cssW = contentHost.offsetWidth;
         const viewportW = contentHost.getBoundingClientRect().width;
         this.zoomFactor = cssW > 0 ? viewportW / cssW : 1;
+
+        const cursorEntry = this.manager.currentCursor;
+        if (cursorEntry !== undefined) {
+            const rect = this.findNoteCursorRect(cursorEntry, this.isStaffView());
+            if (rect !== undefined) {
+                this.positionSelectionCursor(cursor, containerRect, rect, this.isStaffView() ? -4 : 0);
+            }
+        }
 
         // Separate entries by granularity.
         const trackEntries: ISelectionEntry[] = [];
@@ -1013,15 +1099,20 @@ export class SelectionView {
             }
         }
 
-        // Detect view mode from the first element.
-        const firstElements = singleNotes.length > 0
-            ? this.findNoteElements(singleNotes[0])
-            : this.findNoteElements(noteGroups[0]);
+        let firstElements: HTMLElement[] = [];
+        for (const entry of [...singleNotes, ...noteGroups]) {
+            firstElements = this.findNoteElements(entry);
+            if (firstElements.length > 0) {
+                break;
+            }
+        }
+
         const isStaffMode = firstElements.length > 0
             && firstElements[0].classList.contains(staffNoteRunClass);
 
         // Position the cursor directly before a single selected note in both view modes.
-        if (singleNotes.length === 1) {
+        if (singleNotes.length === 1 && this.manager.currentSelection.size === 1
+            && this.manager.currentCursor === undefined) {
             const rect = this.findNoteCursorRect(singleNotes[0], isStaffMode);
             if (rect) {
                 this.positionSelectionCursor(cursor, containerRect, rect, isStaffMode ? -4 : 0);
@@ -1065,10 +1156,8 @@ export class SelectionView {
                     continue;
                 }
 
-                // A group covers the note band of the row its runs live in: a row holds one viewer, whose
-                // height makes up that band, while the runs are only as tall as the line they sit on. The
-                // band reaches below the row by the room a note's marks hang into — its dot, its accent —
-                // so a group whose notes carry marks is still covered by its own band.
+                // Shared row geometry includes the ink and marks of every note, so the group overlay uses the row's
+                // full height.
                 const row = runs[0].closest<HTMLElement>(".staff-measure-track-row");
                 if (row === null) {
                     continue;
@@ -1118,7 +1207,7 @@ export class SelectionView {
                     x: (minLeft - containerRect.left) / z,
                     y: (rowRect.top - containerRect.top) / z,
                     width: ((maxRight - minLeft) / z) + bandWidth,
-                    height: (rowRect.height / z) + (staffSpacePx * 2),
+                    height: rowRect.height / z,
                 });
             }
 
@@ -1191,10 +1280,7 @@ export class SelectionView {
                     && !isAdjacentBar && !isAdjacentSubdivision) {
                     noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
                     groupElements = [];
-                    lastEndCell = undefined;
-                    lastBar = undefined;
                     groupBars = new Set<number>();
-                    groupSubdivision = undefined;
                 }
 
                 groupElements.push(...elements);
@@ -1346,6 +1432,10 @@ export class SelectionView {
         const event = this.scoreElementRegistry?.getTarget(element);
         const measure = location.measure;
 
+        if (measure?.simile) {
+            return { granularity: SelectionGranularity.TrackPiece, measure, track: measure.track };
+        }
+
         return event === undefined || !("duration" in event) || measure === undefined
             ? undefined
             : { granularity: SelectionGranularity.Note, measure, event, start: location.start };
@@ -1361,6 +1451,14 @@ export class SelectionView {
      * @returns The matching elements, or an empty array if none found.
      */
     private findNoteElements(entry: ISelectionEntry): HTMLElement[] {
+        const { target } = entry;
+        if (target.granularity === SelectionGranularity.TrackPiece && target.measure.simile) {
+            return this.elementsOf(entry).filter((element) => {
+                return element.classList.contains("staff-note-viewer-simile")
+                    || element.classList.contains("grid-simile-overlay");
+            });
+        }
+
         return this.elementsOf(entry);
     }
 
@@ -1432,7 +1530,9 @@ export class SelectionView {
      * rest's symbol.
      */
     private glyphElement(run: HTMLElement): HTMLElement | null {
-        return run.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol");
+        return run.querySelector<HTMLElement>(
+            ".staff-note-head, .staff-note-viewer-rest-symbol, .staff-note-viewer-simile > *",
+        );
     }
 
     /**
@@ -1853,20 +1953,6 @@ export class SelectionView {
         overlay.style.top = `${rect.y}px`;
         overlay.style.width = `${rect.width + 4}px`;
         overlay.style.height = `${rect.height}px`;
-
-        if (this.editMode && !this.selectionDeleteButtonCreated) {
-            const deleteButton = document.createElement("button");
-            deleteButton.type = "button";
-            deleteButton.className = "selection-delete-button";
-            deleteButton.setAttribute("aria-label", "Clear selection");
-            deleteButton.setAttribute("data-tooltip", "Clear selection");
-            deleteButton.addEventListener("click", (event) => {
-                event.stopPropagation();
-                void requisitions.execute("selectionDeleteRequested", undefined);
-            });
-            overlay.appendChild(deleteButton);
-            this.selectionDeleteButtonCreated = true;
-        }
 
         container.appendChild(overlay);
     }

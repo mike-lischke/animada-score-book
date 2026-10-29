@@ -6,9 +6,11 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
+import { ScoreSymbol, ScoreSymbols } from "../../../../core/ScoreSymbols.js";
+import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
-import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
+import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, SelectionSerializer, type ISelectionHitEntry, type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
@@ -22,8 +24,12 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
     /** One-based index of the measure to display */
     measureNumber: number;
 
+    /** The focus switch the measure draws in its head room. */
+    focusButton?: ComponentChild;
+
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
+    arrangementPlayer?: ArrangementPlayer;
     selectionManager: SelectionManager;
     scoreElementRegistry?: ScoreElementRegistry;
 
@@ -32,6 +38,12 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
      * Used by the print feature to limit output to the user's selection.
      */
     tracks?: ISbDmTrack[];
+
+    /**
+     * The column's layout width in px at 100% zoom. The print layout states it, so a printed column keeps the
+     * measure's width instead of sharing the width of the viewer.
+     */
+    measureWidth?: number;
 }
 
 interface IGridMeasureViewerState {
@@ -43,13 +55,14 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     implements ISelectionHitTester {
     public override state: IGridMeasureViewerState = { beatPositions: [] };
 
+    private viewerElement?: HTMLDivElement;
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {
         const { selectionManager } = this.props;
         selectionManager.registerHitTester(this);
 
-        const viewer = this.base as HTMLElement | null;
+        const viewer = this.viewerElement;
         if (!viewer) {
             return;
         }
@@ -85,7 +98,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
      */
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { measureNumber, dataModel, scoreElementRegistry, tracks: tracksOverride } = this.props;
-        const element = this.base as HTMLElement | null;
+        const element = this.viewerElement;
         if (!element) {
             return [];
         }
@@ -117,7 +130,6 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
             const measure = track.measures[measureNumber - 1];
 
-            let rowHasNotes = false;
             for (const noteElement of noteElements) {
                 const location = scoreElementRegistry?.getLocation(noteElement);
                 if (location?.step === undefined) {
@@ -143,45 +155,29 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                             rect: noteRect,
                         });
                     }
-
-                    rowHasNotes = true;
                 }
             }
 
-            if (!rowHasNotes) {
-                const entry: ISelectionHitEntry = {
-                    granularity: SelectionGranularity.TrackPiece,
-                    target: { granularity: SelectionGranularity.TrackPiece, track, measure },
-                    rect: rowRect,
-                };
-
-                trackPieceEntries.push(entry);
-            }
+            trackPieceEntries.push({
+                granularity: SelectionGranularity.TrackPiece,
+                target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                rect: rowRect,
+            });
         }
 
-        // Notes dominate: when any note is hit, only return notes (no mixed granularities).
-        if (noteEntries.length > 0) {
-            return noteEntries;
-        }
-
-        if (trackPieceEntries.length > 0) {
-            return trackPieceEntries;
-        }
-
-        const measure = SelectionSerializer.measureOfBar(this.props.dataModel.arrangement!, measureNumber);
-        if (measure === undefined) {
-            return [];
-        }
-
-        return [{
+        const measure = SelectionSerializer.measureOfBar(dataModel.arrangement!, measureNumber);
+        const measureEntries: ISelectionHitEntry[] = measure === undefined ? [] : [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
             rect: elRect,
         }];
+
+        return [...noteEntries, ...trackPieceEntries, ...measureEntries];
     }
 
     public override render(): ComponentChild {
-        const { measureNumber, dataModel, scoreMetrics, scoreElementRegistry, tracks: tracksOverride } = this.props;
+        const { measureNumber, dataModel, scoreMetrics, scoreElementRegistry, tracks: tracksOverride,
+            focusButton, arrangementPlayer, measureWidth } = this.props;
         const { beatPositions } = this.state;
 
         if (!dataModel.arrangement) {
@@ -202,16 +198,45 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 measure={measure}
                 track={track}
                 dataModel={dataModel}
+                arrangementPlayer={arrangementPlayer}
                 barNumber={measureNumber}
                 scoreElementRegistry={scoreElementRegistry}
             />);
         }
 
-        const className = this.generateFinalClassName(["grid-measure-viewer"]);
+        const repeatBars = dataModel.arrangement.repeatBars;
+        const opensRepeat = repeatBars?.get(measureNumber)?.start === true;
+        const closesRepeat = repeatBars?.get(measureNumber)?.end === true;
+        const nextOpensRepeat = repeatBars?.get(measureNumber + 1)?.start === true;
+        const openingRoom = opensRepeat ? ScoreSymbols.inkBox(ScoreSymbol.RepeatStart).width : "0px";
+        const closingRoom = closesRepeat ? ScoreSymbols.inkBox(ScoreSymbol.RepeatEnd).width : "0px";
+        const className = this.generateFinalClassName([
+            "grid-measure-viewer",
+            closesRepeat || nextOpensRepeat ? "grid-measure-repeat-boundary" : undefined,
+        ]);
 
-        const viewerStyle = {
-            flex: 1,
-            minWidth: `calc(${baseSteps} * var(--note-height))`,
+        const viewerStyle = measureWidth === undefined
+            ? {
+                flex: 1,
+                minWidth: `max(calc(${baseSteps} * var(--note-height) + ${openingRoom} + ${closingRoom}), `
+                    + "var(--bar-action-min-width, 0px))",
+                "--grid-repeat-opening-room": openingRoom,
+                "--grid-repeat-closing-room": closingRoom,
+            }
+            : {
+                flex: `0 0 ${measureWidth}px`,
+                minWidth: 0,
+                "--grid-repeat-opening-room": openingRoom,
+                "--grid-repeat-closing-room": closingRoom,
+            };
+        const registryRef = scoreElementRegistry?.createRef({
+            kind: ScoreElementKind.BarContainer,
+            bar: measureNumber,
+            trackId: 0,
+        });
+        const setViewerRef = (element: HTMLDivElement | null): void => {
+            this.viewerElement = element ?? undefined;
+            registryRef?.(element);
         };
 
         return (
@@ -219,13 +244,10 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 className={className}
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Stretch}
-                innerRef={scoreElementRegistry?.createRef({
-                    kind: ScoreElementKind.BarContainer,
-                    bar: measureNumber,
-                    trackId: 0,
-                })}
+                innerRef={setViewerRef}
                 style={viewerStyle}
             >
+                {focusButton}
                 <GridMeasureBeam
                     measureNumber={measureNumber}
                     beatPositions={beatPositions}
@@ -237,7 +259,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     }
 
     private updateBeatPositions(): void {
-        const viewer = this.base as HTMLElement | undefined;
+        const viewer = this.viewerElement;
         if (!viewer) {
             return;
         }

@@ -34,6 +34,15 @@ export interface IStaffEventAddress {
     event: IMeasureEvent;
 }
 
+/** A gapless row of rests a selection addresses as one silence. */
+interface IRestRun {
+    measure: ISbDmTrackPiece;
+
+    first: IMeasureEvent;
+
+    last: IMeasureEvent;
+}
+
 /** Where an element is written: the measure it goes into, the position it starts at and its length. */
 interface IInsertionTarget {
     measure: ISbDmTrackPiece;
@@ -220,10 +229,10 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Creates a subdivision over the events the selection addresses. The span from the first to the
-     * last addressed event becomes the subdivision's grid span, and the selected note styles are
-     * copied into its leading slots — the same edit the grid performs for a cell selection. The span
-     * must cover whole grid steps, since a subdivision replaces steps.
+     * Creates a subdivision over the events the selection addresses. The subdivision spans from the
+     * start of the first to the end of the last addressed event and replaces the parent slots it
+     * covers, so an event inside a subdivision yields a nested one. The selected note styles are
+     * copied into its leading slots — the same edit the grid performs for a cell selection.
      *
      * @param entries The selection entries defining the subdivision span.
      * @param actual The number of equal slots the subdivision contains.
@@ -242,14 +251,15 @@ export class StaffMeasureEditor extends MeasureEditor {
 
         const start = { ...first.start };
         const end = addFractions(last.start, last.duration);
-        const steps = this.stepSpanOf(start, end, measure);
-        if (steps === undefined) {
-            void requisitions.execute("showWarning", "This selection does not cover whole grid steps.");
+        const created = this.dataModel.createSubdivisionOverSpan(measure.track.id, measure.number, start, end,
+            actual, events);
+        if (!created) {
+            void requisitions.execute("showWarning", "This selection does not cover whole subdivision units.");
 
             return false;
         }
 
-        return this.dataModel.createSubdivision(measure.track.id, measure.number, start, end, actual, steps, events);
+        return true;
     }
 
     /**
@@ -427,7 +437,8 @@ export class StaffMeasureEditor extends MeasureEditor {
     /**
      * Applies the adopted note value to the selection: the staff resizes the addressed events and ripples
      * the following ones (ADR-0003). Only the overwrite mode changes existing content; the insert mode
-     * uses the value for the next entry.
+     * uses the value for the next entry. A selection of rests takes the value as one rest, because the
+     * rests it addresses are a single silence.
      *
      * @returns True when the selection changed.
      */
@@ -437,7 +448,11 @@ export class StaffMeasureEditor extends MeasureEditor {
         }
 
         const entries = this.selectionEntries();
-        if (!this.resizeSelection(entries, this.noteValue)) {
+        const restRun = this.restRunOfSelection(entries);
+        const changed = restRun === undefined
+            ? this.resizeSelection(entries, this.noteValue)
+            : this.resizeRestRun(restRun);
+        if (!changed) {
             return false;
         }
 
@@ -503,20 +518,51 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Resolves the number of grid steps a fractional span covers.
+     * Resolves the row of rests a selection addresses. A selection of several notes is no row, and
+     * neither is one that skips a note, so only a gapless row of rests merges into one rest.
      *
-     * @param start The span start as a fraction of the measure.
-     * @param end The span end as a fraction of the measure.
-     * @param measure The measure supplying the step resolution.
+     * @param entries The selection entries to inspect.
      *
-     * @returns The step count, or undefined when the span does not run from step boundary to step boundary.
+     * @returns The row of rests, or undefined when the selection addresses none.
      */
-    private stepSpanOf(start: IFraction, end: IFraction, measure: ISbDmTrackPiece): number | undefined {
-        const stepsPerBar = measure.meter.stepResolution;
-        const from = (start.numerator * stepsPerBar) / start.denominator;
-        const to = (end.numerator * stepsPerBar) / end.denominator;
+    private restRunOfSelection(entries: ISelectionEntry[]): IRestRun | undefined {
+        const measure = this.measureOfSelection(entries);
+        const events = this.selectedEventsOf(entries);
+        const first = events.at(0);
+        const last = events.at(-1);
+        if (measure === undefined || first === undefined || last === undefined || events.length < 2) {
+            return undefined;
+        }
 
-        return Number.isInteger(from) && Number.isInteger(to) && to - from >= 1 ? to - from : undefined;
+        const gaplessRests = events.every((event, index) => {
+            const previous = index === 0 ? undefined : events[index - 1];
+
+            return event.noteStyleId === undefined
+                && (previous === undefined
+                    || compareFractions(addFractions(previous.start, previous.duration), event.start) === 0);
+        });
+
+        return gaplessRests ? { measure, first, last } : undefined;
+    }
+
+    /**
+     * Gives a row of rests the adopted length as a single rest. The rests are one silence, so giving each
+     * of them the length would add time instead of joining them.
+     *
+     * @param run The row of rests the selection addresses.
+     *
+     * @returns True when the selection changed.
+     */
+    private resizeRestRun(run: IRestRun): boolean {
+        const duration = this.noteValueDurationFor(this.noteValue, run.measure);
+
+        // The value the run's rests carry is the one the toolbars mark, so choosing it changes nothing.
+        if (duration === undefined || compareFractions(duration, run.first.duration) === 0) {
+            return false;
+        }
+
+        return this.dataModel.setRestSpan(run.measure.track.id, run.measure.number, { ...run.first.start },
+            addFractions(run.last.start, run.last.duration), duration);
     }
 
     /**

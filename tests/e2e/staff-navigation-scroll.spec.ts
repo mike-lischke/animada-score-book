@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { routeApi } from "./e2e-test-helpers.js";
+import { routeApi, showTrackView } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -16,11 +16,7 @@ test("keyboard navigation scrolls the staff viewer to keep the cursor visible", 
     await expect(page.locator("#trackViewerHost")).toBeVisible();
 
     // Switch to staff mode.
-    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
-    await expect(trackViewToggle).toBeVisible();
-    if (!await trackViewToggle.isChecked()) {
-        await trackViewToggle.check({ force: true });
-    }
+    await showTrackView(page, "staff");
 
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 

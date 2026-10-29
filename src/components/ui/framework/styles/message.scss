@@ -12,15 +12,15 @@
     white-space: pre-wrap;
 
     &.error {
-        background-color: hsla(14, 88%, 42%, 0.1);
-        border: 1px solid hsl(14, 88%, 42%);
-        color: rgb(199, 56, 13);
+        background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
+        border: 1px solid var(--color-error);
+        color: var(--color-error);
     }
 
     &.warning {
-        background-color: hsla(54, 88%, 42%, 0.1);
-        border: 1px solid hsl(54, 88%, 42%);
-        color: hsl(54, 88%, 42%);
+        background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+        border: 1px solid var(--color-warning);
+        color: var(--color-warning);
     }
 
     &.info {
@@ -30,14 +30,14 @@
     }
 
     &.response {
-        background-color: hsla(0, 0%, 39%, 0.1);
-        border: 1px solid hsl(0, 0%, 39%);
-        color: hsl(0, 0%, 39%);
+        background-color: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 60%, transparent);
+        color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
     }
 
     &.diagnose {
-        background-color: hsla(224, 58%, 50%, 0.1);
-        border: 1px solid hsl(224, 58%, 50%);
-        color: hsl(224, 58%, 50%);
+        background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+        border: 1px solid var(--color-primary);
+        color: var(--color-primary);
     }
 }

@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import { routeApi } from "./e2e-test-helpers.js";
+import { routeApi, showTrackView } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -69,11 +69,7 @@ test.describe("Staff view two-step note", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
         // Switch to staff (track) view.
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
-        await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
-        }
+        await showTrackView(page, "staff");
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 

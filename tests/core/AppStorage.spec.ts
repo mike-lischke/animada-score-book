@@ -35,7 +35,7 @@ const getSessionSettingsKeys = (): string[] => {
     return keys;
 };
 
-describe.sequential("AppStorage", () => {
+describe("AppStorage", { concurrent: false }, () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });

@@ -49,14 +49,18 @@ const snapshot = {
  * @param page The page holding the staff view.
  * @param index The index of the run within its row.
  *
- * @returns The run's flex-grow value.
+ * @returns The run's share of its row, which is its duration in the bar.
  */
 const growOf = (page: Page, index: number): Promise<string> => {
     return page.evaluate((runIndex) => {
         const row = document.querySelector(".staff-measure-track-row");
-        const run = row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run")[runIndex];
+        const runs = [...(row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run") ?? [])];
+        const total = runs.reduce((sum, run) => {
+            return sum + run.getBoundingClientRect().width;
+        }, 0);
+        const width = runs[runIndex]?.getBoundingClientRect().width ?? Number.NaN;
 
-        return run?.style.flex.split(" ")[0] ?? "";
+        return String(Number((width / total).toFixed(4)));
     }, index);
 };
 
@@ -85,12 +89,16 @@ const leftOf = async (page: Page, index: number): Promise<number> => {
 const restSpanOf = async (page: Page): Promise<string> => {
     const total = await page.evaluate(() => {
         const runs = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
-
-        return runs.reduce((sum, run) => {
+        const rowWidth = runs.reduce((sum, run) => {
+            return sum + run.getBoundingClientRect().width;
+        }, 0);
+        const restWidth = runs.reduce((sum, run) => {
             return run.querySelector(".staff-note-viewer-rest-symbol") === null
                 ? sum
-                : sum + Number.parseFloat(run.style.flex);
+                : sum + run.getBoundingClientRect().width;
         }, 0);
+
+        return restWidth / rowWidth;
     });
 
     return total.toFixed(3);
@@ -112,11 +120,11 @@ test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .noteLengthToolbar")).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
 
     // Select the quarter rest between the two beamed groups.
     await page.locator(".staff-measure-track-row .staff-note-viewer-run").nth(4).click();
+    await expect(page.locator("#selectionEditPopup .note-length-toolbar")).toBeVisible();
     await expect(page.locator(".staff-note-viewer-run.note-selected .staff-note-viewer-rest-symbol"))
         .toHaveCount(1);
 });
@@ -136,7 +144,7 @@ test("changes a rest's length with the length hotkey", async ({ page }) => {
 test("changes a rest's length with the length toolbar", async ({ page }) => {
     const noteBehind = await leftOf(page, 5);
 
-    await page.locator(".noteLengthButton").nth(1).click({ force: true });
+    await page.locator(".note-length-button").nth(1).click({ force: true });
     await expect.poll(() => {
         return growOf(page, 4);
     }).toBe("0.5");
@@ -148,7 +156,7 @@ test("changes a rest's length with the length toolbar", async ({ page }) => {
 test("grows a rest by the augmentation dot", async ({ page }) => {
     expect(await restSpanOf(page)).toBe("0.250");
 
-    await page.locator(".noteDotButton").click({ force: true });
+    await page.locator(".note-dot-button").click({ force: true });
 
     // The dot makes the rest a dotted quarter, which stands as one glyph wherever it is: the notes
     // behind the rest give way.

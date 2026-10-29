@@ -10,7 +10,7 @@ import {
 } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IMeasureEvent, ITrackSnapshot } from "../../src/core/types/general.js";
-import { readStoredCurrentScore, routeApi } from "./e2e-test-helpers.js";
+import { entryModeSegment, readStoredCurrentScore, routeApi, showEntryMode } from "./e2e-test-helpers.js";
 
 /** Four beamed sixteenths, a quarter rest, then eight sixteenths. */
 const mixedBarSnapshot: IArrangementSnapshot = {
@@ -67,8 +67,7 @@ const openInEditMode = async (page: Page, snapshot: IArrangementSnapshot, sessio
     await expect(page.locator("#trackViewerHost")).toBeVisible();
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .noteLengthToolbar")).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
 };
 
 /**
@@ -144,7 +143,9 @@ test.describe("staff insert mode", () => {
             "9/16+1/16:1",
             "5/8+1/16:1",
             "11/16+1/16:1",
-            "3/4+1/4:-",
+            "3/4+1/16:-",
+            "13/16+1/8:-",
+            "15/16+1/16:-",
         ]);
     });
 
@@ -156,7 +157,7 @@ test.describe("staff insert mode", () => {
         await runs.nth(4).click();
         await page.keyboard.press("Delete");
 
-        await expect(runs).toHaveCount(13);
+        await expect(runs).toHaveCount(15);
         await expect(runs.nth(4).locator(".staff-note-head-symbol")).toHaveCount(1);
 
         await expect.poll(async () => {
@@ -174,7 +175,9 @@ test.describe("staff insert mode", () => {
             "9/16+1/16:1",
             "5/8+1/16:1",
             "11/16+1/16:1",
-            "3/4+1/4:-",
+            "3/4+1/16:-",
+            "13/16+1/8:-",
+            "15/16+1/16:-",
         ]);
     });
     test("draws no selection rectangle while the pointer drags across the bar", async ({ page }) => {
@@ -192,6 +195,36 @@ test.describe("staff insert mode", () => {
         await expect(page.locator(".selection-rect")).toHaveCount(0);
         await expect(page.locator(".selection-overlay")).toHaveCount(0);
     });
+
+    test("keeps the edit popup open while the entry grows the score and through undo and redo", async ({ page }) => {
+        const failures: string[] = [];
+        page.on("pageerror", (error) => {
+            failures.push(error.message);
+        });
+
+        const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
+        await expect(runs).toHaveCount(13);
+
+        // The bar is full, so the quarter entered at the rest pushes its tail into the measure that grows for it.
+        await runs.nth(4).click();
+        await page.keyboard.press("1");
+        await expect(page.locator("#selectionEditPopup")).toBeVisible();
+        await expect.poll(async () => {
+            return (await storedTrack(page)).measures.length;
+        }).toBe(2);
+
+        await page.keyboard.press("Control+z");
+        await expect(page.locator("#selectionEditPopup")).toBeVisible();
+        await expect.poll(async () => {
+            return (await storedTrack(page)).measures.length;
+        }).toBe(1);
+
+        await page.keyboard.press("Control+Shift+z");
+        await expect(page.locator("#selectionEditPopup")).toBeVisible();
+
+        // The entry published a playback order for a bar the track did not hold yet, which a player must survive.
+        expect(failures).toEqual([]);
+    });
 });
 
 test.describe("staff entry mode switch", () => {
@@ -201,17 +234,36 @@ test.describe("staff entry mode switch", () => {
 
     test("marks the values of the selection the mode switches to", async ({ page }) => {
         const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
-        const marked = page.locator(".noteLengthToolbar .noteLengthButton.du-btn-primary");
+        const marked = page.locator(".note-length-toolbar .note-length-button.du-btn-primary");
+
+        // The score opens in insert mode, which marks the value the next entry uses.
+        await expect(entryModeSegment(page, "insert")).toHaveAttribute("aria-pressed", "true");
 
         await runs.nth(0).click();
 
-        // Insert mode marks the value the next entry uses, not what the cursor addresses.
-        await expect(marked).toHaveAttribute("data-tooltip", /Quarter note/);
+        // The cursor addresses a sixteenth, yet the bar keeps marking the value the next entry uses.
+        await expect(marked).toHaveAttribute("title", /Quarter note/);
 
-        await page.locator("label.entryModeButton").click({ force: true });
-        await expect(page.locator("#entryModeButton")).toBeChecked();
+        await showEntryMode(page, "overwrite");
 
         // The bar now shows what the selection carries, which is the addressed sixteenth.
-        await expect(marked).toHaveAttribute("data-tooltip", /Sixteenth note/);
+        await expect(marked).toHaveAttribute("title", /Sixteenth note/);
+    });
+
+    test("switches the mode with the I and O keys", async ({ page }) => {
+        const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
+        const insertSegment = entryModeSegment(page, "insert");
+        const overwriteSegment = entryModeSegment(page, "overwrite");
+
+        await expect(insertSegment).toHaveAttribute("aria-pressed", "true");
+
+        // The keys reach the view through an editor that has the cursor, which a click on a run sets.
+        await runs.nth(0).click();
+
+        await page.keyboard.press("o");
+        await expect(overwriteSegment).toHaveAttribute("aria-pressed", "true");
+
+        await page.keyboard.press("i");
+        await expect(insertSegment).toHaveAttribute("aria-pressed", "true");
     });
 });

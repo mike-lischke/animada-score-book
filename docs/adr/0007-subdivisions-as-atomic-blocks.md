@@ -8,16 +8,11 @@
 
 ## Context
 
-A length change ripples through a track: the model collects its notes on an absolute timeline, applies
-the requested durations and lays the result out again. Subdivisions were outside that model — every
-track holding one was skipped, so a note beside a tuplet could not be dotted or resized.
+A length change ripples through a track: the model collects its notes on an absolute timeline, applies the requested durations and lays the result out again. Subdivisions were outside that model — every track holding one was skipped, so a note beside a tuplet could not be dotted or resized.
 
 ## Decision
 
-We will treat a subdivision as one item on the absolute timeline. The item carries the block's span and
-its leaf events relative to the block; the ripple moves it as a whole and never reshapes, cuts or drops
-it, and a request addressing a slot is ignored. The layout rebuilds the subdivision records from the
-block's placements.
+We will treat a subdivision as one item on the absolute timeline. The item carries the block's span and its leaf events relative to the block; the ripple moves it as a whole and never reshapes, cuts or drops it, and a request addressing a slot is ignored. The layout rebuilds the subdivision records from the block's placements.
 
 ## Invariants
 

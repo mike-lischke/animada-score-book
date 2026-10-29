@@ -52,7 +52,7 @@ interface ISelectionDialogState {
 }
 
 export class SelectionDialog extends UIComponent<{}, ISelectionDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<{
         closure: DialogResponseClosure; selected?: ISelectionDialogItem; selectedItems?: ISelectionDialogItem[];
     }>;

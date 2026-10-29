@@ -7,8 +7,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import type { IArrangementSnapshot, IRepeatBar, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, toolbarButton } from "./e2e-test-helpers.js";
+import {
+    TrackViewMode, type IArrangementSnapshot, type IRepeatBar, type ITrackPieceSnapshot
+} from "../../src/core/types/general.js";
+import { routeApi, scrollClearOfToolsBar, showEntryMode, showTrackView } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -131,7 +133,7 @@ const staffBar = (page: Page, barNumber: number): Locator => {
  * glyph and the strokes are drawn, so a repeat is recognised by the parts it is assembled from.
  */
 const closingBarline = (page: Page, barNumber: number): Locator => {
-    return staffBar(page, barNumber).locator(".staff-note-viewer-barline-end, .staff-note-viewer-barline-centred");
+    return staffBar(page, barNumber).locator(".staff-note-viewer-barline-end");
 };
 
 /**
@@ -171,9 +173,8 @@ const repeatGaps = (page: Page, barNumber: number): Promise<IRepeatGaps> => {
         const heads = [...viewer.querySelectorAll(".staff-note-head")];
         const openingBox = viewer.querySelector(".staff-note-viewer-barline-start")?.getBoundingClientRect()
             ?? null;
-        const closingBox = viewer
-            .querySelector(".staff-note-viewer-barline-end, .staff-note-viewer-barline-centred")
-            ?.getBoundingClientRect() ?? null;
+        const closingBox = viewer.querySelector(".staff-note-viewer-barline-end")?.getBoundingClientRect()
+            ?? null;
 
         // The dots are the innermost part of a repeat barline, so the edge of its ink is the edge the notes face.
         return {
@@ -182,6 +183,28 @@ const repeatGaps = (page: Page, barNumber: number): Promise<IRepeatGaps> => {
                 ? 0
                 : closingBox.left - heads[heads.length - 1].getBoundingClientRect().right,
         };
+    }, barNumber);
+};
+
+/**
+ * @param page The page to read from.
+ * @param barNumber The 1-based bar number.
+ *
+ * @returns How far the ink of the bar's first note stands right of its note runs, in px, or 0 when the bar holds
+ * no note.
+ */
+const firstHeadOffset = async (page: Page, barNumber: number): Promise<number> => {
+    return page.evaluate((bar: number): number => {
+        // The list is indexed without a bounds check, so the column may be missing.
+        const column = document.querySelectorAll(".staff-measure-viewer")[bar - 1] as Element | undefined;
+        const viewer = column?.querySelector(".staff-note-viewer") ?? null;
+        const runs = viewer?.querySelector(".staff-note-viewer-runs") ?? null;
+        const head = viewer?.querySelector(".staff-note-head") ?? null;
+        if (runs === null || head === null) {
+            return 0;
+        }
+
+        return head.getBoundingClientRect().left - runs.getBoundingClientRect().left;
     }, barNumber);
 };
 
@@ -239,13 +262,17 @@ test("draws the barline a repeated section closes at on the last bar", async ({ 
         .toHaveClass(/barline-view-thick/);
 });
 
-test("draws one barline for a repeat that closes and opens at the same bar", async ({ page }) => {
+test("draws the repeat that closes a bar and the one that opens the next as two barlines", async ({ page }) => {
     await seedScore(page, snapshotWith(2, { 1: { end: true }, 2: { start: true } }));
 
-    // Both repeats share one barline, which straddles the boundary with the dots on both sides.
-    await expect(closingBarline(page, 1)).toHaveCount(1);
-    await expect(closingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(2);
-    await expect(openingBarline(page, 2)).toHaveCount(0);
+    // Each mark stands on its own bar, so the section closes with the repeat that ends the first bar and opens
+    // again with the one that starts the second.
+    await expect(closingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(1);
+    await expect(closingBarline(page, 1).locator(".barline-view-part").last())
+        .toHaveClass(/barline-view-thick/);
+    await expect(openingBarline(page, 2).locator(".barline-view-dots")).toHaveCount(1);
+    await expect(openingBarline(page, 2).locator(".barline-view-part").first())
+        .toHaveClass(/barline-view-thick/);
 });
 
 test("opens the score with a repeat barline when the first bar starts a section", async ({ page }) => {
@@ -255,53 +282,107 @@ test("opens the score with a repeat barline when the first bar starts a section"
     await expect(openingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(1);
 });
 
-test("keeps the same room from a repeat barline on either side of a bar", async ({ page }) => {
-    await seedScore(page, snapshotWith(3, { 1: { start: true, end: true } }, eighthPiece));
+test("draws separate grid repeat bar lines with room outside the note cells", async ({ page }) => {
+    await seedScore(page, snapshotWith(3, { 1: { start: true, end: true }, 2: { start: true }, 3: { end: true } }));
+    await showTrackView(page, TrackViewMode.Grid);
+    const first = page.locator(".grid-measure-viewer").first();
+    await expect(first.locator(".grid-repeat-barline-start .barline-view-dots text")).toHaveText(repeatDots);
+    await expect(first.locator(".grid-repeat-barline-end .barline-view-dots text")).toHaveText(repeatDots);
+    await expect(page.locator(".grid-repeat-barline-start")).toHaveCount(2);
+    await expect(page.locator(".grid-repeat-barline-end")).toHaveCount(2);
+    await expect(first).toHaveCSS("border-right-color", "rgba(0, 0, 0, 0)");
 
-    // The barline a bar opens with keeps the room the bar's last note leaves before the one it closes with, so a
-    // bar stands as far from the dots on either side of a repeated section.
-    const gaps = await repeatGaps(page, 1);
-    expect(gaps.opening).toBeGreaterThan(20);
-    expect(Math.abs(gaps.opening - gaps.closing)).toBeLessThanOrEqual(gaps.closing * 0.1);
+    const gaps = await first.evaluate((column) => {
+        const row = column.querySelector(".grid-measure-row")!.getBoundingClientRect();
+        const start = column.querySelector(".grid-repeat-barline-start")!.getBoundingClientRect();
+        const end = column.querySelector(".grid-repeat-barline-end")!.getBoundingClientRect();
+        const bounds = column.getBoundingClientRect();
+
+        return {
+            opening: row.left - start.right,
+            closing: end.left - row.right,
+            startInside: start.left - bounds.left,
+            endInside: bounds.right - end.right,
+        };
+    });
+    expect(gaps.opening).toBeGreaterThan(0);
+    expect(gaps.closing).toBeGreaterThan(0);
+    expect(gaps.startInside).toBeGreaterThanOrEqual(0);
+    expect(gaps.endInside).toBeGreaterThanOrEqual(0);
+});
+
+test("takes the room a repeat needs from the barline alone, whatever the bar holds", async ({ page }) => {
+    await seedScore(page, snapshotWith(3, {}, eighthPiece));
+    await page.locator("#editModeButton").click({ force: true });
+
+    const before = await firstHeadOffset(page, 1);
+    const neighbourBefore = await firstHeadOffset(page, 2);
+    const start = page.locator('.bar-action-button[data-action="repeat-start"]').first();
+    await scrollClearOfToolsBar(page, start);
+    await start.click({ force: true });
+
+    // The mark takes the room of its own ink and nothing else: the notes move right by exactly the room the
+    // barline keeps, so a bar with a repeat is not pushed towards the middle.
+    const room = await page.evaluate((): number => {
+        const runs = document.querySelector(".staff-note-viewer .staff-note-viewer-runs");
+
+        return runs === null ? 0 : Number.parseFloat(getComputedStyle(runs).paddingLeft);
+    });
+
+    expect(room).toBeGreaterThan(0);
+
+    // The run widths follow the box the barline narrows, so the note keeps its place inside its own run within a
+    // fraction of a pixel.
+    await expect.poll(async () => {
+        return Math.abs((await firstHeadOffset(page, 1)) - before - room);
+    }).toBeLessThan(1);
+
+    // The notes clear the dots the barline reaches into the bar with, and a mark only moves its own bar.
+    expect((await repeatGaps(page, 1)).opening).toBeGreaterThan(0);
+    expect(await firstHeadOffset(page, 2)).toBe(neighbourBefore);
 });
 
 test("keeps the whole-measure rest of a bar centred under a repeat barline", async ({ page }) => {
     await seedScore(page, snapshotWith(2, { 1: { start: true, end: true } }, restPiece));
 
-    // A rest sits centred in its slot and keeps the room of the barline by itself, so such a bar is not pushed.
+    // The bar keeps the same room on both sides of itself, so its rest stays centred.
     expect(await restCentre(page, 1)).toBeCloseTo(0.5, 2);
 });
 
-test("offers the repeat marks as unavailable for a selection that is not whole bars", async ({ page }) => {
+test("sets and clears a bar's repeat mark from the bar actions", async ({ page }) => {
     await seedScore(page, snapshotWith(3, {}));
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
 
-    // A note is not a bar, so neither mark can be set on the selection.
+    // The marks are bar actions now: the bar opens the score with a repeat barline once its button is on.
+    const start = page.locator('.bar-action-button[data-action="repeat-start"]').first();
+    await scrollClearOfToolsBar(page, start);
+    await start.click({ force: true });
+
+    await expect(start).toHaveClass(/du-btn-primary/);
+    await expect(openingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(1);
+
+    // Pressing the button again takes the mark off, and the barline the mark stated goes with it.
+    await scrollClearOfToolsBar(page, start);
+    await start.click({ force: true });
+
+    await expect(start).not.toHaveClass(/du-btn-primary/);
+    await expect(openingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(0);
+});
+
+test("offers the repeat marks above every bar, not in a selection popup", async ({ page }) => {
+    await seedScore(page, snapshotWith(3, {}));
+
+    await page.locator("#editModeButton").click({ force: true });
+    await showEntryMode(page, "overwrite");
+
+    // Every bar carries both marks as its own actions.
+    await expect(page.locator('.bar-action-group [data-action="repeat-start"]')).toHaveCount(3);
+    await expect(page.locator('.bar-action-group [data-action="repeat-end"]')).toHaveCount(3);
+
+    // A selected note brings none of them along: its popup holds the note tools alone.
     await staffBar(page, 2).locator(".staff-note-head-symbol").first().click();
-
-    await expect(toolbarButton(page, "Repeat start")).toBeDisabled();
-    await expect(toolbarButton(page, "Repeat end")).toBeDisabled();
-
-    // The strokes of the drawn barline follow the colour of their icon, and the framework fades that colour for a
-    // disabled button, which is what greys the mark out next to an enabled one.
-    await expect.poll(() => {
-        return page.evaluate(() => {
-            const iconOf = (tooltip: string): SVGSVGElement | null => {
-                return document.querySelector<SVGSVGElement>(
-                    `.subdivisionToolbar button[data-tooltip="${tooltip}"] > svg`);
-            };
-
-            const disabled = iconOf("Repeat start");
-            const enabled = iconOf("Draw crescendo / decrescendo hairpin");
-            const stroke = disabled?.querySelector<SVGElement>(".barline-icon-stroke");
-            if (disabled === null || enabled === null || stroke === null || stroke === undefined) {
-                return false;
-            }
-
-            return getComputedStyle(stroke).stroke === getComputedStyle(disabled).color
-                && getComputedStyle(disabled).color !== getComputedStyle(enabled).color;
-        });
-    }).toBe(true);
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await expect(page.locator('#selectionEditPopup [title="Repeat start"]')).toHaveCount(0);
+    await expect(page.locator('#selectionEditPopup [title="Repeat end"]')).toHaveCount(0);
 });

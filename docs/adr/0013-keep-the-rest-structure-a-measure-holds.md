@@ -9,22 +9,13 @@
 
 ## Context
 
-A rest was only the gap between the timeline items (notes and subdivisions): every layout recomputed
-all rests from those gaps, merged adjacent ones and split a gap into standard values. A measure
-without any item therefore always held exactly one rest covering its bar.
+A rest was only the gap between the timeline items (notes and subdivisions): every layout recomputed all rests from those gaps, merged adjacent ones and split a gap into standard values. A measure without any item therefore always held exactly one rest covering its bar.
 
-That made a rest request a lie in a silence: giving a whole-measure rest a shorter length found no
-content to move aside, the layout recreated the very same rest — and the edit still reported a change,
-so it raised an undo step without a visible result. It also made a rest structure inexpressible: a
-bar split into two half rests collapsed back into a whole rest at the next layout, and the staff view
-drew a silent bar as one whole rest whatever it held.
+That made a rest request a lie in a silence: giving a whole-measure rest a shorter length found no content to move aside, the layout recreated the very same rest — and the edit still reported a change, so it raised an undo step without a visible result. It also made a rest structure inexpressible: a bar split into two half rests collapsed back into a whole rest at the next layout, and the staff view drew a silent bar as one whole rest whatever it held.
 
 ## Decision
 
-We will keep the rest structure a measure holds. A layout fills each gap with the rests that already
-covered it when they still cover it exactly and differ from the split the gap would derive on its own;
-any other gap is derived from its length as before. A length request shapes the measure's rests where
-content alone cannot express it, and a measure holding more than one rest is drawn as its parts.
+We will keep the rest structure a measure holds. A layout fills each gap with the rests that already covered it when they still cover it exactly and differ from the split the gap would derive on its own; any other gap is derived from its length as before. A length request shapes the measure's rests where content alone cannot express it, and a measure holding more than one rest is drawn as its parts.
 
 ## Invariants
 

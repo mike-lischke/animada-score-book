@@ -19,10 +19,7 @@ import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
 import { selectionEventsOf, type IAddressedMeasureEvents } from "../../../ui/selection-ranges.js";
 import { Button } from "../framework/Button.js";
-import { Container } from "../framework/Container.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface INoteLengthToolbarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -176,10 +173,10 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
             return (
                 <Button
                     key={option.length}
-                    className="noteLengthButton"
+                    className="selection-toolbar-action note-length-button"
                     isDefault={option.length === markedLength}
                     disabled={disabled}
-                    data-tooltip={`${option.tooltip} (Alt/Cmd+${option.shortcut})`}
+                    title={`${option.tooltip} (Alt/Cmd+${option.shortcut})`}
                     onClick={() => {
                         this.selectLength(option.length);
                     }}
@@ -194,10 +191,10 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         const toggledValue: INoteValue = { length: activeValue.length, dotted: !activeValue.dotted };
         const dotButton = (
             <Button
-                className="noteDotButton"
+                className="selection-toolbar-action note-dot-button"
                 isDefault={markedDotted === true}
                 disabled={this.isDisabled(toggledValue)}
-                data-tooltip="Dotted (Alt/Cmd+.)"
+                title="Dotted (Alt/Cmd+.)"
                 onClick={() => {
                     this.toggleDots();
                 }}
@@ -206,22 +203,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
             </Button>
         );
 
-        const buttons = [...lengthButtons, dotButton];
-
-        return (
-            <Container
-                className="noteLengthToolbarHost"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                <GooeyGroup
-                    className="noteLengthToolbar"
-                    background="var(--color-base-200)"
-                >
-                    {buttons}
-                </GooeyGroup>
-            </Container>
-        );
+        return [...lengthButtons, dotButton];
     }
 
     private handleSelectionChanged = (): Promise<boolean> => {
@@ -395,7 +377,8 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      * @returns The note value, or undefined when the arrangement is not loaded.
      */
     private noteValueOf(measure: ISbDmTrackPiece, index: number): INoteValue | undefined {
-        const arrangement = this.props.dataModel.arrangement;
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
         if (!arrangement) {
             return undefined;
         }
@@ -415,7 +398,8 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      * @returns The addressed measures with their event indexes.
      */
     private addressedEvents(entries: ISelectionEntry[]): IAddressedMeasureEvents[] {
-        const arrangement = this.props.dataModel.arrangement;
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
 
         return arrangement ? selectionEventsOf(arrangement, entries) : [];
     }
@@ -424,7 +408,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      * Renders the note symbol for a note length: the head outline plus a segment filled from its
      * apex, which spans the share of a whole circle the note value stands for. The segment is drawn
      * over the outline and reaches exactly to its outer edge, so it hides the outline where it lies.
-     * Both are separate elements, because they carry different colors.
+     * Both are separate elements, because the segment covers the outline's edge there.
      *
      * @param length The note length to render.
      *

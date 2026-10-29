@@ -11,7 +11,7 @@ import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
-import { EditEntryMode } from "../../../core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
@@ -20,19 +20,15 @@ import { NoteStyleIcon } from "../Note/NoteStyleIcon.js";
 import { NoteStyleLineIcon } from "../Note/NoteStyleLineIcon.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";
 import { Button } from "../framework/Button.js";
-import { Container } from "../framework/Container.js";
-import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface INoteStyleBarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
 
     /** The active view mode; determines whether grid symbols or staff note heads are shown. */
-    trackViewMode?: "grid" | "staff";
+    trackViewMode?: TrackViewMode;
 
     /**
      * The entry mode the view works in. Insert mode marks nothing, because an entry names the style
@@ -79,6 +75,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         this.refreshFromSelection();
     }
@@ -95,35 +92,20 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
     }
 
     public override render(): ComponentChild {
         const { noteStyles, markedStyle, canEnter } = this.state;
-        const { trackViewMode = "grid" } = this.props;
+        const { trackViewMode = TrackViewMode.Grid } = this.props;
 
         const restButton = this.renderRestButton(markedStyle, canEnter);
-        const controls = trackViewMode === "staff"
+        const controls = trackViewMode === TrackViewMode.Staff
             ? this.renderStaffControls(noteStyles, markedStyle?.noteStyleId, canEnter)
             : this.renderGridControls(noteStyles, markedStyle?.noteStyleId, canEnter);
 
-        return (
-            <Container
-                className="noteStyleBarHost"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-                style={{ flex: 1, minWidth: 0 }}
-            >
-                <GooeyGroup
-                    className="noteStyleBar"
-                    background="var(--color-base-200)"
-                    style={{ flex: 1, minWidth: 0, overflowX: "auto" }}
-                >
-                    {restButton}
-                    {controls}
-                </GooeyGroup>
-            </Container>
-        );
+        return <>{restButton}{controls}</>;
     }
 
     /**
@@ -138,10 +120,10 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     private renderRestButton(markedStyle: IMarkedStyle | undefined, canEnter: boolean): ComponentChild {
         return (
             <Button
-                className="noteStyleRestButton"
+                className="selection-toolbar-action noteStyleRestButton"
                 isDefault={markedStyle?.isRest === true}
                 disabled={!canEnter}
-                data-tooltip="Rest (0)"
+                title="Rest (0)"
                 onClick={() => {
                     void requisitions.execute("restEntryRequested", undefined);
                 }}
@@ -166,24 +148,24 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             return (
                 <Button
                     key={style.id}
-                    className="noteStyleButton"
+                    className="selection-toolbar-action noteStyleButton"
                     isDefault={style.id === markedStyleId}
                     disabled={!canEnter}
-                    data-tooltip={`${this.styleDescription(style)} (${index + 1})`}
+                    title={`${this.styleDescription(style)} (${index + 1})`}
                     onClick={() => {
                         void requisitions.execute("noteEntryRequested", style.id);
                     }}
                 >
-                    <NoteStyleSymbolViewer noteStyle={style} data-tooltip="inherit" />
+                    <NoteStyleSymbolViewer noteStyle={style} />
                 </Button>
             );
         });
     }
 
     /**
-     * Renders the staff-mode controls. Styles that differ only in articulation collapse into one
-     * voice, and voices that share the same note head are grouped into a dropdown whose entries
-     * place each voice on its note line, so they remain distinguishable.
+     * Renders the staff-mode controls: one button per voice. Styles that differ only in articulation collapse
+     * into one voice, and a voice that shares its note head with another one shows the head on its note line,
+     * which is what tells the two apart.
      *
      * @param noteStyles The resolved note styles.
      * @param markedStyleId The style shared by the current selection, if any.
@@ -199,87 +181,54 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             return style.noteLine ?? 1;
         }));
 
-        return groups.map((group) => {
-            if (group.length === 1) {
-                return this.renderStyleButton(group[0], markedStyleId, canEnter);
+        const buttons: ComponentChild[] = [];
+        for (const group of groups) {
+            for (const entry of group) {
+                // A head that stands alone names its style; one of several voices needs the line it sits on.
+                const lines = group.length === 1 ? undefined : lineCount;
+                buttons.push(this.renderStyleButton(entry, markedStyleId, canEnter, lines));
             }
+        }
 
-            return this.renderStyleDropdown(group, markedStyleId, canEnter, lineCount);
-        });
+        return buttons;
     }
 
+    /**
+     * Renders one voice as a button.
+     *
+     * @param entry The voice to render.
+     * @param markedStyleId The style shared by the current selection, if any.
+     * @param canEnter Whether note entry is currently possible.
+     * @param staffLines The staff lines to draw the head on, or undefined for a head that stands alone.
+     *
+     * @returns The button carrying the voice.
+     */
     private renderStyleButton(entry: IStyleGroupEntry, markedStyleId: string | undefined,
-        canEnter: boolean): ComponentChild {
+        canEnter: boolean, staffLines: number | undefined): ComponentChild {
         const { style, index, memberIds } = entry;
         const isMarked = markedStyleId !== undefined && memberIds.includes(markedStyleId);
+
+        let icon: ComponentChild;
+        if (staffLines === undefined) {
+            icon = <NoteStyleIcon noteStyle={style} />;
+        } else {
+            icon = <NoteStyleLineIcon entries={[{ noteStyle: style, line: style.noteLine ?? 1 }]}
+                lineCount={staffLines} />;
+        }
 
         return (
             <Button
                 key={style.id}
-                className="noteStyleButton"
+                className="selection-toolbar-action noteStyleButton"
                 isDefault={isMarked}
                 disabled={!canEnter}
-                data-tooltip={`${this.styleDescription(style)} (${index + 1})`}
+                title={`${this.styleDescription(style)} (${index + 1})`}
                 onClick={() => {
                     void requisitions.execute("noteEntryRequested", style.id);
                 }}
             >
-                <NoteStyleIcon noteStyle={style} data-tooltip="inherit" />
+                {icon}
             </Button>
-        );
-    }
-
-    /**
-     * Renders a dropdown for a group of styles that share the same note head. The button shows the
-     * shared note head alone, while each entry renders one style on its own note line.
-     *
-     * @param group The grouped style entries.
-     * @param markedStyleId The style shared by the current selection, if any.
-     * @param canEnter Whether note entry is currently possible.
-     * @param lineCount The total number of staff lines for the instrument.
-     *
-     * @returns The dropdown node for the group.
-     */
-    private renderStyleDropdown(group: IStyleGroupEntry[], markedStyleId: string | undefined,
-        canEnter: boolean, lineCount: number): ComponentChild {
-        const items: IDropdownItem[] = group.map((entry) => {
-            const { style, index } = entry;
-
-            return {
-                label: `${this.styleDescription(style)} (${index + 1})`,
-                icon: (
-                    <NoteStyleLineIcon
-                        entries={[{ noteStyle: style, line: style.noteLine ?? 1 }]}
-                        lineCount={lineCount}
-                    />
-                ),
-                onClick: () => {
-                    void requisitions.execute("noteEntryRequested", style.id);
-                },
-            };
-        });
-
-        const marked = group.find((entry) => {
-            return markedStyleId !== undefined && entry.memberIds.includes(markedStyleId);
-        });
-        const selectedItem = marked !== undefined
-            ? `${this.styleDescription(marked.style)} (${marked.index + 1})`
-            : undefined;
-        const tooltip = group.map((entry) => {
-            return entry.style.symbol?.shortDescription ?? entry.style.id;
-        }).join(", ");
-
-        return (
-            <Dropdown
-                key={group[0].style.id}
-                className="noteStyleDropdown"
-                icon={<NoteStyleIcon noteStyle={group[0].style} />}
-                items={items}
-                closeOnSelect
-                disabled={!canEnter}
-                selectedItem={selectedItem}
-                data-tooltip={tooltip}
-            />
         );
     }
 
@@ -382,7 +331,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     private refreshFromSelection(): void {
         const { selectionManager, entryMode } = this.props;
 
-        const entries = [...selectionManager.currentSelection.values()];
+        const entries = selectionManager.currentCursor === undefined
+            ? [...selectionManager.currentSelection.values()] : [selectionManager.currentCursor];
         const tracks = this.resolveSelectedTracks(entries);
         const noteStyles = this.resolveNoteStyles(tracks);
         const canEnter = this.shareInstrument(tracks);

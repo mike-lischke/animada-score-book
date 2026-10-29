@@ -61,7 +61,7 @@ const createScoreEntry = (overrides?: Partial<ISbDmScore>): ISbDmScore => {
         state: { initialized: true, isLeaf: true, expanded: true, expandedOnce: true },
         perm: { isOwner: true, canRead: true, canWrite: true, isWorld: true, groupIds: [1, 3] },
         ...overrides,
-    } as ISbDmScore;
+    };
 };
 
 /**
@@ -112,7 +112,7 @@ const openWithScore = async (overrides?: {
 
     document.body.appendChild(target);
 
-    await ref.current!.open(target, entry);
+    await ref.current!.open(target.getBoundingClientRect(), entry);
     document.body.removeChild(target);
 
     return { ref, renderResult, onSaved };

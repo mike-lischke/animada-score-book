@@ -30,7 +30,7 @@ Checking → Setup → AdminSetup → Login → Running
 | `src/core/types/` | Core domain types: `general.ts` (`IAudioData`, `IArrangementSnapshot`, `IFraction`, `IArrangementExtensions`, etc.), `clipboard.ts` (clipboard content kinds) |
 | `src/player/` | Audio playback engine (Web Audio API): `ArrangementPlayer` orchestrates `TrackPlayer`s + `Metronome` via `TimeCoordinator` (score-time ↔ real-time math) |
 | `src/supplement/` | Utilities: `Requisitions` (typed pub/sub event bus — all cross-component communication), `EscapeStack`, `Stack`, `Semaphore`, `MP3Export` |
-| `src/components/ui/` | Feature components: `Arrangement/`, `Bar/` (Grid + Staff views), `Note/`, `Track/`, `Minimap/`, `GuideRail/`, `InstrumentBrowser/`, `NotificationCenter/`, `Statusbar/`, `Print/`, `composites/` |
+| `src/components/ui/` | Feature components: `Arrangement/`, `Bar/` (Grid + Staff views), `Note/`, `Track/`, `Header/` (compact header + arrangement identity), `Navigation/` (app footer + score navigator), `GuideRail/`, `InstrumentBrowser/`, `NotificationCenter/`, `Print/`, `composites/` |
 | `src/components/ui/framework/` | Custom UI component library: `UIComponent` (base class), `Container` (flex layout), `Dialog`, `Button`, `Menu/`, `TreeGrid`, `Tabview/`, `Popup`, `Tooltip`, etc. |
 | `src/ui/` | Top-level UI modules: `ScoreLibrary` (lazy-loaded tree-grid), `SettingsDialog`, `LoginDialog`, `SelectionManager`, `ModeManager`, `MouseHandler`, `AnimationEngine`, admin editors |
 | `src/server/` | Node.js backend: `backend.ts` (entry), `Router.ts` (flat `?action=` dispatch), `Auth.ts` + `AuthRoutes.ts` (JWT, scrypt, refresh tokens), `ScoreRoutes.ts`, `AdminRoutes.ts`, `StaticRoutes.ts`, `mysql-adapter.ts`/`postgres-adapter.ts` (canonical schema in `createTablesSQL`), `config.ts` |
@@ -51,7 +51,7 @@ The score renders in **grid mode** (matrix-style, each bar a column) or **staff 
 
 All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns:
 - `Container` for all flex layouts — never raw `<div>` with `display: flex`.
-- `generateFinalClassName(["base-class", this.props.className])` merges classes.
+- `generateFinalClassName(["base-class", this.props.className])` merges classes, to combine a common base class with any application-supplied class names.
 - `data-*` props are auto-forwarded to DOM via `ICommonUIProperties`.
 - Styles are per-component SCSS files under `src/components/ui/framework/styles/`, imported centrally via `styles/index.scss`.
 
@@ -92,6 +92,28 @@ All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns
 ### Git Commit Messages
 - Use present tense, imperative mood: "Fix bug" not "Fixed bug" or "Fixes bug".
 - Always use english in commit messages, even if the codebase is otherwise multilingual.
+
+### Documentation Updates
+
+**The documentation is updated before a release, not with every commit.** Between releases a commit carries a
+documentation change only when the user asks for one; ordinary commits leave the handbook, the README, and the release
+notes alone.
+
+When a release is prepared — or when the user asks for documentation work — the check covers every change since the
+last release that touches any of these:
+- UI: new, changed, renamed, or removed controls, dialogs, sections, labels, tooltips, messages, shortcuts, icons, layout behaviour at different viewport sizes.
+- Backend behaviour: endpoints and their actions, status codes, error texts, permission rules, locks, setup and reset flow, startup logging that the docs quote.
+- Configuration: keys in `backend-config.json`, environment variables, their defaults and effects.
+- Installation and operation: requirements, package contents, first start, upgrade and backup steps.
+- Screenshots and diagrams: an image that shows the changed element is re-captured or adapted.
+
+Where the update goes:
+- The matching chapter under `docs/en/` (`using/`, `administration/`, `getting-started/`, `reference/`, `development/`, `troubleshooting.md`, `instruments.md`). Grep for the labels and messages you changed instead of guessing the chapter.
+- `docs/planning/handbook-2.0/screenshot-storyboard.md` when an image is missing or outdated but cannot be re-captured yet.
+- `release-notes.md` for the notes of the released version.
+
+Internal changes — refactorings, tests, build scripts, type-only changes, code comments — need no documentation at
+all. When in doubt during release preparation, treat the change as user-visible and check.
 
 ### Switch Statements
 
@@ -214,7 +236,6 @@ MySQL does not support `IF NOT EXISTS` for `ALTER TABLE ADD COLUMN` — check wi
 
 ## Testing
 
-- Vitest runs with `isolate=false` and concurrent file execution; specs that mock shared singletons or rely on module state should use `describe.sequential` or otherwise isolate state explicitly.
 - UI structure changes in `SettingsDialog` require updating snapshot at `tests/ui/__snapshots__/SettingsDialog.spec.tsx.snap`.
 - Legacy arrangement snapshots (version 1) and BananaDrum URL params must be migrated via `ArrangementMigrator.migrateToArrangement()` (returns `{ arrangement, migrated }`). Tests should use the public API, not private `migrate()`.
 

@@ -22,7 +22,7 @@ interface IArrangementTitleState {
 }
 
 export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, IArrangementTitleState> {
-    private inputRef = createRef<HTMLInputElement>();
+    private inputRef = createRef<HTMLInputElement | null>();
 
     public constructor(props: IArrangementTitleProperties) {
         super(props);
@@ -118,6 +118,9 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, I
                 if (input) {
                     input.value = arrangement.title;
                 }
+
+                // Reverting the title owns the key, so it must not also clear the score selection.
+                e.stopPropagation();
 
                 this.setState({ inputValue: arrangement.title }, () => {
                     this.inputRef.current?.blur();

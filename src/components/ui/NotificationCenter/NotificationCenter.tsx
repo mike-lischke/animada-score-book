@@ -5,6 +5,7 @@
 
 import { createRef, type ComponentChild, type RefObject } from "preact";
 
+import { escapeStack } from "../../../supplement/EscapeStack.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
@@ -48,7 +49,7 @@ interface INotificationToast {
     /** Used when removing the toast. First it is hidden and in a second step it is removed from the list. */
     state: "normal" | "adding" | "removing";
 
-    ref: RefObject<HTMLDivElement>;
+    ref: RefObject<HTMLDivElement | null>;
 
     /** The resolver to call when the toast is closed. */
     resolve: (value: string | undefined) => void;
@@ -83,7 +84,7 @@ interface INotificationCenterState {
     silent: boolean;
 }
 
-const singleton = createRef<NotificationCenter>();
+const singleton = createRef<NotificationCenter | null>();
 
 /**
  * A class for displaying unobtrusive messages to the user. It also allows the user to dismiss the message
@@ -101,7 +102,10 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     private static nextToastId = 0;
 
     private autoHideTimeout = 15000; // 15 seconds to hide any unhandled message.
-    private containerRef = createRef<HTMLDivElement>();
+    private containerRef = createRef<HTMLDivElement | null>();
+
+    /** Toast timers outlive the component (e.g. when the app leaves the running phase), so re-renders are guarded. */
+    private isMounted = false;
 
     public constructor(props: ICommonUIProperties) {
         super(props);
@@ -134,19 +138,35 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         });
     }
 
+    /** Toggles the history list, the action the footer's notification button triggers. */
+    public static toggleHistory(): void {
+        singleton.current?.toggleHistory();
+    }
+
     public override componentDidMount(): void {
-        document.addEventListener("keydown", this.handleKeyDown);
-        requisitions.register("statusBarItemClicked", this.statusBarButtonClick);
+        this.isMounted = true;
+
         requisitions.register("showInfo", this.handleShowInfo);
         requisitions.register("showWarning", this.handleShowWarning);
         requisitions.register("showError", this.handleShowError);
 
-        this.updateStatusBarItem();
+        this.updateEscapeRegistration();
+        this.publishState();
+    }
+
+    public override componentDidUpdate(): void {
+        this.updateEscapeRegistration();
     }
 
     public override componentWillUnmount(): void {
-        document.removeEventListener("keydown", this.handleKeyDown);
-        requisitions.unregister("statusBarItemClicked", this.statusBarButtonClick);
+        this.isMounted = false;
+
+        // Auto-hide timers would otherwise fire into an unmounted component.
+        for (const toast of this.state.mainList) {
+            clearTimeout(toast.timer);
+        }
+
+        escapeStack.remove(this.handleEscape);
         requisitions.unregister("showInfo", this.handleShowInfo);
         requisitions.unregister("showWarning", this.handleShowWarning);
         requisitions.unregister("showError", this.handleShowError);
@@ -156,7 +176,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         const { showHistory } = this.state;
 
         const className = this.generateFinalClassName([
-            "notificationCenter",
+            "notification-center",
             this.classFromProperty(showHistory, "history"),
         ]);
 
@@ -194,7 +214,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         }
 
         this.setState({ history, showHistory: !showHistory }, () => {
-            this.updateStatusBarItem();
+            this.publishState();
         });
     };
 
@@ -225,7 +245,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         });
 
         this.setState({ history: [], mainList: newMainList }, () => {
-            this.updateStatusBarItem();
+            this.publishState();
         });
     };
 
@@ -274,7 +294,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         <Icon src={NotificationCenter.typeToIconMap.get(details.type)} />
                         <Label caption={details.text} wrap />
                         <Button
-                            className="closeButton"
+                            className="close-button"
                             imageOnly
                             onClick={this.closeToast.bind(this, toast, undefined)}
                         >
@@ -300,7 +320,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         const newlyAdded = history.filter((toast) => {
             return toast.isNew;
         }).length;
-        let caption = "";
+        let caption: string;
         if (history.length === 0) {
             caption = "NO NOTIFICATIONS";
         } else if (newlyAdded === 0) {
@@ -318,24 +338,24 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                 <Label caption={caption} />
                 <Button
                     imageOnly
-                    data-tooltip="Clear All Notifications"
+                    title="Clear All Notifications"
                     onClick={this.clearHistory}
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.ClearAll} />
+                    <Icon className="actionIcon" src={UIIcon.ClearAll} />
                 </Button>
                 <Button
                     imageOnly
-                    data-tooltip="Toggle Do Not Disturb Mode"
+                    title="Toggle Do Not Disturb Mode"
                     onClick={this.toggleSilentMode}
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.BellSlash} />
+                    <Icon className="actionIcon" src={UIIcon.BellSlash} />
                 </Button>
                 <Button
                     imageOnly
                     onClick={this.toggleHistory}
-                    data-tooltip="Hide Notifications (Escape)"
+                    title="Hide Notifications (Escape)"
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.ChevronDown} />
+                    <Icon className="actionIcon" src={UIIcon.ChevronDown} />
                 </Button>
             </Container>
         );
@@ -375,7 +395,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         <Icon src={NotificationCenter.typeToIconMap.get(details.type)} />
                         <Label caption={details.text} wrap />
                         <Button
-                            className="closeButton"
+                            className="close-button"
                             imageOnly
                             onClick={this.closeToast.bind(this, toast, undefined)}
                         >
@@ -409,7 +429,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     private toggleSilentMode = (): void => {
         const { silent } = this.state;
         this.setState({ silent: !silent }, () => {
-            this.updateStatusBarItem();
+            this.publishState();
         });
     };
 
@@ -428,7 +448,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             isNew: true,
             details,
             state: "normal",
-            ref: createRef<HTMLDivElement>(),
+            ref: createRef<HTMLDivElement | null>(),
             resolve,
         };
         history.unshift(historyToast);
@@ -439,7 +459,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                 id: historyToast.id,
                 details,
                 state: "adding",
-                ref: createRef<HTMLDivElement>(),
+                ref: createRef<HTMLDivElement | null>(),
                 resolve,
             };
 
@@ -466,7 +486,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             // Add the new toast to the list and trigger a re-render to bring the toast to the screen,
             // but in a hidden state so we can get its height.
             this.setState({ mainList }, () => {
-                this.updateStatusBarItem();
+                this.publishState();
 
                 // Rendering of the new toast is done. Now we can animate it.
                 const toast = mainList[0];
@@ -483,15 +503,15 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         if (toast.ref.current) {
                             toast.ref.current.style.marginBottom = "";
                             toast.state = "normal";
-                            this.forceUpdate();
+                            this.updateIfMounted();
                         }
                     }, 0);
                 }
             });
         } else {
-            this.updateStatusBarItem();
+            this.publishState();
             if (showHistory) {
-                this.forceUpdate();
+                this.updateIfMounted();
             }
         }
     }
@@ -518,7 +538,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             this.setState({ mainList });
         }, { once: true });
 
-        this.forceUpdate();
+        this.updateIfMounted();
     }
 
     /**
@@ -556,7 +576,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             toast.resolve(value);
 
             this.setState({ mainList: ml, history }, () => {
-                this.updateStatusBarItem();
+                this.publishState();
             });
         };
 
@@ -573,22 +593,36 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     }
 
     /**
-     * A handler for global key down. We are only interested in the escape key to close the first open toast.
-     *
-     * @param e The keyboard event.
+     * Closes the history panel, or hides the first open toast.
      */
-    private handleKeyDown = (e: KeyboardEvent): void => {
-        if (e.key === "Escape") {
-            const { mainList, showHistory } = this.state;
-            if (showHistory) {
-                this.setState({ showHistory: false });
-            } else if (mainList.length > 0) {
-                this.hideToast(mainList[0]);
-            }
+    private handleEscape = (): void => {
+        const { mainList, showHistory } = this.state;
+        if (showHistory) {
+            this.setState({ showHistory: false });
+        } else if (mainList.length > 0) {
+            this.hideToast(mainList[0]);
         }
     };
 
-    private updateStatusBarItem(): void {
+    /** Registers for Escape only while there is something the key can close. */
+    private updateEscapeRegistration(): void {
+        const { mainList, showHistory } = this.state;
+
+        if (showHistory || mainList.length > 0) {
+            escapeStack.register(this.handleEscape);
+        } else {
+            escapeStack.remove(this.handleEscape);
+        }
+    }
+
+    /** Re-renders only while the component is mounted, since timers and animation handlers outlive it. */
+    private updateIfMounted(): void {
+        if (this.isMounted) {
+            this.forceUpdate();
+        }
+    }
+
+    private publishState(): void {
         const { history, silent, showHistory } = this.state;
         const newCount = history.filter((toast) => {
             return toast.isNew;
@@ -601,17 +635,6 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             showHistory,
         });
     }
-
-    private statusBarButtonClick = (
-        data: { command: string; event: MouseEvent | KeyboardEvent; }): Promise<boolean> => {
-        if (data.command === "notifications:toggleHistory") {
-            this.toggleHistory();
-
-            return Promise.resolve(true);
-        }
-
-        return Promise.resolve(false);
-    };
 
     private handleShowInfo = (text: string): Promise<boolean> => {
         void this.showNotification({

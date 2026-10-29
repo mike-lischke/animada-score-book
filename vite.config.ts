@@ -4,15 +4,71 @@
  */
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { env } from "node:process";
 
-import preact from "@preact/preset-vite";
+import { preact } from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, Plugin } from "vite";
+
+import { BundleBudget } from "./build/BundleBudget.js";
 
 const packageJson = JSON.parse(
     readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
 ) as { version: string; };
+
+/**
+ * The chunks the client bundle is split into.
+ *
+ * Every third-party library is named here, one explicit package per pattern: a generic `node_modules` rule would move
+ * Vite's preload helper into a lazy chunk, which makes the entry chunk import that chunk (and everything in it)
+ * eagerly. A library only one dynamic import reaches (`@mediabunny/mp3-encoder`) keeps the chunk that import gave it;
+ * only libraries shared between several imports are named, so their chunk gets a meaningful name instead of a path
+ * fragment.
+ *
+ * The domain layer (`src/core`) is a chunk of its own: it is the stable part of the app, so UI work then leaves the
+ * browser's copy of it valid, and both app chunks stay below the 500 kB limit Vite warns about.
+ */
+const chunkGroups = [
+    {
+        name: "vendor",
+        test: /[\\/]node_modules[\\/](preact|@mdi[\\/]js|classnames)[\\/]/,
+    },
+    {
+        name: "tabulator",
+        test: /[\\/]node_modules[\\/]tabulator-tables[\\/]/,
+    },
+    {
+        name: "mediabunny",
+        test: /[\\/]node_modules[\\/]mediabunny[\\/]/,
+    },
+    {
+        name: "core",
+        test: /[\\/]src[\\/]core[\\/]/,
+    },
+];
+
+/**
+ * Fails the build when the emitted bundle exceeds its size budget.
+ *
+ * Runs after the bundle is written, so the check sees the files the browser will load.
+ *
+ * @returns A Vite plugin object.
+ */
+const bundleBudgetCheck = (): Plugin => {
+    let distFolder = "";
+
+    return {
+        name: "bundle-budget-check",
+        apply: "build",
+        configResolved: (config) => {
+            distFolder = resolve(config.root, config.build.outDir);
+        },
+        closeBundle: () => {
+            BundleBudget.verify(distFolder);
+        },
+    };
+};
 
 /**
  * Helper plugin to serve index.html for non-asset requests, enabling SPA-like routing in development mode.
@@ -63,8 +119,7 @@ const spaDocumentFallback = (): Plugin => {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
-    // eslint-disable-next-line no-restricted-syntax
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+    const home = env.HOME ?? env.USERPROFILE ?? "";
 
     return {
         server: command === "serve" ? {
@@ -90,19 +145,17 @@ export default defineConfig(({ command }) => {
                 prefreshEnabled: false, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
             }),
             tailwindcss(),
+            bundleBudgetCheck(),
             spaDocumentFallback(),
         ],
         build: {
             target: "esnext",
             assetsInlineLimit: 0, // Don't inline any assets.
-            rollupOptions: {
+            manifest: true, // The bundle budget check reads the chunk graph from it.
+            rolldownOptions: {
                 output: {
-                    // The libraries the score view needs to start, in a chunk of their own: the app's own chunk
-                    // stays inside the size warning limit and a library update no longer invalidates it.
-                    // Libraries the app imports on demand (the MP3 encoder, the score library's table) are not
-                    // listed here, so they keep the chunk their dynamic import gave them.
-                    manualChunks: {
-                        vendor: ["preact", "@mdi/js", "classnames"],
+                    codeSplitting: {
+                        groups: chunkGroups,
                     },
                 },
             },

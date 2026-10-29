@@ -8,17 +8,11 @@
 
 ## Context
 
-The viewer rendered every measure as live DOM — a 79-measure score with four tracks carried 26.000 nodes — so
-view switches, re-renders and playback painting scaled with the song's length. A window of measures needs offsets
-for measures it does not render, which the DOM cannot supply. Widths were a CSS result, and the views disagreed
-about them. The planned resize feature needs them as data anyway.
+The viewer rendered every measure as live DOM — a 79-measure score with four tracks carried 26.000 nodes — so view switches, re-renders and playback painting scaled with the song's length. A window of measures needs offsets for measures it does not render, which the DOM cannot supply. Widths were a CSS result, and the views disagreed about them. The planned resize feature needs them as data anyway.
 
 ## Decision
 
-We will make the column width of a measure data. `MeasureLayout` resolves a measure's width — its own or the
-view's default — and derives the offsets, the total width and the measure at a position from it. The staff view
-renders only the measures its window covers, at those offsets, with spacers keeping the scrollable width stable;
-the grid view keeps rendering all measures.
+We will make the column width of a measure data. `MeasureLayout` resolves a measure's width — its own or the view's default — and derives the offsets, the total width and the measure at a position from it. The staff view renders only the measures its window covers, at those offsets, with spacers keeping the scrollable width stable; the grid view keeps rendering all measures.
 
 ## Invariants
 

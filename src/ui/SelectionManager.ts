@@ -4,22 +4,37 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import { EditEntryMode } from "../core/types/general.js";
-import {
-    ScoreBookChangeReason, type ISbDmTrackPiece, type ScoreBookDataModel,
-} from "../core/ScoreBookDataModel.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
+import {
+    ScoreBookChangeReason, type ISbDmArrangement, type ISbDmTrackPiece, type ScoreBookDataModel,
+} from "../core/ScoreBookDataModel.js";
 import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent } from "../core/types/general.js";
-import { PlayerPlayState } from "../player/ArrangementPlayer.js";
+import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
+import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import {
     SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
     type ISelectionHitEntry, type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange,
-    type ISerialisedSelectionEntry,
+    type ISerialisedSelectionEntry, type ISerialisedSelectionState,
 } from "./SelectionSerializer.js";
-import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
+
+interface ISelectionCoordinate {
+    bar: number;
+    position: IFraction;
+}
+
+interface ISelectionBounds {
+    granularity: SelectionGranularity;
+    left: ISelectionCoordinate;
+    right: ISelectionCoordinate;
+    topTrackIndex: number;
+    bottomTrackIndex: number;
+}
+
+const measureStart: IFraction = { numerator: 0, denominator: 1 };
+const measureEnd: IFraction = { numerator: 1, denominator: 1 };
 
 /**
  * Manages selections across tracks and publishes selection changes.
@@ -51,14 +66,14 @@ export class SelectionManager {
 
     private readonly hitTesters = new Set<ISelectionHitTester>();
 
-    /** Hit-test result from the previous rect change, used for differential updates. */
-    private previousEntries: ISelectionEntry[] = [];
-
-    /** Saved selection before playback started, for restoration on stop. */
-    private originalSelection?: Map<string, ISelectionEntry>;
+    private selectionGestureActive = false;
+    private selectionGestureBase: ISelectionEntry[] = [];
 
     /** Debounce timer id for persisting the selection to localStorage. */
     private saveDebounceId?: ReturnType<typeof setTimeout>;
+
+    /** Pending score-load callbacks that restore selection after the viewer renders. */
+    private readonly scoreBookLoadedTimers = new Set<ReturnType<typeof setTimeout>>();
 
     /**
      * Tracks whether the first scoreBookLoaded event (app startup) has already been processed.
@@ -69,23 +84,34 @@ export class SelectionManager {
 
     /** Edit mode as last published on `editModeChanged`, used to initialise new selection views. */
     private editMode = false;
+    private zenMode = false;
+    private selectionBeforeZen?: ISelectionEntry[];
+    private anchorBeforeZen?: ISelectionPoint;
 
     /**
      * Entry mode as last published on `editEntryModeChanged`, used to initialise new selection views. The
      * persisted value is the start value, because the app only announces a mode the user switched to.
      */
     private entryMode = AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert;
+    private viewMode = AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
+        ?? TrackViewMode.Grid;
+    private cursorEntry?: ISelectionEntry;
 
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
     public constructor(private readonly dataModel?: ScoreBookDataModel) {
         requisitions.register("selectionRectChanged", this.handleSelectionRectChanged);
-        requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.register("trackViewModeToggled", this.handleViewModeChanged);
+    }
+
+    public get currentCursor(): ISelectionEntry | undefined {
+        return this.cursorEntry;
     }
 
     public get selectionMode(): SelectionMode {
@@ -101,8 +127,24 @@ export class SelectionManager {
     }
 
     public dispose(): void {
+        requisitions.unregister("selectionRectChanged", this.handleSelectionRectChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.unregister("trackViewModeToggled", this.handleViewModeChanged);
+
+        if (this.saveDebounceId !== undefined) {
+            clearTimeout(this.saveDebounceId);
+            this.saveDebounceId = undefined;
+        }
+
+        for (const timerId of this.scoreBookLoadedTimers) {
+            clearTimeout(timerId);
+        }
+
+        this.scoreBookLoadedTimers.clear();
 
         if (this.view) {
             this.view.dispose();
@@ -122,7 +164,8 @@ export class SelectionManager {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode, this.entryMode);
+        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode, this.entryMode,
+            this.zenMode);
     }
 
     /**
@@ -188,21 +231,67 @@ export class SelectionManager {
     }
 
     /**
-     * Called by the SelectionView when a new drag selection begins, to allow the manager to reset state if needed.
-     * The current selection is only cleared if the current selection mode is New.
+     * Begins a pointer selection, clears the old selection if needed, and defers the first hit's delta.
      *
-     * @param selectionMode The selection mode to use for the new selection. If omitted, the current mode is used.
+     * @param selectionMode The selection mode to use, or the current mode when omitted.
+     * @param initialRect The pointer-down hit area, when selection is enabled.
      */
-    public beginSelection(selectionMode?: SelectionMode): void {
-        this.previousEntries = [];
+    public beginSelection(selectionMode?: SelectionMode, initialRect?: DOMRect): void {
+        if (this.selectionGestureActive) {
+            this.finishSelection();
+        }
 
-        if (selectionMode) {
+        if (selectionMode !== undefined) {
             this.currentSelectionMode = selectionMode;
         }
 
-        if (this.currentSelectionMode === SelectionMode.New) {
+        if (this.currentSelectionMode === SelectionMode.Add && this.currentSelection.size > 0) {
+            this.selectionGestureBase = [...this.currentSelection.values()];
+            this.selectionAnchor ??= this.anchorOf(this.selectionGestureBase[0]);
+        } else {
+            this.currentSelectionMode = SelectionMode.New;
             this.internalClearSelection();
+            this.selectionAnchor = undefined;
+            this.selectionGestureBase = [];
         }
+
+        this.selectionGestureActive = true;
+
+        if (initialRect === undefined) {
+            return;
+        }
+
+        const rawEntries = this.collectEntries(initialRect);
+        if (rawEntries.length === 0) {
+            void requisitions.execute("selectionEditPopupCloseRequested", undefined);
+        }
+
+        let entries: ISelectionEntry[];
+        if (this.currentSelectionMode === SelectionMode.Add && this.selectionAnchor !== undefined) {
+            const possibleEntries = this.gestureEntriesForGranularity(rawEntries, this.selectionAnchor.granularity);
+            entries = SelectionManager.closestToClick(initialRect, possibleEntries);
+        } else {
+            entries = SelectionManager.closestToClick(initialRect, this.resolveRawEntries(rawEntries));
+            if (entries.length > 0) {
+                this.selectionAnchor = this.anchorOf(entries[0]);
+                this.selectionGestureBase = [entries[0]];
+            }
+        }
+
+        if (entries.length === 0) {
+            return;
+        }
+
+        this.applySelection(entries);
+    }
+
+    public finishSelection(): void {
+        if (!this.selectionGestureActive) {
+            return;
+        }
+
+        this.selectionGestureActive = false;
+        this.selectionGestureBase = [];
     }
 
     /**
@@ -210,6 +299,10 @@ export class SelectionManager {
      * can apply selection decoration. Called after view mode switches (grid ↔ staff).
      */
     public republishSelection(): void {
+        if (this.cursorEntry !== undefined) {
+            void requisitions.execute("selectionCursorChanged", this.cursorEntry);
+        }
+
         if (this.currentSelection.size > 0) {
             const allEntries = [...this.currentSelection.values()];
             void requisitions.execute("selectionChanged", { added: allEntries, removed: [] });
@@ -217,19 +310,24 @@ export class SelectionManager {
     }
 
     /**
-     * Called by the SelectionView when a click (pointer down + up without significant movement) ends the interaction.
-     * Runs a hit-test at the click position and applies the result using the current {@link selectionMode}.
+     * Finishes a pointer selection or resolves a cursor-only click.
      *
      * @param clickRect A tiny rect at the click position.
      * @param cursorOnly True in insert mode, where a click only places the cursor instead of selecting.
      */
     public endSelection(clickRect: DOMRect, cursorOnly = false): void {
-        this.previousEntries = [];
+        if (this.selectionGestureActive) {
+            this.finishSelection();
+
+            return;
+        }
 
         const rawEntries = this.collectEntries(clickRect);
+        if (rawEntries.length === 0) {
+            void requisitions.execute("selectionEditPopupCloseRequested", undefined);
+        }
 
-        // Insert mode draws no selection: a click places the cursor on the addressed note, and a click
-        // that addresses a coarser element leaves the cursor where it is.
+        // Insert mode places the cursor on a note or simile; other coarser elements leave it where it is.
         if (cursorOnly) {
             const cursor = SelectionManager.cursorEntryOf(rawEntries);
             if (cursor === undefined) {
@@ -237,35 +335,32 @@ export class SelectionManager {
             }
 
             this.replaceSelection([SelectionManager.withoutHitRect(cursor)]);
-            this.publishPlayRange();
 
             return;
         }
 
-        const entries = SelectionManager.closestToClick(clickRect, this.resolveRawEntries(rawEntries));
+        let entries: ISelectionEntry[];
+        if (this.currentSelectionMode === SelectionMode.Add && this.selectionAnchor !== undefined) {
+            const possibleEntries = this.gestureEntriesForGranularity(rawEntries, this.selectionAnchor.granularity);
+            entries = SelectionManager.closestToClick(clickRect, possibleEntries);
+        } else {
+            entries = SelectionManager.closestToClick(clickRect, this.resolveRawEntries(rawEntries));
+        }
 
         if (entries.length === 0) {
             if (this.currentSelectionMode === SelectionMode.New) {
                 this.internalClearSelection();
+                this.selectionAnchor = undefined;
             }
 
             return;
         }
 
-        // Reject mixed-granularity additions: Add/Invert only work within the same level.
-        if (this.currentSelection.size > 0 && this.currentSelectionMode !== SelectionMode.New) {
-            if (this.wouldMixGranularities(entries)) {
-                return;
-            }
-        }
-
         if (this.currentSelectionMode === SelectionMode.New) {
-            this.replaceSelection(entries);
-        } else {
-            this.applySelection(entries);
+            this.selectionAnchor = this.anchorOf(entries[0]);
         }
 
-        this.publishPlayRange();
+        this.applySelection(entries);
     }
 
     /**
@@ -387,9 +482,28 @@ export class SelectionManager {
      * @param toggleEntries The entries to toggle.
      */
     public toggleSelection(toggleEntries: ISelectionEntry[]): void {
+        if (toggleEntries.length === 0) {
+            return;
+        }
+
+        const allEntriesSelected = toggleEntries.every((entry) => {
+            return this.currentSelection.has(this.entryKey(entry));
+        });
+        if (allEntriesSelected) {
+            this.clearSelection();
+
+            return;
+        }
+
         const previousMode = this.currentSelectionMode;
-        this.currentSelectionMode = SelectionMode.Invert;
+        this.currentSelectionMode = SelectionMode.Add;
+        this.selectionGestureBase = [...this.currentSelection.values()];
+        const baseAnchor = this.selectionGestureBase.at(0);
+        this.selectionAnchor ??= baseAnchor === undefined
+            ? this.anchorOf(toggleEntries[0])
+            : this.anchorOf(baseAnchor);
         this.applySelection(toggleEntries);
+        this.selectionGestureBase = [];
         this.currentSelectionMode = previousMode;
     }
 
@@ -397,7 +511,14 @@ export class SelectionManager {
      * Clears all selection state and publishes a change.
      */
     public clearSelection(): void {
-        this.internalClearSelection();
+        const hadCursor = this.cursorEntry !== undefined;
+        this.cursorEntry = undefined;
+        const selectionCleared = this.internalClearSelection();
+        if (hadCursor && !selectionCleared) {
+            void requisitions.execute("selectionChanged", { added: [], removed: [] });
+        }
+
+        this.selectionAnchor = undefined;
     }
 
     /**
@@ -410,14 +531,7 @@ export class SelectionManager {
             return;
         }
 
-        const removed = [...this.currentSelection.values()];
-        const key = this.entryKey(entry);
-        this.currentSelection.clear();
-        this.currentSelection.set(key, entry);
-        this.previousEntries = [];
-
-        void requisitions.execute("selectionChanged", { added: [entry], removed });
-        this.schedulePersist();
+        this.replaceSelection([entry]);
     }
 
     /**
@@ -426,15 +540,36 @@ export class SelectionManager {
      * @param entries The entries that become the new selection.
      */
     public replaceSelection(entries: ISelectionEntry[]): void {
+        if (this.editMode && this.entryMode === EditEntryMode.Insert && this.viewMode === TrackViewMode.Staff
+            && entries.length > 0) {
+            this.moveSelectionToCursor(entries);
+
+            return;
+        }
+
+        this.cursorEntry = undefined;
         const removed = [...this.currentSelection.values()];
+        if (entries.length === 0) {
+            this.currentSelection.clear();
+            this.selectionAnchor = undefined;
+            void requisitions.execute("selectionChanged", { added: [], removed });
+            this.schedulePersist();
+
+            return;
+        }
+
+        this.selectionAnchor = this.anchorOf(entries[0]);
+        const bounds = this.selectionBoundsOf(entries, this.selectionAnchor.granularity);
+        const normalized = bounds === undefined
+            ? this.entriesWithoutArrangement(entries, this.selectionAnchor.granularity)
+            : this.entriesInBounds(bounds);
+
         this.currentSelection.clear();
-        for (const entry of entries) {
+        for (const entry of normalized) {
             this.currentSelection.set(this.entryKey(entry), entry);
         }
 
-        this.previousEntries = [];
-
-        void requisitions.execute("selectionChanged", { added: entries, removed });
+        void requisitions.execute("selectionChanged", { added: normalized, removed });
         this.schedulePersist();
     }
 
@@ -489,6 +624,43 @@ export class SelectionManager {
         return Math.hypot(dx, dy);
     }
 
+    private static mergeBounds(first: ISelectionBounds, second: ISelectionBounds): ISelectionBounds {
+        const left = SelectionManager.compareCoordinates(first.left, second.left) <= 0
+            ? first.left
+            : second.left;
+        const right = SelectionManager.compareCoordinates(first.right, second.right) >= 0
+            ? first.right
+            : second.right;
+
+        return {
+            granularity: first.granularity,
+            left,
+            right,
+            topTrackIndex: Math.min(first.topTrackIndex, second.topTrackIndex),
+            bottomTrackIndex: Math.max(first.bottomTrackIndex, second.bottomTrackIndex),
+        };
+    }
+
+    private static entriesEqual(first: ISelectionEntry, second: ISelectionEntry): boolean {
+        const firstCoordinates = SelectionSerializer.coordinatesOf(first);
+        const secondCoordinates = SelectionSerializer.coordinatesOf(second);
+        const startsEqual = firstCoordinates.start === undefined || secondCoordinates.start === undefined
+            ? firstCoordinates.start === secondCoordinates.start
+            : compareFractions(firstCoordinates.start, secondCoordinates.start) === 0;
+        const endsEqual = firstCoordinates.end === undefined || secondCoordinates.end === undefined
+            ? firstCoordinates.end === secondCoordinates.end
+            : compareFractions(firstCoordinates.end, secondCoordinates.end) === 0;
+
+        return first.granularity === second.granularity && firstCoordinates.bar === secondCoordinates.bar
+            && firstCoordinates.trackId === secondCoordinates.trackId && startsEqual && endsEqual;
+    }
+
+    private static compareCoordinates(first: ISelectionCoordinate, second: ISelectionCoordinate): number {
+        return first.bar === second.bar
+            ? compareFractions(first.position, second.position)
+            : first.bar - second.bar;
+    }
+
     /**
      * @param entry A hit-test entry.
      *
@@ -499,30 +671,23 @@ export class SelectionManager {
     }
 
     /**
-     * Returns the end of a list of measure events, which is the end of its last event.
-     *
-     * @param events The events to measure.
-     *
-     * @returns The end of the events' span.
-     */
-    private static endOfEvents(events: IMeasureEvent[]): IFraction {
-        const last = events[events.length - 1];
-
-        return addFractions(last.start, last.duration);
-    }
-
-    /**
-     * Picks the note the cursor can take from hit-test entries. The cursor addresses one note, so the
-     * coarser granularities a hit test offers (track, measure, track piece) are dropped.
+     * Picks a note or simile from hit-test entries, preferring notes over simile track pieces.
      *
      * @param entries The hit-test entries to pick from.
      *
-     * @returns The addressed note, or undefined when the entries hold none.
+     * @returns The addressed note or simile, or undefined when the entries hold neither.
      */
     private static cursorEntryOf(entries: ISelectionEntry[]): ISelectionEntry | undefined {
         return entries.find((entry) => {
             return entry.granularity === SelectionGranularity.Note;
+        }) ?? entries.find((entry) => {
+            return entry.target.granularity === SelectionGranularity.TrackPiece && entry.target.measure.simile;
         });
+    }
+
+    private static isCoarserGranularity(candidate: SelectionGranularity,
+        selected: SelectionGranularity): boolean {
+        return SelectionManager.granularityRank[candidate] < SelectionManager.granularityRank[selected];
     }
 
     /**
@@ -530,103 +695,405 @@ export class SelectionManager {
      * (added/removed), and publishes the change.
      *
      * @param incoming The entries to apply (typically from a hit-test result).
+     *
+     * @returns Whether the current selection changed.
      */
-    private applySelection(incoming: ISelectionEntry[]): void {
-        const added: ISelectionEntry[] = [];
-        const removed: ISelectionEntry[] = [];
-
-        const toggleEntry = (entry: ISelectionEntry): void => {
-            const key = this.entryKey(entry);
-            if (this.currentSelection.has(key)) {
-                this.currentSelection.delete(key);
-                removed.push(entry);
-            } else {
-                this.addEntry(entry, added, removed);
-            }
-        };
-
-        switch (this.currentSelectionMode) {
-            case SelectionMode.New: {
-                for (const entry of incoming) {
-                    toggleEntry(entry);
-                }
-
-                break;
-            }
-
-            case SelectionMode.Add: {
-                for (const entry of incoming) {
-                    if (!this.currentSelection.has(this.entryKey(entry))) {
-                        this.addEntry(entry, added, removed);
-                    }
-                }
-
-                break;
-            }
-
-            default: {
-                for (const entry of incoming) {
-                    toggleEntry(entry);
-                }
-            }
+    private applySelection(incoming: ISelectionEntry[]): boolean {
+        const baseEntries = this.selectionGestureBase.length > 0
+            ? this.selectionGestureBase
+            : this.currentSelectionMode === SelectionMode.Add
+                ? [...this.currentSelection.values()]
+                : [];
+        if (this.currentSelectionMode === SelectionMode.New && !this.selectionGestureActive && incoming.length > 0) {
+            this.selectionAnchor = this.anchorOf(incoming[0]);
         }
 
-        if (added.length > 0 || removed.length > 0) {
-            void requisitions.execute("selectionChanged", { added, removed });
+        let granularity: SelectionGranularity | undefined;
+        if (this.currentSelectionMode === SelectionMode.Add) {
+            granularity = this.selectionAnchor?.granularity
+                ?? baseEntries.at(0)?.granularity
+                ?? incoming.at(0)?.granularity;
+        } else if (this.selectionGestureActive) {
+            granularity = this.selectionAnchor?.granularity ?? incoming.at(0)?.granularity;
+        } else {
+            granularity = incoming.at(0)?.granularity ?? this.selectionAnchor?.granularity;
         }
 
-        this.schedulePersist();
+        if (granularity === undefined) {
+            return this.setCurrentSelection([]);
+        }
+
+        if (this.currentSelectionMode === SelectionMode.New && this.selectionAnchor === undefined
+            && incoming.length > 0) {
+            this.selectionAnchor = this.anchorOf(incoming[0]);
+        }
+
+        if (this.selectionGestureActive && this.viewMode === TrackViewMode.Staff
+            && granularity === SelectionGranularity.Note) {
+            const hits = new Map<string, ISelectionEntry>();
+            for (const entry of [...baseEntries, ...incoming]) {
+                if (entry.granularity === granularity) {
+                    hits.set(this.entryKey(entry), entry);
+                }
+            }
+
+            return this.setCurrentSelection([...hits.values()]);
+        }
+
+        const bounds = this.selectionBoundsOf([...baseEntries, ...incoming], granularity);
+        const entries = bounds === undefined
+            ? this.entriesWithoutArrangement([...baseEntries, ...incoming], granularity)
+            : this.entriesInBounds(bounds);
+
+        return this.setCurrentSelection(entries);
     }
 
-    /**
-     * Adds an entry that is not selected yet. A note group replaces the selected group it covers or
-     * is covered by, so a selection never holds a group together with a nesting one.
-     *
-     * @param entry The entry to add.
-     * @param added Collects the entries that enter the selection.
-     * @param removed Collects the entries that leave the selection.
-     */
-    private addEntry(entry: ISelectionEntry, added: ISelectionEntry[], removed: ISelectionEntry[]): void {
-        this.dropNestingGroups(entry, removed);
-        this.currentSelection.set(this.entryKey(entry), entry);
-        added.push(entry);
-    }
-
-    /**
-     * Removes the selected note groups that nest with an entry about to be applied. Groups of one
-     * track overlap only when one covers the other, and the group a user picks is the group they
-     * mean, so picking a group replaces the group it covers or is covered by.
-     *
-     * @param incoming The entry that is about to be applied.
-     * @param removed Collects the entries that leave the selection.
-     */
-    private dropNestingGroups(incoming: ISelectionEntry, removed: ISelectionEntry[]): void {
-        const { target } = incoming;
-        if (target.granularity !== SelectionGranularity.NoteGroup) {
-            return;
+    private gestureEntriesForGranularity(
+        entries: ISelectionHitEntry[],
+        granularity: SelectionGranularity,
+    ): ISelectionHitEntry[] {
+        if (granularity === SelectionGranularity.Track) {
+            return entries.filter((entry) => {
+                return entry.granularity === SelectionGranularity.Track
+                    || entry.granularity === SelectionGranularity.TrackPiece;
+            });
         }
 
-        const incomingStart = target.events[0].start;
-        const incomingEnd = SelectionManager.endOfEvents(target.events);
+        if (granularity === SelectionGranularity.NoteGroup) {
+            return entries.filter((entry) => {
+                return entry.granularity === SelectionGranularity.Note
+                    || entry.granularity === SelectionGranularity.NoteGroup;
+            });
+        }
 
-        for (const [key, entry] of [...this.currentSelection]) {
-            const other = entry.target;
-            if (other.granularity !== SelectionGranularity.NoteGroup || other.measure !== target.measure) {
+        return entries.filter((entry) => {
+            return entry.granularity === granularity;
+        });
+    }
+
+    private selectionBoundsOf(
+        entries: ISelectionEntry[],
+        granularity: SelectionGranularity,
+    ): ISelectionBounds | undefined {
+        const arrangement = this.dataModel?.arrangement;
+        if (arrangement === undefined || arrangement.tracks.length === 0) {
+            return undefined;
+        }
+
+        const barCount = arrangement.tracks.reduce((maximum, track) => {
+            return Math.max(maximum, track.measures.length);
+        }, 0);
+        const trackIndexes = new Map<number, number>();
+        arrangement.tracks.forEach((track, trackIndex) => {
+            trackIndexes.set(track.id, trackIndex);
+        });
+
+        let bounds: ISelectionBounds | undefined;
+        let topTrackIndex = arrangement.tracks.length;
+        let bottomTrackIndex = -1;
+
+        for (const entry of entries) {
+            // A measure entry stands in for the whole bar, so it covers every track of it — the single measure it
+            // holds just happens to be the first track's. It therefore states the bounds only for a bar selection,
+            // and an entry coarser than the one being materialized states none at all: both address more than the
+            // range holds, which would drag its start towards the whole track, bar or score.
+            const statesBounds = entry.granularity === SelectionGranularity.Measure
+                ? granularity === SelectionGranularity.Measure
+                : !SelectionManager.isCoarserGranularity(entry.granularity, granularity);
+            if (!statesBounds) {
                 continue;
             }
 
-            const otherStart = other.events[0].start;
-            const otherEnd = SelectionManager.endOfEvents(other.events);
-            const incomingCovers = compareFractions(incomingStart, otherStart) <= 0
-                && compareFractions(otherEnd, incomingEnd) <= 0;
-            const otherCovers = compareFractions(otherStart, incomingStart) <= 0
-                && compareFractions(incomingEnd, otherEnd) <= 0;
+            const trackId = SelectionSerializer.trackOf(entry).id;
+            const entryTrackIndex = trackIndexes.get(trackId);
+            if (entryTrackIndex !== undefined) {
+                topTrackIndex = Math.min(topTrackIndex, entryTrackIndex);
+                bottomTrackIndex = Math.max(bottomTrackIndex, entryTrackIndex);
+            }
 
-            if (incomingCovers || otherCovers) {
-                this.currentSelection.delete(key);
+            const next = this.boundsOfEntry(entry, granularity, trackIndexes, barCount,
+                arrangement.tracks.length);
+            if (next === undefined) {
+                continue;
+            }
+
+            if (bounds === undefined) {
+                bounds = next;
+                continue;
+            }
+
+            bounds = SelectionManager.mergeBounds(bounds, next);
+        }
+
+        if (bounds !== undefined && granularity !== SelectionGranularity.Measure
+            && bottomTrackIndex >= 0) {
+            bounds.topTrackIndex = topTrackIndex;
+            bounds.bottomTrackIndex = bottomTrackIndex;
+        }
+
+        return bounds;
+    }
+
+    private boundsOfEntry(
+        entry: ISelectionEntry,
+        granularity: SelectionGranularity,
+        trackIndexes: Map<number, number>,
+        barCount: number,
+        trackCount: number,
+    ): ISelectionBounds | undefined {
+        const coordinates = SelectionSerializer.coordinatesOf(entry);
+        const trackIndex = trackIndexes.get(coordinates.trackId);
+        if (trackIndex === undefined) {
+            return undefined;
+        }
+
+        if (granularity === SelectionGranularity.Track) {
+            return {
+                granularity,
+                left: { bar: 1, position: measureStart },
+                right: { bar: barCount, position: measureEnd },
+                topTrackIndex: trackIndex,
+                bottomTrackIndex: trackIndex,
+            };
+        }
+
+        if (granularity === SelectionGranularity.Measure) {
+            if (coordinates.bar < 1) {
+                return undefined;
+            }
+
+            return {
+                granularity,
+                left: { bar: coordinates.bar, position: measureStart },
+                right: { bar: coordinates.bar, position: measureEnd },
+                topTrackIndex: 0,
+                bottomTrackIndex: trackCount - 1,
+            };
+        }
+
+        if (granularity === SelectionGranularity.TrackPiece) {
+            if (coordinates.bar < 1) {
+                return undefined;
+            }
+
+            return {
+                granularity,
+                left: { bar: coordinates.bar, position: measureStart },
+                right: { bar: coordinates.bar, position: measureEnd },
+                topTrackIndex: trackIndex,
+                bottomTrackIndex: trackIndex,
+            };
+        }
+
+        if (coordinates.bar < 1 || coordinates.start === undefined || coordinates.end === undefined) {
+            return undefined;
+        }
+
+        return {
+            granularity,
+            left: { bar: coordinates.bar, position: coordinates.start },
+            right: { bar: coordinates.bar, position: coordinates.end },
+            topTrackIndex: trackIndex,
+            bottomTrackIndex: trackIndex,
+        };
+    }
+
+    private entriesInBounds(bounds: ISelectionBounds): ISelectionEntry[] {
+        const arrangement = this.dataModel?.arrangement;
+        if (arrangement === undefined) {
+            return [];
+        }
+
+        const tracks = arrangement.tracks.slice(bounds.topTrackIndex, bounds.bottomTrackIndex + 1);
+        const entries: ISelectionEntry[] = [];
+
+        if (bounds.granularity === SelectionGranularity.Track) {
+            for (const track of tracks) {
+                entries.push({
+                    granularity: SelectionGranularity.Track,
+                    target: { granularity: SelectionGranularity.Track, track },
+                });
+            }
+
+            return entries;
+        }
+
+        for (let bar = bounds.left.bar; bar <= bounds.right.bar; bar++) {
+            if (bounds.granularity === SelectionGranularity.Measure) {
+                const measure = SelectionSerializer.measureOfBar(arrangement, bar);
+                if (measure !== undefined) {
+                    entries.push({
+                        granularity: SelectionGranularity.Measure,
+                        target: { granularity: SelectionGranularity.Measure, measure },
+                    });
+                }
+
+                continue;
+            }
+
+            for (const track of tracks) {
+                const measure = track.measures.at(bar - 1);
+                if (measure === undefined) {
+                    continue;
+                }
+
+                if (bounds.granularity === SelectionGranularity.TrackPiece) {
+                    entries.push({
+                        granularity: SelectionGranularity.TrackPiece,
+                        target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                    });
+                    continue;
+                }
+
+                const start = bar === bounds.left.bar ? bounds.left.position : measureStart;
+                const end = bar === bounds.right.bar ? bounds.right.position : measureEnd;
+                const coveredEvents: IMeasureEvent[] = [];
+
+                for (const event of measure.events) {
+                    const eventEnd = addFractions(event.start, event.duration);
+                    const selectedStart = compareFractions(event.start, start) > 0 ? event.start : start;
+                    const selectedEnd = compareFractions(eventEnd, end) < 0 ? eventEnd : end;
+                    if (compareFractions(selectedStart, selectedEnd) >= 0) {
+                        continue;
+                    }
+
+                    coveredEvents.push(event);
+                    if (bounds.granularity === SelectionGranularity.Note) {
+                        entries.push({
+                            granularity: SelectionGranularity.Note,
+                            target: {
+                                granularity: SelectionGranularity.Note, measure, event,
+                                start: selectedStart, end: selectedEnd
+                            },
+                        });
+                    }
+                }
+
+                if (bounds.granularity === SelectionGranularity.NoteGroup && coveredEvents.length > 0) {
+                    entries.push({
+                        granularity: SelectionGranularity.NoteGroup,
+                        target: { granularity: SelectionGranularity.NoteGroup, measure, events: coveredEvents },
+                    });
+                }
+            }
+        }
+
+        return entries;
+    }
+
+    private entriesWithoutArrangement(
+        entries: ISelectionEntry[],
+        granularity: SelectionGranularity,
+    ): ISelectionEntry[] {
+        if (granularity !== SelectionGranularity.NoteGroup) {
+            return entries;
+        }
+
+        const entriesByMeasure = new Map<ISbDmTrackPiece, ISelectionEntry[]>();
+        for (const entry of entries) {
+            if (entry.target.granularity !== SelectionGranularity.NoteGroup
+                && entry.target.granularity !== SelectionGranularity.Note) {
+                continue;
+            }
+
+            const measure = entry.target.measure;
+            let measureEntries = entriesByMeasure.get(measure);
+            if (measureEntries === undefined) {
+                measureEntries = [];
+                entriesByMeasure.set(measure, measureEntries);
+            }
+
+            measureEntries.push(entry);
+        }
+
+        const normalized: ISelectionEntry[] = [];
+        for (const [measure, measureEntries] of entriesByMeasure) {
+            let start: IFraction | undefined;
+            let end: IFraction | undefined;
+            for (const entry of measureEntries) {
+                const coordinates = SelectionSerializer.coordinatesOf(entry);
+                if (coordinates.start !== undefined
+                    && (start === undefined || compareFractions(coordinates.start, start) < 0)) {
+                    start = coordinates.start;
+                }
+
+                if (coordinates.end !== undefined
+                    && (end === undefined || compareFractions(coordinates.end, end) > 0)) {
+                    end = coordinates.end;
+                }
+            }
+
+            if (start === undefined || end === undefined) {
+                continue;
+            }
+
+            const events = measure.events.filter((event) => {
+                const eventEnd = addFractions(event.start, event.duration);
+
+                return compareFractions(event.start, end) < 0 && compareFractions(eventEnd, start) > 0;
+            });
+            if (events.length > 0) {
+                normalized.push({
+                    granularity: SelectionGranularity.NoteGroup,
+                    target: { granularity: SelectionGranularity.NoteGroup, measure, events },
+                });
+            }
+        }
+
+        return normalized.length > 0 ? normalized : entries;
+    }
+
+    private anchorOf(entry: ISelectionEntry): ISelectionPoint {
+        const coordinates = SelectionSerializer.coordinatesOf(entry);
+
+        return {
+            granularity: entry.granularity,
+            bar: coordinates.bar,
+            trackId: coordinates.trackId,
+            ...(coordinates.start === undefined ? {} : { position: coordinates.start }),
+        };
+    }
+
+    private setCurrentSelection(entries: ISelectionEntry[]): boolean {
+        if (entries.length > 0) {
+            this.cursorEntry = undefined;
+        }
+
+        const nextSelection = new Map<string, ISelectionEntry>();
+        for (const entry of entries) {
+            nextSelection.set(this.entryKey(entry), entry);
+        }
+
+        const added: ISelectionEntry[] = [];
+        const removed: ISelectionEntry[] = [];
+        for (const [key, entry] of nextSelection) {
+            const previous = this.currentSelection.get(key);
+            if (previous === undefined) {
+                added.push(entry);
+            } else if (!SelectionManager.entriesEqual(previous, entry)) {
+                added.push(entry);
+                removed.push(previous);
+            }
+        }
+
+        for (const [key, entry] of this.currentSelection) {
+            if (!nextSelection.has(key)) {
                 removed.push(entry);
             }
         }
+
+        this.currentSelection.clear();
+        for (const [key, entry] of nextSelection) {
+            this.currentSelection.set(key, entry);
+        }
+
+        const changed = added.length > 0 || removed.length > 0;
+        if (changed) {
+            void requisitions.execute("selectionChanged", { added, removed });
+            this.schedulePersist();
+        }
+
+        return changed;
     }
 
     /**
@@ -640,9 +1107,7 @@ export class SelectionManager {
         if (hadSelection) {
             const removed = [...this.currentSelection.values()];
             this.currentSelection.clear();
-            this.previousEntries = [];
             void requisitions.execute("selectionChanged", { added: [], removed });
-            void requisitions.execute("playRangeChanged", undefined);
 
             this.schedulePersist();
 
@@ -777,212 +1242,23 @@ export class SelectionManager {
         return this.filterToDominantGranularity(rawEntries);
     }
 
-    /**
-     * Checks whether the given entries would mix granularities with the current selection.
-     *
-     * @param entries The candidate entries.
-     *
-     * @returns True if applying the entries would result in mixed granularities.
-     */
-    private wouldMixGranularities(entries: ISelectionEntry[]): boolean {
-        if (entries.length === 0) {
-            return false;
-        }
-
-        const newGranularity = entries[0].granularity;
-
-        return [...this.currentSelection.values()].some((entry) => {
-            return entry.granularity !== newGranularity;
-        });
-    }
-
     private handleSelectionRectChanged = (data: ISelectionRectChange): Promise<boolean> => {
-        // The selection stores entries without the rect of the element they were hit at.
-        const currentEntries = this.resolveEntries(data.rect).map((entry) => {
+        const rawEntries = this.collectEntries(data.rect);
+        const granularity = this.selectionAnchor?.granularity;
+        const entries = granularity === undefined
+            ? this.resolveRawEntries(rawEntries) : this.gestureEntriesForGranularity(rawEntries, granularity);
+        const currentEntries = entries.map((entry) => {
             return SelectionManager.withoutHitRect(entry);
         });
 
-        // Reject mixed-granularity drag in Add/Invert mode.
-        if (currentEntries.length > 0 && this.currentSelection.size > 0
-            && this.currentSelectionMode !== SelectionMode.New) {
-            if (this.wouldMixGranularities(currentEntries)) {
-                this.previousEntries = [];
-
-                return Promise.resolve(true);
-            }
+        if (currentEntries.length === 0) {
+            return Promise.resolve(true);
         }
 
-        // Generate a list of ids for entries that are currently selected.
-        const previousKeys = new Set(this.previousEntries.map((e) => {
-            return this.entryKey(e);
-        }));
-
-        // Do the same for the current hit-test result.
-        const currentKeys = new Set(currentEntries.map((e) => {
-            return this.entryKey(e);
-        }));
-
-        // Now create lists of entries that need to be toggled.
-        const toggleEntries: ISelectionEntry[] = [];
-
-        for (const entry of currentEntries) {
-            if (!previousKeys.has(this.entryKey(entry))) {
-                toggleEntries.push(entry);
-            }
-        }
-
-        for (const entry of this.previousEntries) {
-            if (!currentKeys.has(this.entryKey(entry))) {
-                toggleEntries.push(entry);
-            }
-        }
-
-        this.previousEntries = currentEntries;
-        if (toggleEntries.length > 0) {
-            this.applySelection(toggleEntries);
-
-            this.publishPlayRange();
-        }
+        this.applySelection(currentEntries);
 
         return Promise.resolve(true);
     };
-
-    private publishPlayRange(): void {
-        const bars = new Set<number>();
-        for (const entry of this.currentSelection.values()) {
-            const { target } = entry;
-            if (target.granularity !== SelectionGranularity.Track) {
-                bars.add(target.measure.number);
-            }
-        }
-
-        if (bars.size > 0) {
-            const sorted = [...bars].sort((a, b) => {
-                return a - b;
-            });
-
-            void requisitions.execute("playRangeChanged", {
-                from: sorted[0],
-                to: sorted[sorted.length - 1],
-            });
-        } else {
-            void requisitions.execute("playRangeChanged", undefined);
-        }
-    }
-
-    /**
-     * Reacts to playback state changes. When playback starts and the current selection is not at measure
-     * granularity, the selection is temporarily replaced with the containing measures so the play range
-     * is valid. When playback stops, the original fine-grained selection is restored.
-     *
-     * @param state The new playback state.
-     *
-     * @returns A resolved promise to satisfy the requisition handler signature.
-     */
-    private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
-        if (state === PlayerPlayState.Playing || state === PlayerPlayState.Counting) {
-            this.switchToMeasureSelection();
-        } else {
-            this.restoreOriginalSelection();
-        }
-
-        return Promise.resolve(true);
-    };
-
-    /**
-     * If the current selection contains entries that are not at measure granularity,
-     * saves the original selection and replaces it with measure-level entries for the containing bars.
-     * Does nothing if all entries are already at measure granularity.
-     */
-    private switchToMeasureSelection(): void {
-        if (this.currentSelection.size === 0 || this.originalSelection) {
-            return;
-        }
-
-        const hasNonMeasure = [...this.currentSelection.values()].some((entry) => {
-            return entry.granularity !== SelectionGranularity.Measure;
-        });
-        if (!hasNonMeasure) {
-            return;
-        }
-
-        // Save the original selection for later restoration.
-        this.originalSelection = new Map(this.currentSelection);
-
-        // Collect the measures of the selected bars.
-        const measures = new Map<number, ISbDmTrackPiece>();
-        for (const entry of this.currentSelection.values()) {
-            const coordinates = SelectionSerializer.coordinatesOf(entry);
-            if (coordinates.bar < 1) {
-                continue;
-            }
-
-            const measure = this.measureOfBar(coordinates.bar);
-            if (measure !== undefined) {
-                measures.set(coordinates.bar, measure);
-            }
-        }
-
-        const measureEntries: ISelectionEntry[] = [...measures.values()].map((measure) => {
-            return {
-                granularity: SelectionGranularity.Measure,
-                bar: measure.number,
-                trackId: measure.track.id,
-                target: { granularity: SelectionGranularity.Measure, measure },
-            };
-        });
-
-        // Replace the selection with measure-level entries.
-        const removed = [...this.currentSelection.values()];
-        this.currentSelection.clear();
-        for (const entry of measureEntries) {
-            this.currentSelection.set(this.entryKey(entry), entry);
-        }
-
-        void requisitions.execute("selectionChanged", { added: measureEntries, removed });
-        this.publishPlayRange();
-    }
-
-    /**
-     * Returns one of the bar's measures, which represents the bar for a measure-level selection.
-     *
-     * @param bar The one-based measure number.
-     *
-     * @returns A measure of that bar, or undefined when no track has it.
-     */
-    private measureOfBar(bar: number): ISbDmTrackPiece | undefined {
-        for (const track of this.dataModel?.arrangement?.tracks ?? []) {
-            const measure = track.measures.at(bar - 1);
-            if (measure) {
-                return measure;
-            }
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Restores the original selection that was saved before playback started, then clears the saved state.
-     * Does nothing if no original selection was saved.
-     */
-    private restoreOriginalSelection(): void {
-        if (!this.originalSelection) {
-            return;
-        }
-
-        const saved = this.originalSelection;
-        this.originalSelection = undefined;
-
-        const removed = [...this.currentSelection.values()];
-        this.currentSelection.clear();
-        for (const [key, entry] of saved) {
-            this.currentSelection.set(key, entry);
-        }
-
-        const added = [...saved.values()];
-        void requisitions.execute("selectionChanged", { added, removed });
-        this.publishPlayRange();
-    }
 
     /**
      * Schedules a debounced write of the current selection to localStorage.
@@ -992,6 +1268,11 @@ export class SelectionManager {
     private schedulePersist(): void {
         if (this.saveDebounceId) {
             clearTimeout(this.saveDebounceId);
+            this.saveDebounceId = undefined;
+        }
+
+        if (this.zenMode) {
+            return;
         }
 
         this.saveDebounceId = setTimeout(() => {
@@ -1003,12 +1284,23 @@ export class SelectionManager {
     /**
      * The current selection in the form the history stores it.
      *
-     * @returns The serialised selection, or undefined when nothing is selected.
+     * @returns The serialised selection, or undefined when nothing is selected and the cursor is unset.
      */
     public get serialisedSelection(): string | undefined {
+        const cursor = this.cursorEntry;
         const entries = [...this.currentSelection.values()];
+        if (entries.length === 0 && cursor === undefined) {
+            return undefined;
+        }
 
-        return entries.length === 0 ? undefined : JSON.stringify(SelectionSerializer.serialise(entries));
+        const state: ISerialisedSelectionState = {
+            version: 1,
+            ...(this.selectionAnchor === undefined ? {} : { anchor: this.selectionAnchor }),
+            entries: SelectionSerializer.serialise(entries),
+            ...(cursor === undefined ? {} : { cursor: SelectionSerializer.coordinatesOf(cursor) }),
+        };
+
+        return JSON.stringify(state);
     }
 
     /**
@@ -1054,18 +1346,97 @@ export class SelectionManager {
             return;
         }
 
-        let stored: ISerialisedSelectionEntry[];
+        let parsed: unknown;
         try {
-            stored = JSON.parse(state) as ISerialisedSelectionEntry[];
+            parsed = JSON.parse(state) as unknown;
         } catch {
             return;
         }
 
-        if (!Array.isArray(stored) || stored.length === 0) {
+        let stored: ISerialisedSelectionEntry[];
+        let anchor: ISelectionPoint | undefined;
+        let cursor: ISerialisedSelectionEntry | undefined;
+        if (Array.isArray(parsed)) {
+            stored = parsed as ISerialisedSelectionEntry[];
+        } else if (typeof parsed === "object" && parsed !== null) {
+            const selectionState = parsed as ISerialisedSelectionState;
+            if (selectionState.version !== 1 || !Array.isArray(selectionState.entries)) {
+                return;
+            }
+
+            stored = selectionState.entries;
+            anchor = this.isSelectionPoint(selectionState.anchor) ? selectionState.anchor : undefined;
+            cursor = selectionState.cursor;
+        } else {
+            return;
+        }
+
+        if (stored.length === 0) {
+            this.restoreCursor(arrangement, cursor);
+
             return;
         }
 
         this.replaceSelection(SelectionSerializer.deserialise(arrangement, stored));
+        if (anchor !== undefined && arrangement.tracks.some((track) => {
+            return track.id === anchor.trackId;
+        })) {
+            this.selectionAnchor = anchor;
+        }
+    }
+
+    /**
+     * Restores the staff cursor a stored selection state carries. The staff view keeps its selection in the
+     * cursor, so a state without one leaves the cursor the re-resolution found in place: an undo/redo is no
+     * reason to take the editing surface away.
+     *
+     * @param arrangement The arrangement the cursor addresses.
+     * @param stored The stored cursor, absent for a state that had none.
+     */
+    private restoreCursor(arrangement: ISbDmArrangement, stored: ISerialisedSelectionEntry | undefined): void {
+        if (stored === undefined) {
+            return;
+        }
+
+        const resolved = SelectionSerializer.deserialise(arrangement, [stored]).at(0);
+        if (resolved === undefined) {
+            // The note is gone with the revert, so the popup that hangs on it has nothing left to show.
+            this.cursorEntry = undefined;
+            void requisitions.execute("selectionEditPopupCloseRequested", undefined);
+
+            return;
+        }
+
+        this.cursorEntry = resolved;
+        void requisitions.execute("selectionCursorChanged", resolved);
+        this.followCursor(resolved);
+    }
+
+    private isSelectionPoint(value: unknown): value is ISelectionPoint {
+        if (typeof value !== "object" || value === null) {
+            return false;
+        }
+
+        const point = value as ISelectionPoint;
+        if (!Number.isInteger(point.granularity) || point.granularity < SelectionGranularity.Track
+            || point.granularity > SelectionGranularity.Note || !Number.isInteger(point.bar)
+            || !Number.isInteger(point.trackId)) {
+            return false;
+        }
+
+        const position: unknown = (value as { position?: unknown; }).position;
+        if (position === undefined) {
+            return true;
+        }
+
+        if (typeof position !== "object" || position === null) {
+            return false;
+        }
+
+        const fraction = position as IFraction;
+
+        return Number.isInteger(fraction.numerator) && Number.isInteger(fraction.denominator)
+            && fraction.denominator !== 0;
     }
 
     /**
@@ -1085,7 +1456,9 @@ export class SelectionManager {
 
         // Delay slightly so the arrangement viewer has time to render its DOM before selection overlays
         // are applied.
-        setTimeout(() => {
+        const timerId = setTimeout(() => {
+            this.scoreBookLoadedTimers.delete(timerId);
+
             if (this.firstLoadDone) {
                 if (reason === ScoreBookChangeReason.ScoreLoaded) {
                     this.clearSelection();
@@ -1095,6 +1468,7 @@ export class SelectionManager {
                 this.restorePersistedSelection();
             }
         }, 100);
+        this.scoreBookLoadedTimers.add(timerId);
 
         return Promise.resolve(true);
     };
@@ -1110,22 +1484,140 @@ export class SelectionManager {
      */
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
         this.editMode = enabled;
+        this.clearInsertSelection();
 
         return Promise.resolve(true);
     };
 
     /**
-     * Remembers the entry mode for newly created selection views.
+     * Entering zen mode puts the selection aside, so what the user marks while watching does not survive it.
      *
-     * @param mode The entry mode announced by the app.
+     * @param enabled Whether zen mode is active.
      *
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
-    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
-        this.entryMode = mode;
+    private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
+        if (this.zenMode === enabled) {
+            return Promise.resolve(true);
+        }
+
+        this.zenMode = enabled;
+        if (enabled) {
+            this.selectionBeforeZen = [...this.currentSelection.values()];
+            this.anchorBeforeZen = this.selectionAnchor;
+            this.selectionAnchor = undefined;
+            this.replaceSelection([]);
+        } else {
+            this.replaceSelection(this.selectionBeforeZen ?? []);
+            this.selectionAnchor = this.anchorBeforeZen;
+            this.selectionBeforeZen = undefined;
+            this.anchorBeforeZen = undefined;
+        }
 
         return Promise.resolve(true);
     };
+
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        this.entryMode = mode;
+        if (this.editMode && mode === EditEntryMode.Overwrite && this.cursorEntry !== undefined) {
+            this.replaceSelection([this.cursorEntry]);
+        } else {
+            this.clearInsertSelection();
+        }
+
+        return Promise.resolve(true);
+    };
+
+    private handleViewModeChanged = (mode: TrackViewMode): Promise<boolean> => {
+        this.viewMode = mode;
+        this.clearInsertSelection();
+
+        return Promise.resolve(true);
+    };
+
+    private clearInsertSelection(): void {
+        if (this.editMode && this.entryMode === EditEntryMode.Insert && this.viewMode === TrackViewMode.Staff
+            && this.currentSelection.size > 0) {
+            this.moveSelectionToCursor(this.currentSelection.values());
+        }
+    }
+
+    private moveSelectionToCursor(entries: Iterable<ISelectionEntry>): void {
+        const firstEntry = this.firstCursorOf(entries);
+        if (firstEntry === undefined) {
+            return;
+        }
+
+        this.cursorEntry = firstEntry;
+        this.internalClearSelection();
+        this.selectionAnchor = undefined;
+        void requisitions.execute("selectionCursorChanged", firstEntry);
+        this.followCursor(firstEntry);
+    }
+
+    /**
+     * Brings the measure the cursor moved into into view. The staff view renders only a window of measures, so the
+     * bar a cursor edit moved it to may not even exist as an element.
+     *
+     * @param entry The entry the cursor addresses.
+     */
+    private followCursor(entry: ISelectionEntry): void {
+        const { bar, start } = SelectionSerializer.coordinatesOf(entry);
+        void requisitions.execute("measureVisibilityRequested", { bar, position: start });
+    }
+
+    private firstCursorOf(entries: Iterable<ISelectionEntry>): ISelectionEntry | undefined {
+        const tracks = this.dataModel?.arrangement?.tracks;
+        const trackIndexes = new Map(tracks?.map((track, index) => {
+            return [track.id, index];
+        }));
+        let firstEntry: ISelectionEntry | undefined;
+        let firstTrackIndex = Infinity;
+        let firstBar = Infinity;
+        let firstStart = measureStart;
+
+        for (const entry of entries) {
+            const { target } = entry;
+            let measure = target.granularity === SelectionGranularity.Track
+                ? target.track.measures.at(0) : target.measure;
+            if (measure === undefined) {
+                continue;
+            }
+
+            if (target.granularity === SelectionGranularity.Measure) {
+                measure = tracks?.[0]?.measures[measure.number - 1] ?? measure;
+            }
+
+            const start = SelectionSerializer.coordinatesOf(entry).start ?? measureStart;
+            const trackIndex = trackIndexes.get(measure.track.id) ?? measure.track.id;
+            if (trackIndex > firstTrackIndex || (trackIndex === firstTrackIndex
+                && (measure.number > firstBar || (measure.number === firstBar
+                    && compareFractions(start, firstStart) >= 0)))) {
+                continue;
+            }
+
+            const event = modelEventAt(measure, start);
+            if (event === undefined) {
+                continue;
+            }
+
+            firstEntry = {
+                granularity: SelectionGranularity.Note,
+                target: {
+                    granularity: SelectionGranularity.Note,
+                    measure,
+                    event,
+                    start,
+                    end: addFractions(event.start, event.duration),
+                },
+            };
+            firstTrackIndex = trackIndex;
+            firstBar = measure.number;
+            firstStart = start;
+        }
+
+        return firstEntry;
+    }
 
     /**
      * Reacts to an undo/redo by re-resolving the selection against the current arrangement and
@@ -1158,6 +1650,8 @@ export class SelectionManager {
             return;
         }
 
+        this.reResolveCursor(arrangement);
+
         const previous = [...this.currentSelection.values()];
         const resolved = SelectionSerializer.deserialise(arrangement, SelectionSerializer.serialise(previous));
 
@@ -1182,8 +1676,22 @@ export class SelectionManager {
 
         if (added.length > 0 || removed.length > 0) {
             void requisitions.execute("selectionChanged", { added, removed });
-            this.publishPlayRange();
             this.schedulePersist();
         }
+    }
+
+    /**
+     * Re-resolves the cursor, which addresses a note of the arrangement the revert replaced. The staff view
+     * keeps its selection in the cursor, so leaving it stale would drop what the edit popup hangs on.
+     *
+     * @param arrangement The restored arrangement the cursor addresses.
+     */
+    private reResolveCursor(arrangement: ISbDmArrangement): void {
+        const previous = this.cursorEntry;
+        if (previous === undefined) {
+            return;
+        }
+
+        this.restoreCursor(arrangement, SelectionSerializer.coordinatesOf(previous));
     }
 }

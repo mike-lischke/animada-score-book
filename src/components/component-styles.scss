@@ -32,10 +32,35 @@
     background-color: var(--color-base-100);
 }
 
-.playStopButton,
-.undoRedoButton,
-.editSaveButton,
-#recordButton,
+/* The play control is the bar's primary action: an inverted pill that names itself, like the mockup. */
+#arrangementPlayControls .play-stop-button {
+    gap: 6px;
+    flex: 0 0 88px;
+    width: 88px;
+    min-width: 88px;
+    box-sizing: border-box;
+    height: var(--control-size);
+    min-height: var(--control-size);
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    background-color: var(--color-base-content);
+    color: var(--color-base-100);
+
+    &:not(:disabled):hover {
+        background-color: color-mix(in srgb, var(--color-base-content) 85%, var(--color-base-100));
+    }
+
+    .icon {
+        font-size: 16px;
+        min-width: 16px;
+        min-height: 16px;
+        color: var(--color-playback-accent);
+    }
+}
+
 #pauseButton {
     height: 36px;
     width: 36px;
@@ -49,59 +74,29 @@
     }
 }
 
-.editSaveButton.large {
-    height: 44px;
-    width: 44px;
-}
-
-.editSaveButton,
-.undoRedoButton,
 .noteStyleButton {
     border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
 }
 
-.playStopButton svg,
-#recordButton svg,
+.play-stop-label {
+    white-space: nowrap;
+}
+
 #pauseButton svg {
     height: 36px;
     width: 36px;
 }
 
-.playControlsGooey,
-.undoRedoGooey,
-.editSaveGooey {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.noteStyleBarHost {
-    margin-left: 4px;
-}
-
-.noteStyleBar {
-    display: flex;
-    align-items: center;
+.undoRedoGroup {
+    flex: 0 0 auto;
     gap: 4px;
 }
 
+/* The hole the drawn note heads punch into their fill follows the surface the button is filled with, which the
+   action styles of the selection card state. */
 .noteStyleButton,
 .noteStyleRestButton {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
-    background-color: var(--color-base-100);
-    flex-shrink: 0;
-    box-shadow: none;
     --note-style-icon-hole: var(--color-base-100);
-
-    &:not(:disabled):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-    }
 
     .icon.note-style-symbol {
         color: inherit;
@@ -109,10 +104,7 @@
     }
 
     &.du-btn-primary {
-        border-color: var(--color-primary);
-        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-        color: var(--color-base-content);
-        --note-style-icon-hole: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+        --note-style-icon-hole: color-mix(in srgb, var(--color-primary) 18%, var(--color-base-100));
     }
 }
 
@@ -293,7 +285,7 @@
     height: 24px;
     flex-shrink: 0;
 
-    /* Explicit size guards against the generic `.du-dropdown svg` 32px override. */
+    /* An inline drawing has no size of its own, so the snippet states the box its lines span. */
     .note-style-line-icon-staff {
         display: block;
         width: 24px;
@@ -314,149 +306,24 @@
     }
 }
 
-/* Dropdown button in the note style bar matches the regular note style buttons. */
-.noteStyleBar .noteStyleDropdown .du-btn-ghost {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
-    background-color: var(--color-base-100);
-    flex-shrink: 0;
-    box-shadow: none;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
-    --note-style-icon-hole: var(--color-base-100);
-
-    &:not(:disabled):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-    }
-}
-
-/* The popup grows with its labels instead of wrapping them. */
-.noteStyleBar .noteStyleDropdown .dropdown-popup {
-    width: max-content;
-    min-width: 13rem;
-
-    li a {
-        white-space: nowrap;
-    }
-}
-
-/* The entry mode button stands on its own, directly left of the tuplet button. */
-.entryModeGooey {
-    margin-left: 4px;
-}
-
-.entryModeButton {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
-    background-color: var(--color-base-100);
-    flex-shrink: 0;
-    box-shadow: none;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
-
-    &:not(:has(input:disabled)):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-    }
-
-    /* The mark shows that overwrite, the mode that replaces content, is in effect. */
-    &.du-btn-primary {
-        border-color: var(--color-primary);
-        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-        color: var(--color-base-content);
-    }
-}
-
-.subdivisionToolbar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.subdivisionToolbarHost {
-    margin-left: 16px;
-    align-self: stretch;
-}
-
 /* A symbol that fills the icon box in both sides reads larger than the marks next to it, so it states the side
  * the ink is scaled to itself: what is left over is the margin the hand-drawn icons have. The dynamic `f` is
- * taller than it is wide, the simile a touch wider than it is high, so each side is what lands on whole pixels. */
+ * taller than it is wide, so its side is what lands on whole pixels. */
 .forteButton .score-symbol-icon {
     --icon-ink-spaces: 1.6;
 }
 
-.simileButton .score-symbol-icon {
-    --icon-ink-spaces: 1.61;
-}
-
-.subdivisionToolbar .btn {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
-    background-color: var(--color-base-100);
-    flex-shrink: 0;
-    box-shadow: none;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
-
-    &:not(:disabled):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-    }
-
-    /* A button shows the mark it carries as active, the way the note length buttons do. */
-    &.du-btn-primary {
-        border-color: var(--color-primary);
-        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-        color: var(--color-base-content);
-    }
-}
-
-.noteLengthToolbarHost {
-    margin-left: 4px;
-}
-
-.noteLengthToolbar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.noteLengthButton,
-.noteDotButton {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
-    background-color: var(--color-base-100);
-    flex-shrink: 0;
-    box-shadow: none;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
-    --note-length-icon-fill: var(--color-primary);
-
-    &:not(:disabled):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-    }
-
-    /* The outline dims through the color the button hands to its icon, so the fill follows it with
-       a mix of the same strength. */
-    &:disabled {
-        --note-length-icon-fill: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-    }
-
+/* The value icons are drawn in the button's own ink: the outline states the value and the segment filled from
+   its apex the share of a whole it stands for. */
+.note-length-button,
+.note-dot-button {
     .noteLengthIcon {
         color: var(--color-base-content);
         display: block;
 
-        .noteLengthIconOutline {
+        .noteLengthIconOutline,
+        .noteLengthIconFill,
+        .noteLengthIconDot {
             fill: currentColor;
             stroke: none;
         }
@@ -465,60 +332,12 @@
             fill: none;
             stroke: currentColor;
         }
-
-        .noteLengthIconFill {
-            fill: var(--note-length-icon-fill);
-            stroke: none;
-        }
-
-        .noteLengthIconDot {
-            fill: currentColor;
-            stroke: none;
-        }
-    }
-
-    &.du-btn-primary {
-        border-color: var(--color-primary);
-        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-        color: var(--color-base-content);
     }
 }
 
-.articulationToolbarHost {
-    margin-left: 4px;
-}
-
-.articulationToolbar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.articulationButton {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
-    background-color: var(--color-base-100);
-    flex-shrink: 0;
-    box-shadow: none;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
-
-    &:not(:disabled):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-    }
-
-    .articulation-icon {
-        display: block;
-    }
-
-    &.du-btn-primary {
-        border-color: var(--color-primary);
-        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-        color: var(--color-base-content);
-    }
+/* The articulation buttons carry the hand-drawn marks of the toolbar icons box. */
+.articulationButton .articulation-icon {
+    display: block;
 }
 
 /* Every icon of the toolbars is drawn in the same box, so the buttons read as one row whatever mark they carry.
@@ -534,8 +353,7 @@
     display: block;
 }
 
-#volumeSlider,
-#tempoSlider {
+#volumeSlider {
     margin: 0;
     flex: 0 0 auto;
 }
@@ -551,15 +369,98 @@
     flex-shrink: 0;
 }
 
+/* The focus switch of a measure: it hangs in the column's head room and states whether playback runs the bar. */
+.grid-measure-viewer,
+.staff-measure-viewer {
+    > .measure-focus-button {
+        position: absolute;
+        top: 4px;
+        right: 8px;
+        height: 28px;
+        min-height: 28px;
+        gap: 6px;
+        padding: 0 9px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 9999px;
+        background: var(--color-base-100);
+        color: var(--color-base-content);
+        font-size: 11px;
+        white-space: nowrap;
+        z-index: 5;
+
+        &[aria-pressed="true"] {
+            border-color: var(--color-playback-accent);
+            background: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
+
+            .measureFocusDot {
+                background: var(--color-playback-accent);
+            }
+        }
+
+        .measureFocusDot {
+            width: 8px;
+            height: 8px;
+            flex: 0 0 8px;
+            border-radius: 50%;
+            background: color-mix(in srgb, var(--color-base-content) 30%, transparent);
+        }
+    }
+}
+
 #trackViewerContainer {
-    --bar-action-strip-height: 52px;
+    /* The container takes the vertical room the score leaves, so the side panels reach down and the score content
+       has a defined area to be centred in. */
+    flex: 1 1 auto;
 
-    &.edit-mode {
+    /* How far the centred score content sits below the container's top. The panels move their own controls by the
+       same amount, which keeps the rows they list beside the score rows they belong to. */
+    --content-center-shift: 0px;
 
-        .trackControlsPanel,
-        .trackEditSidebarPanel {
-            /* 8px is the top margin of the action strip. */
-            padding-top: calc(var(--bar-action-strip-height) + 8px);
+    /* Height of the block above a side panel, which its first row is offset by: the list's 7px padding, the 30px
+       header block and the 16px gap after it. Keep in step with `.track-controls-list` / `.track-edit-sidebar`. */
+    --track-panel-head: 53px;
+
+    /* Additional toolbar room inside the score columns. The fixed action bar lives above this container. */
+    --score-strip-band: 0px;
+
+    /* Room the focus switch of a measure hangs in: it sits in the head room of a column, above the score's first
+       row, in both views. */
+    --measure-focus-headroom: 36px;
+
+    /* Distance from the top of the score content to the first row of a column. The side panels state the same
+    offset, so their rows line up with the rows they belong to. Staff columns keep their own head room; a grid
+    column carries its beat strip inside it — 20pt plus its margins and the first row's top margin. */
+    --score-row-top: var(--measure-focus-headroom);
+
+    /* Room the closing measure's resize thumb takes beyond the measure: the handle sits on the barline, its thumb
+       is centred on it, so half the thumb (7 px) less the 1 px the handle's centre lies inside the column. */
+    --staff-handle-overhang: 6px;
+
+    .trackControlsPanel {
+        /* The rows follow the centred score rows; the header above them stays where it is. */
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--panel-head-room, 0px) + var(--content-center-shift));
+    }
+
+    .staff-measure-viewer,
+    .staff-prefix-viewer {
+        padding-top: var(--score-row-top, 24px);
+    }
+
+    /* A grid column carries its beat strip instead of head room of its own: the strip is given the distance below
+       the action bar the staff's first row has, so a column's content sits as far down as the staff's does. */
+    &.view-grid {
+        --grid-head-room: var(--measure-focus-headroom);
+
+        --score-row-top: calc(20pt + 24px + var(--measure-focus-headroom));
+
+        .grid-measure-viewer {
+            padding-top: var(--grid-head-room);
+        }
+
+        /* That head room is not part of the head room `--score-row-top` states for the panels to mirror, so the edit
+           mode adds it to their offset. The non-edit mode does the same in its own branch. */
+        &.edit-mode {
+            --panel-head-room: var(--grid-head-room);
         }
     }
 
@@ -569,8 +470,20 @@
         flex: 1 1 auto;
         min-width: 600px;
         scrollbar-width: none;
-        -ms-overflow-style: none;
         touch-action: pan-x;
+
+        /* The score sits in the middle of the room below the action bar, so a score shorter than the viewer is not
+           glued to the top. Content taller than the host grows it, which leaves nothing to distribute. */
+        justify-content: center;
+
+        /* This host scrolls the score sideways, so a swipe past its end must stop here. The vertical wheel
+           has to keep passing through to #viewerScrollHost, hence the x axis alone. */
+        overscroll-behavior-x: none;
+
+        /* Phones have no room for the desktop minimum; the score scrolls inside the host instead. */
+        @media (max-width: 600px) {
+            min-width: 0;
+        }
 
         &::-webkit-scrollbar {
             display: none;
@@ -578,10 +491,16 @@
 
         #trackViewerContentHost {
             padding-top: 0;
+
+            /* The score's right edge is where the last rendered measure ends, so the room the resize thumb of
+               that measure reaches into has to be part of the content rather than of a measure — otherwise the
+               scrollable width moves with the rendered window and a scroll position means two things. */
+            padding-right: var(--staff-handle-overhang);
             min-width: 100%;
 
             #trackViewerDecorations,
-            #trackViewerDecorationOverlay {
+            #trackViewerDecorationOverlay,
+            #trackViewerPlayheadOverlay {
                 position: absolute;
                 flex-grow: 1;
                 overflow: hidden;
@@ -594,6 +513,11 @@
                 pointer-events: none;
             }
 
+            /* Just above the score's own overlays, so the sticky action bar still covers the beam. */
+            #trackViewerPlayheadOverlay {
+                z-index: 4;
+            }
+
             #playBeam {
                 width: 4px;
                 border: none;
@@ -602,39 +526,23 @@
                 position: absolute;
                 top: 0;
                 bottom: 0;
+                will-change: transform;
 
                 /* The beam marks playback, so it only appears while playback runs. */
                 visibility: hidden;
 
                 /* Parked off-screen until playback starts. The beam is moved with a transform, never
                  * with `left`: the layout property made the browser lay out the scroller on every
-                 * animation frame (measured ≈120 layouts/s); the transform leaves layout untouched. */
+                * animation frame (measured ≈120 layouts/s); the transform leaves layout untouched. */
                 left: 0;
                 transform: translate3d(-500px, 0, 0);
-            }
-
-            #playRange {
-                width: 0;
-                background-color: oklch(95% 0.20043 108 / 0.15);
-                border: 1px solid oklch(91% 0.2 107);
-                border-radius: 12px;
-
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                left: -500px;
-
-                transition: left 0.050s linear;
             }
 
             @include score.score-grid-rules($useThemeColors: true, $renderBeam: true, $beatNumberTop: 10px);
         }
     }
 
-    .trackControlsList {
-        --track-controls-collapsed-width: 90px;
-        --track-controls-expanded-width: clamp(200px, 24vw, 300px);
-
+    .track-controls-list {
         overflow: hidden;
         gap: 16px;
 
@@ -643,7 +551,6 @@
         min-width: 0;
         min-height: 0;
         padding: 7px 10px;
-        margin-bottom: 20px;
         z-index: 1;
 
         background: var(--color-base-100);
@@ -658,18 +565,39 @@
                 transform: translateX(0);
             }
         }
+
+        &:not(.track-labels-list) {
+            padding-right: 9px;
+            border-right: 1px solid var(--border-subtle);
+
+            .trackControlsPanel {
+                margin-right: -5px;
+                padding-right: 10px;
+            }
+        }
+
+        /* The collapsed rail shows the instrument icons alone, so their row's controls may not peek out. */
+        &:not(.expanded) .trackSliderArea {
+            visibility: hidden;
+        }
     }
 
     .trackControlsPanel {
         min-width: 0;
 
-        .trackControls {
+        .track-controls {
             align-self: flex-end;
             width: calc(var(--track-controls-expanded-width) - 20px);
-            height: var(--note-height);
+            height: var(--track-row-height, var(--note-height));
             margin-bottom: 20px;
 
             flex-shrink: 0;
+
+            /* The icons and sliders sit on the staff line of the track they belong to, which the row geometry
+               states as the line's offset from the row's middle. A centred item moves by half its top margin. */
+            > * {
+                margin-top: calc(var(--staff-centre, 0px) * 2);
+            }
 
             &:last-child {
                 margin-bottom: 0;
@@ -686,28 +614,28 @@
             z-index: 2;
         }
 
-        .trackControls .trackInstrumentShell {
+        .track-controls .trackInstrumentShell {
             position: relative;
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             border: 4px solid white;
         }
 
-        .trackControls .trackInstrumentIcon {
-            width: 40px;
+        .track-controls .trackInstrumentIcon {
+            width: 34px;
             mask-size: contain;
             background-color: var(--color-base-content);
             flex: 0 0 auto;
         }
 
-        .trackControls .trackSliderArea {
+        .track-controls .trackSliderArea {
             flex: 1 1 auto;
             min-width: 0;
             margin-right: 10px;
         }
 
-        .trackControls .trackInstrumentName {
+        .track-controls .track-instrument-name {
             font-size: 0.9rem;
             white-space: nowrap;
             overflow: hidden;
@@ -716,141 +644,99 @@
             margin-bottom: 2px;
         }
 
-        .trackControls .trackVolumeSlider {
-            width: calc(100% - 16px);
-            margin: 0 8px;
+        .track-controls .track-volume-slider {
+            width: 100%;
+            margin: 0;
         }
 
-        .trackControls .trackVolumeLegend {
+        .track-controls .trackVolumeLegend {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            width: calc(100% - 16px);
-            margin: 3px 8px 0;
+            width: calc(100% - 18px);
+            margin: 3px 9px 0;
             font-size: 0.75rem;
             color: var(--color-base-content);
             user-select: none;
         }
 
-        .trackControls .trackVolumeLegendLeft {
+        .track-controls .trackVolumeLegendLeft {
             text-align: left;
         }
 
-        .trackControls .trackVolumeLegendRight {
+        .track-controls .trackVolumeLegendRight {
             text-align: right;
         }
     }
 
+    /* The panel's first row reaches into the header in staff view, so the switch has to paint and hit-test
+       above it. The header itself stays transparent for pointer events. */
     .trackControlsHeader {
+        z-index: 1;
         height: 30px;
         min-width: 0;
+        pointer-events: none;
     }
 
-    .trackControlsToggle {
-        height: 24px;
-        min-height: 24px;
-        justify-content: flex-start;
-    }
-
-    .trackViewModeToggleGroup {
-        margin-left: 8px;
-    }
-
-    .trackViewModeIcons {
-        height: 32px;
-        margin-top: 3px;
-    }
-
-    .trackViewModeGridIcon {
-        width: 8px;
-        height: 8px;
+    .track-controls-list.track-labels-list {
         flex: 0 0 auto;
-        border: 1px dashed currentColor;
+        width: max-content;
+        padding: 7px 16px;
+        transition: none;
+
+        .track-label-row {
+            height: var(--track-row-height, var(--note-height));
+            flex-shrink: 0;
+            margin-bottom: 20px;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        .track-instrument-label {
+            width: 100%;
+            margin-top: calc(var(--staff-centre, 0px) * 2);
+            font-size: 12px;
+            line-height: 1.3;
+            white-space: nowrap;
+        }
     }
 
-    /* The note stands for the staff view the way the dashed square stands for the grid, so it is drawn
-       with the same means. */
-    .trackViewModeStaffIcon {
-        position: relative;
-        width: 12px;
-        height: 18px;
-        flex: 0 0 auto;
-        color: inherit;
-    }
+}
 
-    .trackViewModeStaffIconHead {
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 7px;
-        height: 5px;
-        border-radius: 50%;
-        background: currentColor;
-        transform: rotate(-20deg);
-    }
+#appRoot:not(.zen-mode) {
+    #trackViewerContainer:not(.edit-mode) {
 
-    .trackViewModeStaffIconStem {
-        position: absolute;
-        right: 5px;
-        top: 0;
-        width: 1px;
-        height: 14px;
-        background: currentColor;
-    }
-
-    .trackViewModeToggle {
-        margin: 0;
-    }
-
-    .trackViewModeToggle input[type="checkbox"] {
-        width: 32px;
-        height: 18px;
-    }
-
-    .trackViewModeToggle.toggle-vertical {
-        // daisyUI's toggle is horizontal. Rotate it 90° clockwise so the handle
-        // moves vertically. With this rotation, the unchecked handle sits at the
-        // top and the checked handle at the bottom.
-        transform: rotate(90deg);
-        margin-right: -2px;
+        /* A grid column carries its beat strip in head room the staff's rows do not have; the panels mirror it. */
+        &.view-grid {
+            --panel-head-room: var(--grid-head-room);
+        }
     }
 }
 
-.trackEditSidebar {
-    gap: 16px;
-
+.track-edit-sidebar {
+    box-sizing: border-box;
     flex: 0 0 auto;
-    width: fit-content;
+    width: 48px;
     min-width: 0;
     min-height: 0;
-    padding: 7px 10px;
-    margin-bottom: 20px;
+    padding: 7px 0;
     z-index: 1;
     pointer-events: auto;
 
     background: var(--color-base-100);
+    border-left: 1px solid var(--border-subtle);
 
-    .trackEditSidebarHeader {
-        height: 30px;
-        min-height: 30px;
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--color-base-content);
-        opacity: 0.7;
-        user-select: none;
-        white-space: nowrap;
-    }
-
+    /* No header block precedes this panel, so the room a header would take (30px + its 16px gap) is added
+       back to the shared panel offset. */
     .trackEditSidebarPanel {
         min-width: 0;
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px + var(--panel-head-room, 0px) + var(--content-center-shift));
 
         .trackEditEmpty {
-            padding: 24px 12px;
-            font-size: 0.8rem;
+            padding: 24px 2px;
+            font-size: 0.6rem;
+            line-height: 1.3;
             color: var(--color-base-content);
             opacity: 0.5;
             text-align: center;
@@ -859,38 +745,41 @@
     }
 }
 
-.trackEditRow {
+.track-edit-row {
     align-self: stretch;
-    height: var(--note-height);
+    height: var(--track-row-height, var(--note-height));
     margin-bottom: 20px;
-    padding: 0 8px;
     cursor: default;
     flex-shrink: 0;
 
     &:last-child {
         margin-bottom: 0;
     }
+
+    .track-edit-trigger {
+        /* The button sits on the staff line of the track it belongs to, which the row geometry states as the
+           line's offset from the row's middle. A centred item moves by half its top margin. */
+        margin-top: calc(var(--staff-centre, 0px) * 2);
+    }
 }
 
-.trackEditTrigger {
+.track-edit-trigger {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 48px;
-    height: 48px;
+    width: 30px;
+    height: 30px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 20%, transparent);
     border-radius: 50%;
-    background: var(--color-base-200);
+    background: var(--color-base-100);
     cursor: pointer;
     color: var(--color-base-content);
-    transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease,
-        border-color 0.15s ease;
+    transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 
     &:hover {
         border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-200));
-        transform: scale(1.08);
+        background: color-mix(in srgb, var(--color-primary) 12%, var(--color-base-100));
     }
 
     .icon {
@@ -898,13 +787,266 @@
     }
 }
 
+/* The card that the popups carrying the actions of selected score elements share: a header naming what they act
+   on and a tray of action buttons. It is portaled into the document body (like every popup), so it only uses
+   theme tokens the root publishes. The `.popup` prefix lifts these rules above the framework's own popup
+   defaults. */
+.popup.selection-toolbar {
+    width: max-content;
+    min-width: 200px;
+    max-width: 340px;
+    padding: 12px;
+    gap: 10px;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
+    border-radius: 12px;
+    background: var(--color-base-100);
+    box-shadow: 0 10px 28px var(--shadow-color);
+
+    /* The card slides in when it appears, so the popup it replaces reads as the older one. It hangs under the
+       elements it acts on, so it rises into place. */
+    animation: selection-toolbar-slide-up 0.16s ease-out;
+
+    .selection-toolbar-header {
+        gap: 6px;
+        min-width: 0;
+
+        /* The header stands apart from the tools below it by a line. */
+        padding-bottom: 8px;
+        border-bottom: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+    }
+
+    /* The dot carries the color of the instrument the addressed elements belong to. */
+    .selection-toolbar-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
+    }
+
+    .selection-toolbar-instrument {
+        flex: 0 1 auto;
+        min-width: 0;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .selection-toolbar-separator {
+        flex: 0 0 auto;
+        color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+    }
+
+    .selection-toolbar-position {
+        flex: 0 0 auto;
+        font-size: 13px;
+        color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+        white-space: nowrap;
+    }
+
+    .selection-toolbar-close {
+        flex: 0 0 auto;
+        width: 24px;
+        min-width: 24px;
+        height: 24px;
+        min-height: 24px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: color-mix(in srgb, var(--color-base-content) 55%, transparent);
+        cursor: pointer;
+
+        &:hover {
+            background: var(--color-base-200);
+            color: var(--color-base-content);
+        }
+
+        .icon {
+            width: 14px;
+            min-width: 14px;
+            height: 14px;
+            min-height: 14px;
+        }
+    }
+
+    .selection-toolbar-section {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: color-mix(in srgb, var(--color-base-content) 45%, transparent);
+        user-select: none;
+    }
+
+    /* The caption names the section, the label beside it says what its controls belong to. */
+    .selection-toolbar-caption {
+        width: 100%;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    /* The label of a section is drawn in the theme's accent color, so it stands out from the caption it sits beside. */
+    .selection-toolbar-badge {
+        flex: 0 0 auto;
+        padding: 0 8px;
+        border-radius: 9999px;
+        background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-base-100));
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 16px;
+        color: var(--color-primary);
+        white-space: nowrap;
+    }
+
+    /* The rows of the card share its width: a section on the tray takes a row of its own, the strips of plain
+       buttons flow beside each other, and the room left over spreads evenly between them, which lines the first
+       strip up on the left and the last one on the right. */
+    .selection-toolbar-sections {
+        align-content: flex-start;
+    }
+
+    .selection-toolbar-group {
+        flex: 0 0 auto;
+        min-width: 0;
+
+        &.is-tray {
+            flex-basis: 100%;
+        }
+    }
+
+    /* The row a section's controls sit in. Its inset matches the tray's padding, so the buttons of a plain row
+       line up with the ones the note styles sit on. */
+    .selection-toolbar-actions {
+        min-width: 0;
+        padding: 0 4px;
+
+        /* Only the note styles sit on a tray, which reads their buttons as the palette of the addressed track. */
+        &.selection-toolbar-tray {
+            width: 100%;
+            padding: 4px;
+            border-radius: 10px;
+            background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
+            box-shadow: inset 0 1px 3px color-mix(in srgb, var(--color-base-content) 8%, transparent);
+        }
+
+        /* The simile glyph's ink fills more of its box than a drawn icon does, so its ink is stated 4px smaller
+           than the tray's icon size. Ink is scaled in staff spaces, which are 10px here. */
+        &.track-piece-toolbar .score-symbol-icon {
+            --icon-ink-spaces: 1.21;
+        }
+
+        /* The tuplet tool reads as a mode of its own, which the mockup draws in violet: a violet mark and border
+           on a surface merely tinted with the same color. */
+        &.subdivision-toolbar .dropdown-host > .du-btn-ghost {
+            border-color: var(--color-tuplet-accent);
+            background-color: color-mix(in srgb, var(--color-tuplet-accent) 12%, var(--color-base-100));
+            color: var(--color-tuplet-accent);
+
+            &:not(:disabled):hover {
+                background-color: color-mix(in srgb, var(--color-tuplet-accent) 22%, var(--color-base-100));
+            }
+
+            &:disabled {
+                border-color: color-mix(in srgb, var(--color-tuplet-accent) 35%, transparent);
+                background-color: color-mix(in srgb, var(--color-tuplet-accent) 6%, var(--color-base-100));
+                color: color-mix(in srgb, var(--color-tuplet-accent) 55%, transparent);
+            }
+        }
+    }
+
+    /* A tray holds square buttons beside the buttons the note tools bring: a dropdown trigger that stands in
+       the row for one is drawn the same way, and so is every button of a note tool. */
+    .selection-toolbar-action,
+    .dropdown-host > .du-btn-ghost {
+        flex: 0 0 36px;
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        min-height: 36px;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        border-radius: 8px;
+        background-color: var(--color-base-100);
+        color: var(--color-base-content);
+        box-shadow: 0 1px 2px var(--shadow-color);
+
+        &:not(:disabled):hover {
+            border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+            background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+        }
+
+        /* An action that is a switch reads as pressed while it holds its state. */
+        &.du-btn-primary {
+            border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+            background-color: color-mix(in srgb, var(--color-primary) 18%, var(--color-base-100));
+            color: var(--color-base-content);
+        }
+
+        /* A glyph icon and a drawn icon share one visual size inside the button. */
+        .icon,
+        .score-symbol-icon,
+        .tuplet-icon,
+        .articulation-icon,
+        .noteLengthIcon {
+            width: 20px;
+            min-width: 20px;
+            height: 20px;
+            min-height: 20px;
+        }
+
+        &.is-destructive {
+            color: var(--color-error);
+
+            &:not(:disabled):hover {
+                border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+                background-color: color-mix(in srgb, var(--color-error) 8%, var(--color-base-100));
+            }
+        }
+    }
+}
+
+@keyframes selection-toolbar-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes selection-toolbar-slide-right {
+    from {
+        opacity: 0;
+        transform: translateX(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* The track toolbar floats beside the action trigger it belongs to, so it slides in from that side instead. */
+.popup.track-toolbar {
+    animation: selection-toolbar-slide-right 0.16s ease-out;
+}
+
 .bar-action-strip {
     flex-shrink: 0;
     pointer-events: none;
-    margin: 5px 0 4px 0;
+    margin: 0;
+    position: relative;
 }
 
-.bar-action-group {
+/* The framework gives every container a relative position, which would put the groups in the strip's flow and
+   let their offsets accumulate. Stating the strip keeps them absolute, each one centred on its measure. */
+.bar-action-strip .bar-action-group {
     position: absolute;
     top: 0;
     height: 100%;
@@ -917,36 +1059,148 @@
     transform: translateX(-50%);
 }
 
-.bar-action-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
+.bar-action-insert-icon {
+    gap: 0;
+}
+
+.arrangementViewer {
+    --track-controls-collapsed-width: 90px;
+    --track-controls-expanded-width: clamp(200px, 24vw, 300px);
+
+    /* Inner height of the action bar, its two borders excluded. */
+    --bar-action-strip-height: calc(var(--tool-row-height) - 2px);
+
+    /* Border of a control inside the bar: one step stronger than the frame around the bar itself. */
+    --border-control: color-mix(in srgb, var(--color-base-content) 18%, transparent);
+
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
-    border-radius: 50%;
-    background: var(--color-base-100);
-    cursor: pointer;
-    color: var(--color-base-content);
-    pointer-events: auto;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    overflow-x: clip;
+    user-select: none;
+    min-height: 100%;
 
-    &:hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
-        transform: scale(1.08);
+    .arrangement-action-bar {
+        position: sticky;
+        top: 0;
+        display: flex;
+        flex: 0 0 var(--tool-row-height);
+        height: var(--tool-row-height);
+        min-height: var(--tool-row-height);
+        margin: 0;
+        border-bottom: 1px solid var(--border-subtle);
+        background: color-mix(in srgb, var(--color-base-content) 3%, var(--color-base-100));
+        pointer-events: none;
+        z-index: 3;
     }
 
-    &:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
+    /* The mixer switch in the track controls header. It carries no caption, so its width follows its content
+       and it takes the spacing of the playback bar's switches. Its height stays within the 30px header block,
+       which keeps the track rows where they line up with the score. */
+    .actionControlSwitch {
+        flex: 0 0 auto;
+        justify-content: center;
+        gap: 6px;
+        width: auto;
+        min-width: 0;
+        height: 26px;
+        min-height: 26px;
+        padding: 0 12px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 9999px;
+        background-color: var(--color-base-100);
+        color: var(--color-base-content);
+        font-weight: 600;
+        white-space: nowrap;
+        pointer-events: auto;
+
+        .icon {
+            flex: 0 0 18px;
+            width: 18px;
+            min-width: 18px;
+            height: 18px;
+            min-height: 18px;
+            font-size: 18px;
+        }
+
+        &.is-active {
+            border-color: var(--color-playback-accent);
+            background-color: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
+            color: var(--color-playback-accent);
+
+            .icon {
+                color: var(--color-playback-accent);
+            }
+
+            .actionControlSwitchDot {
+                background-color: var(--color-playback-accent);
+            }
+        }
+    }
+
+    .actionControlSwitchDot {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 8px;
+        border-radius: 50%;
+        background-color: #b4b4b4;
+    }
+
+    .bar-action-strip-viewport {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
         pointer-events: none;
     }
 
-    .icon {
-        pointer-events: none;
+    /* The bar buttons match the controls of the header, on the surface of the bar. */
+    .bar-action-group .bar-action-button {
+        flex: 0 0 var(--control-size);
+        width: var(--control-size);
+        height: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+        border: 1px solid var(--border-control);
+        border-radius: var(--radius-frame);
+        background-color: var(--color-base-100);
+        pointer-events: auto;
+
+        .icon {
+            font-size: 18px;
+            min-width: 18px;
+            min-height: 18px;
+        }
+
+        /* The insert actions draw two glyphs side by side, so they lift the floor the icon style sets. */
+        .bar-action-insert-icon .icon {
+            min-width: 0;
+            min-height: 0;
+        }
+
+        /* The repeat marks are notation symbols, whose box the catalogue states 24px wide: drawn 4px smaller they
+           sit level with the icons of the other buttons. */
+        .score-symbol-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* A repeat mark reads as pressed while the bar carries it, the way the note length buttons do. */
+        &.du-btn-primary {
+            border-color: var(--color-primary);
+            background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+            color: var(--color-base-content);
+        }
     }
+
+    /* The insert actions stand apart from the per-bar actions: 12px on top of the group's 4px gap makes 16px. */
+    .bar-action-group .bar-action-button[data-action="insert-left"] {
+        margin-right: 12px;
+    }
+
+    .bar-action-group .bar-action-button[data-action="insert-right"] {
+        margin-left: 12px;
+    }
+
 }
 
 .selectionDialogList {
@@ -1026,7 +1280,7 @@
 
 /* StaffMeasureViewer: one column per measure, laid out horizontally */
 .staff-measure-viewer {
-    --bar-step-width: calc(var(--note-height) + 5px);
+    --bar-step-width: calc(var(--measure-step-width) + 5px);
 
     /* Will be updated when rendering the measure viewer. */
     --steps-per-bar: 16;
@@ -1034,11 +1288,13 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-width: calc(var(--steps-per-bar) * var(--note-height));
+    min-width: calc(var(--steps-per-bar) * var(--measure-step-width));
     border-right: 2px solid var(--color-base-300);
 
-    /* Keeps the barline of a track piece clear of the column separator, which gets the same room on both sides. */
-    padding: 24px 11px 0 11px;
+    /* Keeps the barline of a track piece clear of the column separator, which gets the same room on both sides.
+       The staff lines run through that room, so the staff of one bar joins the next. */
+    --staff-column-side-padding: 11px;
+    padding: 24px var(--staff-column-side-padding) 0 var(--staff-column-side-padding);
     position: relative;
 
     /* The barline closing the column is the resize handle: an invisible strip centred on the border. */
@@ -1046,11 +1302,38 @@
         position: absolute;
         top: 0;
         bottom: 0;
-        right: -3px;
+        right: -5px;
         width: 8px;
         cursor: col-resize;
         touch-action: none;
         z-index: 3;
+
+        .staff-measure-resize-thumb {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: grid;
+            place-items: center;
+            width: 14px;
+            height: 36px;
+            border: 1px solid var(--border-control);
+            border-radius: 9999px;
+            background: var(--color-base-100);
+            color: var(--color-base-content);
+
+            .icon {
+                width: 10px;
+                min-width: 10px;
+                height: 10px;
+                min-height: 10px;
+            }
+        }
+
+        &:hover .staff-measure-resize-thumb {
+            border-color: var(--color-primary);
+            background: var(--color-base-200);
+        }
     }
 }
 
@@ -1062,33 +1345,59 @@
     flex-shrink: 0;
     width: 48px;
     margin: 0 -8px 0 8px;
-    padding-top: 44px;
 
-    /* The prefix rows sit twenty px lower than the note rows they belong to, so the line their staffs are
-       drawn around is twenty px higher in them. */
-    --staff-centre: 12px;
+    /* The prefix starts at the measure column's head room, so its first row lines up with the note rows. */
+    padding-top: 24px;
 }
 
+/* The bar number is the column's watermark, so it takes the column's own area and the query units below state
+   its size from the height the column has. A score of a single instrument is a short column, which the number
+   follows instead of overflowing it. */
 .staff-measure-number {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    inset: 0;
     z-index: 0;
-    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
     pointer-events: none;
-    flex-shrink: 0;
-    font-size: 192px;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--color-base-content);
-    opacity: 0.1;
+    container-type: size;
+
+    /* A digit fills 0.7 of its font size, so 120cqh covers the column while leaving it a little air above and
+       below. The cap keeps the number at its former size once a column is tall enough to hold that. The digits
+       state no line height: a line box taller than the column would be aligned to the column's top, not centred. */
+    .staff-measure-number-digits {
+        font-size: min(192px, 120cqh);
+        font-weight: 700;
+        line-height: 0;
+        color: var(--color-base-content);
+        opacity: 0.1;
+    }
 }
 
 .staff-prefix-row {
-    min-height: var(--note-height);
-    margin: 0;
-    padding-top: 22px;
-    margin-bottom: 20px;
+    /* The prefix row states the same height as the note rows beside it, so their staff lines line up. */
+    height: var(--staff-row-height, auto);
+    margin: 0 0 20px 0;
+
+    /* The prefix column overlaps the measure column by 8px, whose note rows keep their distance from the barline
+       by `--staff-column-side-padding`. The lines close that distance, so the staff runs on from the clef into
+       the first bar without a break and without drawing over the bar's own lines. */
+    .staff-note-viewer-line {
+        right: calc(8px - var(--staff-column-side-padding, 11px));
+    }
+}
+
+/* The clef and time signature are centred on the staff line, which the row geometry places. */
+.staff-prefix-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% + var(--staff-centre, 0px));
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
 }
 
 .staff-prefix-middle-line {
@@ -1096,7 +1405,7 @@
     top: 50%;
     left: 0;
     right: 0;
-    border-top: var(--staff-line-thickness, 1px) solid var(--color-base-300);
+    border-top: var(--staff-line-thickness, 1px) solid var(--staff-line-colour);
     transform: translateY(-50%);
     z-index: -1;
 }
@@ -1136,7 +1445,7 @@
     margin: 0;
 }
 
-/* MiniBarViewer: one track's note row within a mini bar column. */
+/* One track's note row within a bar column. */
 .bar-track-row {
     position: relative;
     display: flex;
@@ -1148,9 +1457,17 @@
 .staff-note-viewer {
     --staff-note-prefix-width: 58px;
 
-    /* The line the notes are drawn around sits this far below the middle of the row; the space above it
-       holds stems, beams and tuplet brackets. */
-    --staff-centre: 32px;
+    /* Distance from the row's middle to the line notes are drawn on, stated by the row geometry; the space
+       above it holds stems, beams and tuplet brackets. */
+    --staff-centre: 0px;
+
+    /* Room the notation takes above and below the line the notes are drawn on. The viewer states it from
+       the noteheads, the stems and the beam stacks, and the tuplet markers are placed by it. */
+    --staff-ink-top: 0px;
+    --staff-ink-bottom: 0px;
+
+    /* Gap a tuplet marker keeps from the notation. Mirrors `tupletGapPx` in StaffInk.ts. */
+    --tuplet-marker-gap: 6px;
 
     /* A final barline joins the outer staff lines. The viewer states the height it draws with; this value is
        the fallback for the time before a viewer rendered. */
@@ -1165,9 +1482,9 @@
     --staff-repeat-dot-gap: 2px;
 
     /*
-     * Where an up-stem ends: this far above its note's staff line. It is the outer edge of the beam
-     * for a beamed note and the same height for an unbeamed one, so both kinds of stem end on one
-     * line. A stem is one octave (three and a half staff spaces) long by convention.
+     * Where an unbeamed up-stem ends: this far above its note's own staff line, one octave (three and
+     * a half staff spaces) by convention. A beamed note overrides it per group with the distance up to
+     * the beam line the whole group shares, so every stem of the group ends on that one line.
      */
     --stem-tip: calc(var(--staff-space) * 3.5);
 
@@ -1192,7 +1509,10 @@
 
     position: relative;
     width: 100%;
-    min-height: var(--note-height);
+
+    /* The row geometry states the height, so a track with taller notation gets a taller row. The gap below
+       keeps the rows apart; the side controls state the same height and gap, which keeps the columns aligned. */
+    height: var(--staff-row-height, auto);
     margin-bottom: 20px;
 }
 
@@ -1204,7 +1524,7 @@
     /* Centred on the line the notes sit on, which the viewer states; the offset is the line's place in the
        staff. Whole pixels, so the line lands on the pixel grid. */
     top: calc(50% + var(--staff-centre, 32px) + var(--staff-line-offset, 0px) - round(nearest, var(--staff-line-thickness, 1px) / 2, 1px));
-    border-top: var(--staff-line-thickness, 1px) solid var(--color-base-300);
+    border-top: var(--staff-line-thickness, 1px) solid var(--staff-line-colour);
     z-index: -1;
 }
 
@@ -1289,20 +1609,36 @@
 }
 
 /* Runs: flex row of proportional-width note / rest segments */
+.simile-playback-preview {
+    .staff-note-viewer-tuplets {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+}
+
 .staff-note-viewer-runs {
+    .simile-playback-preview & {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
     position: absolute;
-    inset: 0;
+
+    /* The grid keeps the room the outer events hold at the default width, so resizing a measure only spreads the
+       events between them. */
+    top: 0;
+    bottom: 0;
+    right: var(--staff-grid-inset-right, 0px);
+    left: var(--staff-grid-inset-left, 0px);
 
     /* The middle of the run box is the line the staff is drawn around, so it is offset by twice that. */
     margin-top: calc(var(--staff-centre) * 2);
 
-    /* A barline a bar opens with reaches into it, so the notes start right of that ink. How far they keep from it
-       is stated by the viewer, which takes the room the bar leaves before the barline at its other end, so a bar
-       stands the same distance from the dots on both sides of a repeated section. */
+    /* A barline a bar opens with reaches into it, so the notes start right of that ink. The viewer states the room
+       as the barline's own ink plus the gap its dots keep, so a repeat only takes its own space away. */
     padding-left: var(--staff-opening-barline-room, 0px);
 
-    /* A barline a bar closes with reaches into it with its dots too, so the notes end left of that ink: the viewer
-       states the room of the barline it closes with, which the bar keeps free of notes. */
+    /* A barline a bar closes with reaches into it with its dots too, so the notes end left of that ink. */
     padding-right: var(--staff-closing-barline-room, 0px);
     display: flex;
 }
@@ -1322,26 +1658,36 @@
     justify-content: flex-start;
 }
 
-/* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
-   StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). The primary
-   beam sits on the stem tips, its thickness reaching down towards the heads. */
+/* Beam stroke attached to a beamed note. Position, size and the sloped shape are set inline by
+ * StaffNoteViewer.renderBeamSegments per stroke (shared vs partial, level 1..3): the stroke is a
+ * parallelogram on the group's shared beam line, its top edge the line itself and its vertical
+ * thickness reaching down towards the heads. */
 .staff-note-viewer-beam {
     position: absolute;
     height: var(--beam-thickness, 4px);
-    background: var(--color-base-content);
+    color: var(--color-base-content);
+    overflow: visible;
     pointer-events: none;
     z-index: 2;
 }
 
 .staff-note-viewer-tuplets {
+    /*
+     * Depth of a bracket's hooks. An above bracket draws its line on the box's top edge and lets the hooks reach
+     * down from it, so the line itself has to stand that much further from the notation.
+     */
+    --tuplet-bracket-depth: 9px;
+
     position: absolute;
-    inset: 0;
+    top: 0;
+    bottom: 0;
+    right: var(--staff-grid-inset-right, 0px);
+    left: var(--staff-grid-inset-left, 0px);
     pointer-events: none;
 }
 
 .staff-note-viewer-tuplet-number {
     position: absolute;
-    transform: translateX(-50%);
     display: inline-block;
     min-width: 11px;
     text-align: center;
@@ -1353,12 +1699,18 @@
     z-index: 2;
 }
 
+/*
+ * A number sits in the gap the line of a bracket leaves free, its middle on the line's level. A number without a
+ * bracket stands where that line would be, so both shapes place the number the same way.
+ */
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-above {
-    top: calc(50% - 34px);
+    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap) - var(--tuplet-bracket-depth)));
+    transform: translate(-50%, -50%);
 }
 
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-below {
-    top: calc(50% + 59px);
+    top: calc(50% + var(--staff-centre) + var(--staff-ink-bottom) + var(--tuplet-marker-gap) + var(--tuplet-bracket-depth));
+    transform: translate(-50%, -50%);
 }
 
 /*
@@ -1370,7 +1722,7 @@
     --tuplet-number-gap: 17px;
 
     position: absolute;
-    height: 9px;
+    height: var(--tuplet-bracket-depth);
     border-left: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
     border-right: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
     box-sizing: border-box;
@@ -1396,7 +1748,7 @@
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
-    top: calc(50% - 24px);
+    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap) - var(--tuplet-bracket-depth)));
 
     &::before,
     &::after {
@@ -1406,7 +1758,7 @@
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
-    top: calc(50% + 45px);
+    top: calc(50% + var(--staff-centre) + var(--staff-ink-bottom) + var(--tuplet-marker-gap));
 
     &::before,
     &::after {
@@ -1425,12 +1777,15 @@
     padding: 0 3px;
 }
 
+/* The number of a bracket hangs on the line's level: the line is the bracket box's own edge. */
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above > .staff-note-viewer-tuplet-text {
-    top: -10px;
+    top: 0;
+    transform: translate(-50%, -50%);
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below > .staff-note-viewer-tuplet-text {
-    bottom: -10px;
+    bottom: 0;
+    transform: translate(-50%, 50%);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1518,7 +1873,8 @@
         pointer-events: none;
     }
 
-    /* The parentheses of a ghost note hug the head's ink on both sides. */
+    /* The parentheses of a ghost note hug the head's ink on both sides with the same gap. Both glyphs end on
+     * the right edge of their box, so each parenthesis hangs on its gap plus its own ink width. */
     .staff-note-head-paren-left {
         position: absolute;
         left: calc(0% - var(--staff-space) * 0.2);
@@ -1529,7 +1885,7 @@
 
     .staff-note-head-paren-right {
         position: absolute;
-        left: calc(100% + var(--staff-space) * 0.8 + var(--glyph-ink-width-noteheadparenthesisright));
+        left: calc(100% + var(--staff-space) * 0.2 + var(--glyph-ink-width-noteheadparenthesisright));
         top: 50%;
         transform: translate(-100%, -50%);
         pointer-events: none;
@@ -1537,7 +1893,7 @@
 
     /* A dotted note needs room for its dot before the closing parenthesis. */
     &.staff-note-head-dotted .staff-note-head-paren-right {
-        left: calc(100% + var(--staff-space) * 1.6 + var(--glyph-ink-width-noteheadparenthesisright));
+        left: calc(100% + var(--staff-space) * 0.6 + var(--glyph-ink-width-augmentationdot) + var(--glyph-ink-width-noteheadparenthesisright));
     }
 
     /* The accent sits centred under the head's ink, where the score's accents have always been drawn. A
@@ -1560,11 +1916,11 @@
         pointer-events: none;
     }
 
-    /* ---- Press roll: the slashes run along the stem, from its tip down ---- */
+    /* ---- Press roll: the slashes run along the stem, from below the beam stack down ---- */
     .staff-note-head-press-roll-svg {
         position: absolute;
         left: calc(100% - var(--staff-space) * 0.7 - 1px);
-        top: calc(50% - var(--stem-tip, 35px) + 1px);
+        top: calc(50% - var(--stem-tip, 35px) + var(--beam-stack-depth, 0px) + 1px);
         pointer-events: none;
     }
 
@@ -1736,6 +2092,12 @@
     display: block;
     transform: translateY(var(--rest-line-offset, 0px));
 
+    /* A dotted rest's dot hangs beside its glyph, so the symbol moves left by half of the dot's room and stays
+       centred in the slot the measure layout keeps free for it. */
+    &.staff-note-viewer-rest-symbol-dotted {
+        transform: translateY(var(--rest-line-offset, 0px)) translateX(calc(var(--staff-space) * -0.4));
+    }
+
     .staff-note-viewer-rest-dot {
         position: absolute;
         left: calc(50% + var(--rest-ink-width) / 2 + var(--staff-space) * 0.4);
@@ -1781,7 +2143,7 @@
     overflow-x: hidden;
 
     margin: 2px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
     border-radius: 8px;
 }
 
@@ -1853,52 +2215,12 @@
     pointer-events: none;
 }
 
-#trackViewerContainer:not(.edit-mode) .selection-cursor {
-    display: none;
-}
-
 .selection-overlay {
     position: absolute;
     background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
     border: 1px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
     border-radius: 8px;
     pointer-events: none;
-
-    .selection-delete-button {
-        /* Lay the two bars out as one grid cell each, so the grid centres the cross on the circle. */
-        display: grid;
-        place-items: center;
-        position: absolute;
-        top: -9px;
-        right: -9.5px;
-        width: 18px;
-        height: 18px;
-        padding: 0;
-        border: 1px solid var(--color-base-100);
-        border-radius: 50%;
-        background-color: var(--color-primary);
-        color: var(--color-primary-content);
-        cursor: pointer;
-        pointer-events: auto;
-        z-index: 1;
-
-        &::before,
-        &::after {
-            grid-area: 1 / 1;
-            width: 1px;
-            height: 8px;
-            background-color: currentColor;
-            content: "";
-        }
-
-        &::before {
-            transform: rotate(45deg);
-        }
-
-        &::after {
-            transform: rotate(-45deg);
-        }
-    }
 }
 
 /*
@@ -1927,6 +2249,12 @@
         display: block;
         overflow: visible;
     }
+}
+
+/* Only while edit mode is on does a marking take a press; otherwise a press on it reaches the score behind it. */
+#trackViewerContainer:not(.edit-mode) .range-articulation {
+    cursor: default;
+    pointer-events: none;
 }
 
 /* The handle a selected marking shows: one per end of a hairpin, one for the position of an f. */
@@ -1988,7 +2316,10 @@
  * layer is pointer-transparent: a printed marking is never editable. */
 .staff-note-viewer-articulations {
     position: absolute;
-    inset: 0;
+    top: 0;
+    bottom: 0;
+    right: var(--staff-grid-inset-right, 0px);
+    left: var(--staff-grid-inset-left, 0px);
     pointer-events: none;
 }
 
@@ -2021,6 +2352,11 @@ body.range-articulation-mode * {
 
 body.range-articulation-mode #trackViewerContentHost,
 body.range-articulation-mode #trackViewerContentHost * {
+    pointer-events: auto;
+}
+
+body.range-articulation-mode #toolsBarHost,
+body.range-articulation-mode #toolsBarHost * {
     pointer-events: auto;
 }
 
@@ -2176,7 +2512,7 @@ body.range-articulation-mode #trackViewerContentHost * {
     border: 1px solid var(--color-base-300);
     background-color: color-mix(in srgb, var(--color-base-100) 70%, transparent);
     backdrop-filter: blur(10px);
-    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px var(--shadow-color), 0 4px 6px -4px var(--shadow-color));
 }
 
 /* Keyboard navigation highlight for dropdown menus and completion lists. */
@@ -2256,164 +2592,233 @@ body.range-articulation-mode #trackViewerContentHost * {
     margin: 12px 4px 4px 4px;
 }
 
-.arrangementViewer {
-    padding: 15px;
-    overflow-x: hidden;
-    user-select: none;
-    min-height: 100%;
+/* Full-page fallback of the ErrorBoundary. It replaces the app shell, so it centers its panel itself. */
+.error-boundary {
+    display: flex;
+    height: calc(100vh - 2 * var(--page-gap));
+    padding: 24px 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background-color: var(--color-base-200);
+    color: var(--color-base-content);
 
-    .minimap {
-        --minimap-marker-top: -4px;
-        --minimap-marker-height: 68px;
+    @supports (height: 100dvh) {
+        height: calc(100dvh - 2 * var(--page-gap));
+    }
 
-        height: 80px;
-        margin: 0 20px 0 0;
-        touch-action: none;
-
+    /* Auto margins center the panel and, unlike align-items, do not clip it when it outgrows the viewport. */
+    .error-boundary-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        width: 100%;
+        max-width: 600px;
+        margin: auto;
+        padding: 28px;
+        box-sizing: border-box;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        border-radius: var(--radius-app);
         background-color: var(--color-base-100);
+        box-shadow: 0 16px 40px -28px var(--color-base-content);
+    }
 
-        #minimapScrollHost {
-            height: 60px;
-            overflow: hidden;
-            flex: 1 1 auto;
-            min-width: 0;
+    .error-boundary-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
 
-            touch-action: none;
-            scrollbar-width: none;
+    .error-boundary-logo {
+        width: 44px;
+        height: 44px;
+        flex: 0 0 auto;
+        border-radius: 8px;
+    }
 
-            &::-webkit-scrollbar {
-                display: none;
+    .error-boundary-identity {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+    }
+
+    .error-boundary-app-name {
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .error-boundary-app-tagline {
+        font-size: 12px;
+        color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+    }
+
+    .error-boundary-message {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .error-boundary-heading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .error-boundary-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: color-mix(in srgb, var(--color-warning) 16%, transparent);
+        color: var(--color-warning);
+
+        .icon {
+            font-size: 20px;
+        }
+    }
+
+    .error-boundary-title {
+        display: block;
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    .error-boundary-description {
+        max-width: 52ch;
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.55;
+        color: color-mix(in srgb, var(--color-base-content) 82%, transparent);
+    }
+
+    .error-boundary-recovery {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .error-boundary-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .error-boundary-action-hint {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: color-mix(in srgb, var(--color-base-content) 72%, transparent);
+    }
+
+    .error-boundary-help {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px 18px;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        border-radius: 10px;
+        background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
+    }
+
+    .error-boundary-section-title {
+        display: block;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .error-boundary-help-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: color-mix(in srgb, var(--color-base-content) 78%, transparent);
+    }
+
+    .error-boundary-report-link {
+        align-self: flex-start;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-primary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        border-radius: 4px;
+
+        &:hover {
+            text-decoration-thickness: 2px;
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+    }
+
+    .error-boundary-details {
+        font-size: 13px;
+
+        summary {
+            cursor: pointer;
+            width: fit-content;
+            padding: 2px 0;
+            font-weight: 600;
+            border-radius: 4px;
+
+            &:focus-visible {
+                outline: 2px solid var(--color-primary);
+                outline-offset: 2px;
             }
         }
+    }
 
-        .mini-bar-viewer {
-            position: relative;
-            padding-right: 8px;
-            margin-right: 8px;
-            border-right: 1px solid var(--color-neutral);
-            pointer-events: none;
+    .error-boundary-details-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .error-boundary-details-text {
+        width: 100%;
+        max-height: 240px;
+        margin: 0;
+        padding: 12px;
+        box-sizing: border-box;
+        overflow: auto;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 15%, transparent);
+        border-radius: 8px;
+        background-color: color-mix(in srgb, var(--color-base-content) 5%, var(--color-base-100));
+        color: inherit;
+        font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .error-boundary-details-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .error-boundary-copy-status {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-success);
+    }
+
+    @media (max-width: 600px) {
+        .error-boundary-panel {
+            gap: 18px;
+            padding: 22px 18px;
         }
 
-        .mini-bar-track-row {
-            position: relative;
-            pointer-events: none;
-        }
-
-        .mini-bar-selection-overlay {
-            position: absolute;
-            inset: 0;
-            background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
-            pointer-events: none;
-            z-index: 2;
-            border-radius: 4px;
-        }
-
-        .mini-note-viewer {
-            width: var(--note-height);
-            height: var(--note-height);
-            margin: 4px;
-            border-radius: 8px;
-            pointer-events: none;
-        }
-
-        #minimapViewportMarker {
-            position: absolute;
-            display: none;
-            pointer-events: auto;
-            touch-action: none;
-            user-select: none;
-
-            height: var(--minimap-marker-height);
-            top: var(--minimap-marker-top);
-
-            border: 1px solid color-mix(in srgb, var(--color-base-300) 10%, var(--color-neutral-content));
-            border-radius: 6px;
-            background-color: color-mix(in srgb, var(--color-base-300) 50%, transparent);
-            z-index: 4;
-
-            cursor: grab;
-        }
-
-        #minimapViewportLabel {
-            position: absolute;
-            display: none;
-            top: calc(var(--minimap-marker-top) + (var(--minimap-marker-height) / 2));
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            user-select: none;
-            z-index: 6;
-
-            #barNumber {
-                display: inline-block;
-                font-size: 24px;
-                font-weight: bold;
-                line-height: 1;
-                color: var(--color-neutral-content);
-                text-shadow: 0 1px 2px color-mix(in srgb, var(--color-base-100) 50%, black);
-                white-space: nowrap;
-                user-select: none;
-                pointer-events: none;
-            }
-        }
-
-        #minimapBarSelector {
-            position: absolute;
-            display: none;
-            pointer-events: auto;
-            touch-action: none;
-            user-select: none;
-
-            height: var(--minimap-marker-height);
-            top: var(--minimap-marker-top);
-
-            border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
-            border-radius: 4px;
-            background-color: color-mix(in srgb, var(--color-neutral) 20%, transparent);
-            z-index: 3;
-            cursor: grab;
-        }
-
-        #minimapBarSelectorLabel {
-            position: absolute;
-            display: none;
-            top: calc(var(--minimap-marker-top) - 14px);
-            transform: translate(-50%, -100%);
-            pointer-events: none;
-            user-select: none;
-            z-index: 6;
-
-            font-size: 12px;
-            font-weight: 700;
-            line-height: 1;
-            color: var(--color-info-content);
-            background-color: color-mix(in srgb, var(--color-info) 75%, black 10%);
-            border: 1px solid color-mix(in srgb, var(--color-info-content) 25%, transparent);
-            border-radius: 999px;
-            padding: 4px 8px;
-            white-space: nowrap;
-        }
-
-        .minimap-bar-selector-handle {
-            position: absolute;
-            display: none;
-            top: -6px;
-            width: 12px;
-            height: 72px;
-            margin-left: -6px;
-
-            pointer-events: auto;
-            touch-action: none;
-            user-select: none;
-            cursor: ew-resize;
-
-            border-radius: 999px;
-            background-color: color-mix(in srgb, var(--color-neutral) 50%, white);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 65%, transparent);
-            z-index: 5;
-        }
-
-        .minimap-viewport-marker:active {
-            cursor: grabbing;
+        .error-boundary-title {
+            font-size: 20px;
         }
     }
 }

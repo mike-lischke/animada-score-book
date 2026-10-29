@@ -252,6 +252,135 @@ test.describe("Staff view multi-line rendering", () => {
         })).toEqual(["15px", "5px", "-5px", "-15px"]);
     });
 
+    test("connects every stem of a beam group to one shared beam line across staff lines", async ({ page }) => {
+        // Four sixteenths in the first pulse, each on another line of the 4-Bell Agogo, drawn as one beam
+        // group. The group has one beam line, so every stem must reach it and none may pass above it.
+        const snapshot = {
+            version: arrangementSnapshotVersion,
+            title: "E2E Multi-Line Beam",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 100,
+                instrumentId: "a",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        ...[1, 2, 3, 4].map((noteStyleId, index) => {
+                            return {
+                                start: { numerator: index, denominator: 16 },
+                                duration: { numerator: 1, denominator: 16 },
+                                noteStyleId: noteStyleId.toString(),
+                            };
+                        }),
+                        { start: { numerator: 4, denominator: 16 }, duration: { numerator: 12, denominator: 16 } },
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-staff-multi-line-beam";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+
+        await page.goto("/");
+        await expect(page.locator("#trackViewerHost")).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        const { beamTops, beamBottoms, stemTops, stemHeights, lineOffsets } = await page.evaluate(() => {
+            const row = document.querySelector(".staff-measure-track-row");
+            const runs = [...(row?.querySelectorAll<HTMLElement>(".staff-note-viewer-note-run") ?? [])];
+            const strokes = [...(row?.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect") ?? [])]
+                .flatMap((rect) => {
+                    const matrix = rect.getScreenCTM();
+                    if (matrix === null) {
+                        return [];
+                    }
+
+                    const box = rect.getBBox();
+
+                    return [{
+                        matrix,
+                        originX: matrix.e,
+                        scale: Math.abs(matrix.d),
+                        startX: rect.x.baseVal.value,
+                        width: box.width,
+                        height: box.height,
+                    }];
+                });
+
+            // The beam's top edge and thickness at one horizontal position, taken from the stroke covering it.
+            const strokeEdgeAt = (screenX: number): { top: number; bottom: number; } | undefined => {
+                let edge: { top: number; bottom: number; } | undefined;
+
+                for (const stroke of strokes) {
+                    const localX = (screenX - stroke.originX) / stroke.scale;
+                    if (localX < stroke.startX || localX > stroke.startX + stroke.width) {
+                        continue;
+                    }
+
+                    const top = new DOMPoint(localX, 0).matrixTransform(stroke.matrix).y;
+                    if (edge === undefined || top < edge.top) {
+                        edge = { top, bottom: top + (stroke.height * stroke.scale) };
+                    }
+                }
+
+                return edge;
+            };
+
+            const stemBoxes = runs.map((run) => {
+                return run.querySelector(".staff-note-viewer-custom-stem")?.getBoundingClientRect();
+            });
+            const edgeBoxes = stemBoxes.map((box) => {
+                return box === undefined ? undefined : strokeEdgeAt(box.left + (box.width / 2));
+            });
+
+            return {
+                beamTops: edgeBoxes.map((edge) => {
+                    return edge?.top;
+                }),
+                beamBottoms: edgeBoxes.map((edge) => {
+                    return edge?.bottom;
+                }),
+                stemTops: stemBoxes.map((box) => {
+                    return box?.top;
+                }),
+                stemHeights: stemBoxes.map((box) => {
+                    return box?.height;
+                }),
+                lineOffsets: runs.map((run) => {
+                    const head = run.querySelector<HTMLElement>(".staff-note-head");
+
+                    return head === null ? null : getComputedStyle(head).getPropertyValue("--note-line-offset").trim();
+                }),
+            };
+        });
+
+        // The four notes sit on the four lines of the 4-bell agogo, lowest first.
+        expect(lineOffsets).toEqual(["15px", "5px", "-5px", "-15px"]);
+
+        // The group's one beam line rises with the pitch: the last stroke sits higher on screen than the
+        // first. No stem passes above its stroke, and each one reaches into it, so all of them connect.
+        expect(beamTops[0] ?? 0).toBeGreaterThan(beamTops[3] ?? 0);
+        stemTops.forEach((stemTop, index) => {
+            expect(stemTop ?? 0).toBeGreaterThanOrEqual((beamTops[index] ?? 0) - 2);
+            expect(stemTop ?? 0).toBeLessThanOrEqual((beamBottoms[index] ?? 0) + 2);
+        });
+
+        // The notes lie on one evenly spaced line, so the beam follows it and every stem keeps the same
+        // length. A horizontal beam would leave the low notes with longer stems than the high ones.
+        stemHeights.forEach((height) => {
+            expect(Math.abs((height ?? 0) - (stemHeights[0] ?? 0))).toBeLessThanOrEqual(1);
+        });
+    });
+
     test("staff prefix viewer renders matching lines for multi-line instruments", async ({ page }) => {
         const snapshot = buildSnapshot("a", "E2E Prefix Lines");
 

@@ -28,6 +28,7 @@ export enum SmuflGlyphFamily {
     MeasureRepeat,
     BarLines,
     Repeats,
+    Brackets,
 }
 
 /** SMuFL glyph names, spelled exactly as SMuFL defines them. */
@@ -99,6 +100,9 @@ export enum SmuflGlyph {
     RepeatRight = "repeatRight",
     RepeatRightLeft = "repeatRightLeft",
     RepeatDots = "repeatDots",
+
+    BracketTop = "bracketTop",
+    BracketBottom = "bracketBottom",
 }
 
 /** What a font has to provide for a single glyph. */
@@ -112,7 +116,7 @@ export interface ISmuflGlyphDefinition {
 /** The vocabulary of SMuFL symbols the score draws, and what a font has to provide for them. */
 export class SmuflGlyphs {
     /** Every glyph the score draws. */
-    public static readonly all: readonly SmuflGlyph[] = Object.values(SmuflGlyph) as SmuflGlyph[];
+    public static readonly all: readonly SmuflGlyph[] = Object.values(SmuflGlyph);
 
     /** The symbol families the score draws from. */
     public static readonly families: readonly SmuflGlyphFamily[];
@@ -233,6 +237,9 @@ export class SmuflGlyphs {
         [SmuflGlyph.RepeatRight]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE041 },
         [SmuflGlyph.RepeatRightLeft]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE042 },
         [SmuflGlyph.RepeatDots]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE043 },
+
+        [SmuflGlyph.BracketTop]: { family: SmuflGlyphFamily.Brackets, codepoint: 0xE003 },
+        [SmuflGlyph.BracketBottom]: { family: SmuflGlyphFamily.Brackets, codepoint: 0xE004 },
     };
 
     /**

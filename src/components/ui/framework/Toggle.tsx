@@ -30,17 +30,14 @@ export interface IToggleProperties extends ICommonUIProperties {
 }
 
 export class Toggle extends UIComponent<IToggleProperties> {
+    private toggleRef = createRef<HTMLInputElement | null>();
 
-    public static override defaultProps = {
-        checkState: CheckState.Unchecked,
-        disabled: false,
-        round: true,
-    };
-
-    private toggleRef = createRef<HTMLInputElement>();
+    public constructor(props: IToggleProperties) {
+        super(props);
+    }
 
     public override componentDidMount(): void {
-        const { checkState } = this.props;
+        const { checkState = CheckState.Unchecked } = this.props;
 
         if (this.toggleRef.current && checkState === CheckState.Indeterminate) {
             this.toggleRef.current.indeterminate = true;
@@ -50,14 +47,16 @@ export class Toggle extends UIComponent<IToggleProperties> {
     public override componentDidUpdate(prevProps: IToggleProperties): void {
 
         if (this.toggleRef.current) {
-            const { checkState } = this.props;
+            const { checkState = CheckState.Unchecked } = this.props;
 
             this.toggleRef.current.checked = checkState === CheckState.Checked;
         }
     }
 
     public render(): ComponentChild {
-        const { id, checkState, vertical, disabled, uncheckedIcon, checkedIcon } = this.props;
+        const {
+            id, checkState = CheckState.Unchecked, vertical, disabled = false, uncheckedIcon, checkedIcon,
+        } = this.props;
 
         const className = this.generateFinalClassName([
             "toggle",

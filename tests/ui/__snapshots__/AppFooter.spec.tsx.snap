@@ -1,0 +1,474 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppFooter > renders the compact footer 1`] = `
+<div>
+  <div
+    class="container app-footer"
+    id="appFooter"
+    style="flex-direction: row; align-items: center;"
+  >
+    <span
+      class="label appFooterRange"
+    >
+      Bar 1 of 16
+    </span>
+    <div
+      class="scoreNavigator appFooterNavigator appFooterNavigator"
+    >
+      <div
+        class="scoreNavigatorTrack"
+      >
+        <div
+          class="scoreNavigatorWindow"
+          style="left: 0%; width: 100%;"
+        />
+      </div>
+    </div>
+    <div
+      class="container appFooterActions"
+      style="flex-direction: row; align-items: center;"
+    >
+      <button
+        aria-pressed="false"
+        class="btn du-btn appFooterZenButton"
+        id="zenModeButton"
+        title="Enter Zen mode"
+      >
+        <svg
+          class="icon"
+          data-icon="ScreenFull"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M17,14H19V19H14V17H17V14M10,17V19H5V14H7V17H10Z"
+          />
+        </svg>
+      </button>
+      <div
+        class="dropdown-host footerOverflowMenu"
+      >
+        <button
+          class="btn du-btn imageOnly du-btn-ghost"
+          popovertarget="popover-2"
+          style="anchor-name: --anchor-1;"
+          title="More footer actions"
+        >
+          <svg
+            class="icon"
+            data-icon="Ellipsis"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M16,12A2,2 0 0,1 18,10A2,2 0 0,1 20,12A2,2 0 0,1 18,14A2,2 0 0,1 16,12M10,12A2,2 0 0,1 12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12M4,12A2,2 0 0,1 6,10A2,2 0 0,1 8,12A2,2 0 0,1 6,14A2,2 0 0,1 4,12Z"
+            />
+          </svg>
+        </button>
+        <ul
+          class="du-dropdown du-menu dropdown-popup"
+          id="popover-2"
+          popover="auto"
+          style="position-anchor: --anchor-1;"
+        >
+          <li>
+            <a
+              tabindex="0"
+            >
+              <span
+                class="inline-flex w-6 h-6 items-center justify-center"
+              >
+                <svg
+                  class="icon"
+                  data-icon="ZoomOut"
+                  fill="currentColor"
+                  height="1em"
+                  viewBox="0 0 24 24"
+                  width="1em"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M9,2A7,7 0 0,1 16,9C16,10.57 15.5,12 14.61,13.19L15.41,14H16L22,20L20,22L14,16V15.41L13.19,14.61C12,15.5 10.57,16 9,16A7,7 0 0,1 2,9A7,7 0 0,1 9,2M5,8V10H13V8H5Z"
+                  />
+                </svg>
+              </span>
+              Zoom out
+            </a>
+          </li>
+          <li>
+            <a
+              tabindex="0"
+            >
+              <span
+                class="inline-flex w-6 h-6 items-center justify-center"
+              >
+                <svg
+                  class="icon"
+                  data-icon="ZoomIn"
+                  fill="currentColor"
+                  height="1em"
+                  viewBox="0 0 24 24"
+                  width="1em"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M9,2A7,7 0 0,1 16,9C16,10.57 15.5,12 14.61,13.19L15.41,14H16L22,20L20,22L14,16V15.41L13.19,14.61C12,15.5 10.57,16 9,16A7,7 0 0,1 2,9A7,7 0 0,1 9,2M8,5V8H5V10H8V13H10V10H13V8H10V5H8Z"
+                  />
+                </svg>
+              </span>
+              Zoom in
+            </a>
+          </li>
+          <li>
+            <a
+              tabindex="0"
+            >
+              <span
+                class="inline-flex w-6 h-6 items-center justify-center"
+              >
+                <svg
+                  class="icon"
+                  data-icon="Refresh"
+                  fill="currentColor"
+                  height="1em"
+                  viewBox="0 0 24 24"
+                  width="1em"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"
+                  />
+                </svg>
+              </span>
+              Reset zoom
+              <span
+                class="dropdown-item-detail"
+              >
+                100%
+              </span>
+            </a>
+          </li>
+          <li
+            class="dropdown-caption"
+          >
+            <a
+              tabindex="-1"
+            >
+              Version 1.5.0
+            </a>
+          </li>
+          <li>
+            <a
+              tabindex="0"
+            >
+              <span
+                class="inline-flex w-6 h-6 items-center justify-center"
+              >
+                <svg
+                  class="icon"
+                  data-icon="Info"
+                  fill="currentColor"
+                  height="1em"
+                  viewBox="0 0 24 24"
+                  width="1em"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"
+                  />
+                </svg>
+              </span>
+              Release Notes
+            </a>
+          </li>
+        </ul>
+      </div>
+      <button
+        class="btn du-btn appFooterNotificationButton"
+        id="showNotificationHistory"
+        title="No notifications"
+      >
+        <svg
+          class="icon"
+          data-icon="Bell"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M10 21H14C14 22.1 13.1 23 12 23S10 22.1 10 21M21 19V20H3V19L5 17V11C5 7.9 7 5.2 10 4.3V4C10 2.9 10.9 2 12 2S14 2.9 14 4V4.3C17 5.2 19 7.9 19 11V17L21 19M17 11C17 8.2 14.8 6 12 6S7 8.2 7 11V18H17V11Z"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`AppFooter > renders with all props set 1`] = `
+<div>
+  <div
+    class="container app-footer zen-footer zen-footer"
+    id="appFooter"
+    style="flex-direction: row; align-items: center;"
+  >
+    <span
+      class="label appFooterRange"
+    >
+      Bar 1 of 8
+    </span>
+    <div
+      class="scoreNavigator appFooterNavigator appFooterNavigator"
+    >
+      <div
+        class="scoreNavigatorTrack"
+      >
+        <div
+          class="scoreNavigatorWindow"
+          style="left: 0%; width: 100%;"
+        />
+      </div>
+    </div>
+    <div
+      class="container appFooterActions"
+      style="flex-direction: row; align-items: center;"
+    >
+      <div
+        class="container appFooterZoom"
+        style="flex-direction: row; align-items: center;"
+      >
+        <button
+          class="btn du-btn appFooterZoomButton"
+          title="Zoom out"
+        >
+          <svg
+            class="icon"
+            data-icon="HorizontalRule"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H5V11H19V13Z"
+            />
+          </svg>
+        </button>
+        <span
+          class="label appFooterZoomValue"
+        >
+          150%
+        </span>
+        <button
+          class="btn du-btn du-btn-disabled appFooterZoomButton"
+          disabled=""
+          title="Zoom in"
+        >
+          <svg
+            class="icon"
+            data-icon="Add"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <button
+        aria-pressed="true"
+        class="btn du-btn appFooterZenButton"
+        id="zenModeButton"
+        title="Exit Zen mode"
+      >
+        <svg
+          class="icon"
+          data-icon="ScreenNormal"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M14,14H19V16H16V19H14V14M5,14H10V19H8V16H5V14M8,5H10V10H5V8H8V5M19,8V10H14V5H16V8H19Z"
+          />
+        </svg>
+      </button>
+      <span
+        class="appFooterDivider"
+      />
+      <button
+        class="btn du-btn appFooterVersionButton"
+        title="Release Notes"
+      >
+        v2.0.0
+      </button>
+      <button
+        class="btn du-btn appFooterNotificationButton"
+        id="showNotificationHistory"
+        title="Hide notifications"
+      >
+        <svg
+          class="icon"
+          data-icon="BellSlash"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M22.11,21.46L2.39,1.73L1.11,3L5.83,7.72C5.29,8.73 5,9.86 5,11V17L3,19V20H18.11L20.84,22.73L22.11,21.46M7,18V11C7,10.39 7.11,9.79 7.34,9.23L16.11,18H7M10,21H14A2,2 0 0,1 12,23A2,2 0 0,1 10,21M8.29,5.09C8.82,4.75 9.4,4.5 10,4.29C10,4.19 10,4.1 10,4A2,2 0 0,1 12,2A2,2 0 0,1 14,4C14,4.1 14,4.19 14,4.29C16.97,5.17 19,7.9 19,11V15.8L17,13.8V11A5,5 0 0,0 12,6C11.22,6 10.45,6.2 9.76,6.56L8.29,5.09Z"
+          />
+        </svg>
+        <span
+          class="appFooterNotificationBadge"
+        >
+          2
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`AppFooter > renders with the minimum props 1`] = `
+<div>
+  <div
+    class="container app-footer"
+    id="appFooter"
+    style="flex-direction: row; align-items: center;"
+  >
+    <span
+      class="label appFooterRange"
+    >
+      Bar 1 of 16
+    </span>
+    <div
+      class="scoreNavigator appFooterNavigator appFooterNavigator"
+    >
+      <div
+        class="scoreNavigatorTrack"
+      >
+        <div
+          class="scoreNavigatorWindow"
+          style="left: 0%; width: 100%;"
+        />
+      </div>
+    </div>
+    <div
+      class="container appFooterActions"
+      style="flex-direction: row; align-items: center;"
+    >
+      <div
+        class="container appFooterZoom"
+        style="flex-direction: row; align-items: center;"
+      >
+        <button
+          class="btn du-btn appFooterZoomButton"
+          title="Zoom out"
+        >
+          <svg
+            class="icon"
+            data-icon="HorizontalRule"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H5V11H19V13Z"
+            />
+          </svg>
+        </button>
+        <span
+          class="label appFooterZoomValue"
+        >
+          100%
+        </span>
+        <button
+          class="btn du-btn appFooterZoomButton"
+          title="Zoom in"
+        >
+          <svg
+            class="icon"
+            data-icon="Add"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <button
+        aria-pressed="false"
+        class="btn du-btn appFooterZenButton"
+        id="zenModeButton"
+        title="Enter Zen mode"
+      >
+        <svg
+          class="icon"
+          data-icon="ScreenFull"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M17,14H19V19H14V17H17V14M10,17V19H5V14H7V17H10Z"
+          />
+        </svg>
+      </button>
+      <span
+        class="appFooterDivider"
+      />
+      <button
+        class="btn du-btn appFooterVersionButton"
+        title="Release Notes"
+      >
+        v1.5.0
+      </button>
+      <button
+        class="btn du-btn appFooterNotificationButton"
+        id="showNotificationHistory"
+        title="No notifications"
+      >
+        <svg
+          class="icon"
+          data-icon="Bell"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M10 21H14C14 22.1 13.1 23 12 23S10 22.1 10 21M21 19V20H3V19L5 17V11C5 7.9 7 5.2 10 4.3V4C10 2.9 10.9 2 12 2S14 2.9 14 4V4.3C17 5.2 19 7.9 19 11V17L21 19M17 11C17 8.2 14.8 6 12 6S7 8.2 7 11V18H17V11Z"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+`;

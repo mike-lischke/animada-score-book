@@ -23,14 +23,14 @@ test("playback button starts and stops playback", async ({ page }) => {
     await page.goto("/");
 
     const playbackToggle = page.locator("#playbackButton");
-    const playButton = page.locator("#arrangementPlayControls .playStopButton");
+    const playButton = page.locator("#arrangementPlayControls .play-stop-button");
     await expect(playButton).toBeVisible();
 
     await playButton.click();
-    await expect(playbackToggle).toBeChecked();
+    await expect(playbackToggle).toHaveAttribute("aria-pressed", "true");
 
     await playButton.click();
-    await expect(playbackToggle).not.toBeChecked();
+    await expect(playbackToggle).toHaveAttribute("aria-pressed", "false");
 });
 
 test("play beam moves while playback is running", async ({ page }) => {

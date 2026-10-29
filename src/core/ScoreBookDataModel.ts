@@ -43,6 +43,17 @@ export interface ISubdivisionSlotContent {
     articulation?: INoteArticulation;
 }
 
+interface IScoreLockResult {
+    success: boolean;
+    token?: string;
+    locked?: boolean;
+    username?: string;
+    lockedAt?: string;
+
+    /** HTTP status the backend refused the lock with, or undefined when it was granted or unreachable. */
+    status?: number;
+}
+
 /** One bar, the unit of a track's timeline. */
 const barLength: IFraction = { numerator: 1, denominator: 1 };
 
@@ -208,7 +219,7 @@ export enum NoteDisplayType {
     /** A filled square for hand-struck instruments (e.g. Repinique de mão, Conga). */
     Square,
 
-    /** A hollow equilateral triangle for shaken instruments (e.g. Chocalho, Ganzá). */
+    /** A filled equilateral triangle for shaken instruments (e.g. Chocalho, Ganzá). */
     Triangle,
 }
 
@@ -653,6 +664,12 @@ export interface IUserInfo {
     isAdmin: boolean;
 }
 
+/** The group a session logs in through, which is all a session needs to know about it. */
+export interface IGroupInfo {
+    id: number;
+    name: string;
+}
+
 /** A user row as returned by listUsers. */
 export interface IUserRow {
     id: number;
@@ -695,10 +712,7 @@ interface ILoginResponse {
     user: IUserInfo;
 
     /** Set when the user authenticated via a group password. */
-    group?: {
-        id: number;
-        name: string;
-    };
+    group?: IGroupInfo;
 
     capabilities: ICapabilities;
 }
@@ -708,7 +722,7 @@ interface IWhoamiResponse {
     user?: IUserInfo;
 
     /** Set when authenticated via group shared password. */
-    group?: { id: number; name: string; };
+    group?: IGroupInfo;
 
     capabilities: ICapabilities;
 }
@@ -821,6 +835,15 @@ export interface ITrackPieceInsertion {
     events: IMeasureEvent[];
 }
 
+/** The outcome of a destructive database reset. */
+export interface IDatabaseResetResult {
+    /** True if the backend dropped and rebuilt the database including its seed data. */
+    ok: boolean;
+
+    /** The reason the reset failed, as reported by the backend. */
+    error?: string;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
@@ -845,7 +868,7 @@ export class ScoreBookDataModel {
      *
      * @returns The active group, or undefined if logged in as a user or anonymously.
      */
-    public get activeGroup(): { id: number; name: string; } | undefined {
+    public get activeGroup(): IGroupInfo | undefined {
         return this.currentGroup;
     }
 
@@ -857,8 +880,14 @@ export class ScoreBookDataModel {
     public lockToken?: string;
 
     private accessToken: string | undefined;
+
+    /** True while a token refresh runs, which keeps a nested refusal from starting another one. */
+    private refreshing = false;
+
+    /** True once a refresh failed, so refusals do not repeat a futile attempt before the next login. */
+    private sessionRefreshFailed = false;
     private currentUser: IUserInfo | undefined;
-    private currentGroup: { id: number; name: string; } | undefined;
+    private currentGroup: IGroupInfo | undefined;
     private currentCapabilities: ICapabilities = {
         canEditScores: false,
         canManageUsers: false,
@@ -1024,7 +1053,7 @@ export class ScoreBookDataModel {
             widths.set(bar, next);
         }
 
-        void requisitions.execute("arrangementChanged", arrangement.id);
+        void requisitions.execute("measureLayoutChanged", undefined);
 
         return true;
     }
@@ -1290,6 +1319,35 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Replaces a span of rests with a single rest of the requested length and moves the content behind
+     * it by the difference. The rests the span covers are one silence, so they merge into the rest the
+     * user asked for instead of each taking the new length. The span has to hold rests only; the notes
+     * of a selection are resized one by one instead.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The start of the span within the measure.
+     * @param end The end of the span within the measure.
+     * @param duration The length the rest takes.
+     *
+     * @returns True when the track content changed.
+     */
+    public setRestSpan(trackId: number, bar: number, start: IFraction, end: IFraction,
+        duration: IFraction): boolean {
+        const track = this.trackById(trackId);
+        if (track?.measures.at(bar - 1) === undefined || compareFractions(start, end) >= 0) {
+            return false;
+        }
+
+        const changed = this.setSpan(track, bar, start, end, duration);
+        if (changed) {
+            this.announceTrackEdit(track);
+        }
+
+        return changed;
+    }
+
+    /**
      * Replaces runs of measure events with runs of new events, moving everything behind a run by the
      * length difference between the two. A run that only covers part of a subdivision is refused: a
      * subdivision is never cut. Content pushed past the track's last measure is dropped, a
@@ -1423,13 +1481,13 @@ export class ScoreBookDataModel {
 
     /**
      * Clears note content across the given measure ranges in one edit, turning the affected notes
-     * into rests. Clearing a whole measure also removes its subdivisions. Fires one
-     * arrangementMutated event (a single undo step) and one trackChanged event per affected track,
-     * so viewers recompute their note structure.
+     * into rests. Clearing a whole measure also removes its subdivisions and its one-bar repeat mark,
+     * because a cleared measure holds nothing. Fires one arrangementMutated event (a single undo step)
+     * and one trackChanged event per affected track, so viewers recompute their note structure.
      *
      * @param ranges The ranges to clear. Ranges referencing a missing track or measure are ignored.
      *
-     * @returns True when at least one range or subdivision changed.
+     * @returns True when at least one range, subdivision or mark changed.
      */
     public clearRanges(ranges: ITrackPieceRange[]): boolean {
         const arrangement = this.arrangement;
@@ -1450,10 +1508,14 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            const rangeChanged = range.start === undefined && range.end === undefined
+            // A range without bounds covers the whole piece, so clearing it also takes the mark off.
+            const wholePiece = range.start === undefined && range.end === undefined;
+            const contentChanged = wholePiece
                 ? this.clearMeasureContent(measure)
                 : this.replaceSpan(measure, range.start ?? barStart, range.end ?? barLine, undefined);
-            if (rangeChanged) {
+            const markCleared = wholePiece && this.clearSimile(measure);
+
+            if (contentChanged || markCleared) {
                 changed = true;
                 affectedTracks.add(range.trackId);
             }
@@ -2079,6 +2141,42 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Creates a subdivision over a fractional span, resolving the number of parent units it replaces
+     * from the span itself. A parent unit is a slot of the subdivision the span lies in, or the
+     * measure's base subdivision outside any, so a caller that addresses events by fraction — the
+     * staff editor, which has no grid positions — can place a subdivision inside another one. Fires
+     * one arrangementMutated event (a single undo step) and one trackChanged event.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The exact start position of the subdivision (inclusive).
+     * @param end The exact end position of the subdivision (exclusive).
+     * @param actual The number of equal slots the subdivision contains.
+     * @param initialEvents Optional content copied into the first subdivision slots.
+     *
+     * @returns True when the subdivision was created.
+     */
+    public createSubdivisionOverSpan(trackId: number, bar: number, start: IFraction, end: IFraction,
+        actual: number, initialEvents?: Array<ISubdivisionSlotContent | undefined>): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!measure) {
+            return false;
+        }
+
+        const units = this.parentUnitCountOf(measure, start, end);
+        if (units === undefined) {
+            return false;
+        }
+
+        return this.createSubdivision(trackId, bar, start, end, actual, units, initialEvents);
+    }
+
+    /**
      * Deletes the subdivision whose first event starts at the given position, replacing its span
      * with plain rest slots while preserving all other subdivisions. The span is resolved through
      * the measure projection so nested subdivisions are handled correctly. Fires one
@@ -2570,16 +2668,31 @@ export class ScoreBookDataModel {
      * Resets the database by dropping and recreating all tables.
      * This is a destructive operation — all data is lost.
      *
-     * @returns True if the reset succeeded.
+     * @returns The outcome of the reset, with the backend's error text when it failed.
      */
-    public async resetDatabase(): Promise<boolean> {
+    public async resetDatabase(): Promise<IDatabaseResetResult> {
         const res = await this.fetchApi("/api?action=setup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ overwrite: true }),
-        });
+        }, true, true);
 
-        return res?.ok === true;
+        if (!res) {
+            return { ok: false, error: "The backend could not be reached." };
+        }
+
+        if (res.ok) {
+            return { ok: true };
+        }
+
+        let body: { error?: string; } = {};
+        try {
+            body = await res.json() as { error?: string; };
+        } catch {
+            // Not a JSON body — the status line remains the only information available.
+        }
+
+        return { ok: false, error: body.error ?? `HTTP ${res.status} ${res.statusText}` };
     }
 
     public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
@@ -2715,11 +2828,7 @@ export class ScoreBookDataModel {
      * @param capabilities The capabilities.
      */
     public setSession(token: string, user: IUserInfo, capabilities: ICapabilities): void {
-        this.accessToken = token;
-        this.currentUser = user;
-        this.currentCapabilities = capabilities;
-
-        void requisitions.execute("authChanged", undefined);
+        this.applySession(token, user, capabilities);
     }
 
     /**
@@ -2757,15 +2866,7 @@ export class ScoreBookDataModel {
 
         const data = await res.json() as ILoginResponse;
 
-        this.accessToken = data.token;
-        this.currentUser = data.user;
-        this.currentGroup = undefined;
-        this.currentCapabilities = data.capabilities;
-
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
-
-        void requisitions.execute("authChanged", undefined);
+        this.applySession(data.token, data.user, data.capabilities);
 
         return true;
     }
@@ -2791,15 +2892,7 @@ export class ScoreBookDataModel {
 
         const data = await res.json() as ILoginResponse;
 
-        this.accessToken = data.token;
-        this.currentUser = data.user;
-        this.currentGroup = data.group;
-        this.currentCapabilities = data.capabilities;
-
-        sessionStorage.setItem("authType", "group");
-        sessionStorage.setItem("groupId", String(data.group?.id ?? ""));
-
-        void requisitions.execute("authChanged", undefined);
+        this.applySession(data.token, data.user, data.capabilities, data.group);
 
         return true;
     }
@@ -2811,20 +2904,7 @@ export class ScoreBookDataModel {
         // Notify the backend to clear the refresh token cookie.
         await this.fetchApi("/api?action=logout", { method: "POST" });
 
-        this.accessToken = undefined;
-        this.currentUser = undefined;
-        this.currentGroup = undefined;
-        this.currentCapabilities = {
-            canEditScores: false,
-            canManageUsers: false,
-            canManageInstruments: false,
-            canExportMP3: false,
-        };
-
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
-
-        void requisitions.execute("authChanged", undefined);
+        this.clearAuthState();
     }
 
     /**
@@ -2839,20 +2919,7 @@ export class ScoreBookDataModel {
             instruments: [],
         };
 
-        this.accessToken = undefined;
-        this.currentUser = undefined;
-        this.currentGroup = undefined;
-        this.currentCapabilities = {
-            canEditScores: false,
-            canManageUsers: false,
-            canManageInstruments: false,
-            canExportMP3: false,
-        };
-
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
-
-        void requisitions.execute("authChanged", undefined);
+        this.clearAuthState();
     }
 
     /**
@@ -3234,9 +3301,7 @@ export class ScoreBookDataModel {
      *
      * @returns Lock result with token or conflict details.
      */
-    public async lockScore(scoreId: number, prevToken?: string): Promise<{
-        success: boolean; token?: string; locked?: boolean; username?: string; lockedAt?: string;
-    }> {
+    public async lockScore(scoreId: number, prevToken?: string): Promise<IScoreLockResult> {
         const body: Record<string, unknown> = { scoreId };
 
         if (prevToken) {
@@ -3253,10 +3318,10 @@ export class ScoreBookDataModel {
             return { success: false };
         }
 
-        return res.json() as unknown as {
-            success: boolean; token?: string; locked?: boolean; username?: string;
-            lockedAt?: string;
-        };
+        const result = await res.json() as IScoreLockResult;
+
+        // A refusal keeps the status, which tells a session that ended from a score this account may not write.
+        return res.ok ? result : { ...result, success: false, status: res.status };
     }
 
     /**
@@ -3359,13 +3424,34 @@ export class ScoreBookDataModel {
         }
 
         if (!res.ok) {
-            return undefined;
+            throw new Error(await ScoreBookDataModel.saveFailureMessage(res));
         }
 
         // Keep the score library entry name in sync with the arrangement title.
         await this.syncScoreLibName(arrangement.id, arrangement.title);
 
         return content;
+    }
+
+    /**
+     * @param res The response the backend refused a save with.
+     *
+     * @returns The reason the save failed, stated with the status the backend answered with.
+     */
+    private static async saveFailureMessage(res: Response): Promise<string> {
+        if (res.status === 401) {
+            return "Your session has ended — log in again to save this score.";
+        }
+
+        if (res.status === 403) {
+            return "You do not have permission to save this score.";
+        }
+
+        const data = await res.json().catch(() => {
+            return undefined;
+        }) as { error?: string; } | undefined;
+
+        return data?.error ?? `Saving failed: HTTP ${res.status} ${res.statusText}`;
     }
 
     /**
@@ -3378,6 +3464,70 @@ export class ScoreBookDataModel {
      */
     private static timelineSignature(items: IAbsoluteTrackItem[]): string {
         return JSON.stringify(items);
+    }
+
+    /**
+     * Drops the session state and tells the app about it, so it can ask for a login again.
+     */
+    private clearAuthState(): void {
+        this.accessToken = undefined;
+        this.currentUser = undefined;
+        this.currentGroup = undefined;
+        this.currentCapabilities = {
+            canEditScores: false,
+            canManageUsers: false,
+            canManageInstruments: false,
+            canExportMP3: false,
+        };
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * @param token The access token to authenticate with.
+     * @param user The user the session belongs to.
+     * @param capabilities What the session may do.
+     * @param group The group the session logged in through, or undefined for a plain login.
+     */
+    private applySession(token: string, user: IUserInfo, capabilities: ICapabilities,
+        group?: IGroupInfo): void {
+        this.accessToken = token;
+        this.currentUser = user;
+        this.currentGroup = group;
+        this.currentCapabilities = capabilities;
+
+        // A login ends the state a failed refresh left behind, so the next expired token is refreshed again.
+        this.sessionRefreshFailed = false;
+
+        if (group === undefined) {
+            sessionStorage.removeItem("authType");
+            sessionStorage.removeItem("groupId");
+        } else {
+            sessionStorage.setItem("authType", "group");
+            sessionStorage.setItem("groupId", String(group.id));
+        }
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * Takes the one-bar repeat mark off a measure, which leaves an empty piece behind.
+     *
+     * @param measure The measure to unmark.
+     *
+     * @returns True when the measure carried the mark.
+     */
+    private clearSimile(measure: ISbDmTrackPiece): boolean {
+        if (measure.simile !== true) {
+            return false;
+        }
+
+        measure.simile = undefined;
+
+        return true;
     }
 
     /**
@@ -3692,8 +3842,8 @@ export class ScoreBookDataModel {
 
     /**
      * Combines adjacent rest events and decomposes every non-subdivision rest into standard note
-     * values, so the staff view can render each rest with a single glyph. The span alone decides the
-     * split: the staff view places rests freely, so no pulse or grid position is honoured.
+     * values, so the staff view can render each rest with a single glyph. The event before a run
+     * decides the length its split starts from; a run at the bar start starts from the largest value.
      *
      * @param events The events to normalise.
      * @param protectedStarts Start fractions of subdivision slots, which must stay untouched.
@@ -3702,18 +3852,21 @@ export class ScoreBookDataModel {
      */
     private normalizeRests(events: IMeasureEvent[], protectedStarts: Set<string>): IMeasureEvent[] {
         const result: IMeasureEvent[] = [];
+        let previousLength: IFraction | undefined;
 
         for (const event of this.mergeRests(events, protectedStarts)) {
             if (event.noteStyleId !== undefined || protectedStarts.has(this.fractionKey(event.start))) {
                 result.push(event);
+                previousLength = event.duration;
 
                 continue;
             }
 
             let position = { ...event.start };
-            for (const part of decomposeRestSpan(event.duration)) {
+            for (const part of decomposeRestSpan(event.duration, previousLength)) {
                 result.push({ start: position, duration: { ...part } });
                 position = addFractions(position, part);
+                previousLength = part;
             }
         }
 
@@ -3971,6 +4124,57 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Finds the innermost projected subdivision whose span contains the given fraction.
+     *
+     * @param items The projected items to search.
+     * @param start The exact start fraction to contain.
+     *
+     * @returns The containing subdivision, or undefined when none contains the fraction.
+     */
+    private findContainingSubdivision(items: IProjectedItem[], start: IFraction):
+        IProjectedSubdivision | undefined {
+        for (const item of items) {
+            if (item.kind !== ProjectedItemKind.Subdivision) {
+                continue;
+            }
+
+            const end = addFractions(item.start, item.span);
+            if (compareFractions(start, item.start) < 0 || compareFractions(start, end) >= 0) {
+                continue;
+            }
+
+            return this.findContainingSubdivision(item.items, start) ?? item;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Resolves how many parent units a fractional span covers, where a parent unit is a slot of the
+     * subdivision the span lies in, or the measure's base subdivision outside any.
+     *
+     * @param measure The measure the span lies in.
+     * @param start The span start.
+     * @param end The span end.
+     *
+     * @returns The unit count, or undefined when the span leaves its subdivision or covers no whole unit.
+     */
+    private parentUnitCountOf(measure: ISbDmTrackPiece, start: IFraction, end: IFraction): number | undefined {
+        const enclosing = this.findContainingSubdivision(MeasureProjection.project(measure), start);
+        if (enclosing && compareFractions(end, addFractions(enclosing.start, enclosing.span)) > 0) {
+            return undefined;
+        }
+
+        const unit = enclosing
+            ? divideFraction(enclosing.span, enclosing.actual)
+            : { numerator: 1, denominator: measure.meter.stepResolution };
+        const span = subtractFractions(end, start);
+        const ratio = reduceFraction(span.numerator * unit.denominator, span.denominator * unit.numerator);
+
+        return ratio.denominator === 1 && ratio.numerator >= 1 ? ratio.numerator : undefined;
+    }
+
+    /**
      * Checks whether a projected subdivision contains only rest slots, recursing into nested
      * subdivisions.
      *
@@ -4116,7 +4320,6 @@ export class ScoreBookDataModel {
             return;
         }
 
-        let widened = false;
         for (let bar = 1; bar <= arrangement.timeParams.length; bar++) {
             const floor = MeasureLayout.minimumWidthOfMeasure(arrangement, bar);
             if (MeasureLayout.widthOf(bar, widths) >= floor) {
@@ -4129,13 +4332,6 @@ export class ScoreBookDataModel {
             } else {
                 widths.set(bar, floor);
             }
-
-            widened = true;
-        }
-
-        if (widened) {
-            // The staff geometry follows the widths, so the viewer has to lay its columns out again.
-            void requisitions.execute("arrangementChanged", arrangement.id);
         }
     }
 
@@ -4185,11 +4381,7 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Gives the event at the given position a new length and moves the content behind it by the
-     * difference, so a rest takes the time it is given. A missing length removes the event. Content
-     * that no longer fits into its measure continues at the start of the next one and the tail of the
-     * track becomes rests. Where no content gives way — a rest is only the gap between the items — the
-     * request shapes the measure's rests instead, so a rest in a silence keeps the length it is given.
+     * Gives the event at the given position a new length; see {@link setSpan}.
      *
      * @param track The track containing the event.
      * @param bar The one-based measure number.
@@ -4199,25 +4391,52 @@ export class ScoreBookDataModel {
      * @returns True when the track content changed.
      */
     private setEventSpan(track: ISbDmTrack, bar: number, start: IFraction, newDuration?: IFraction): boolean {
-        const measure = track.measures.at(bar - 1);
-        const event = measure?.events.find((candidate) => {
+        const event = track.measures.at(bar - 1)?.events.find((candidate) => {
             return compareFractions(candidate.start, start) === 0;
         });
-        if (measure === undefined || event === undefined) {
+        if (event === undefined) {
             return false;
         }
 
-        // An event never crosses a bar line, so a request that reaches past it ends at the measure end.
+        // A single event that keeps its length changes nothing.
+        if (newDuration !== undefined && compareFractions(newDuration, event.duration) === 0) {
+            return false;
+        }
+
+        return this.setSpan(track, bar, start, addFractions(event.start, event.duration), newDuration);
+    }
+
+    /**
+     * Gives the span [start, end) of a measure the requested length and moves the content behind it by
+     * the difference. The span is notated as one rest, so the rests it covers merge. A missing length
+     * removes the span. Content that no longer fits into the measure continues at the start of the next
+     * one and the tail of the track becomes rests. Where no content gives way — a rest is only the gap
+     * between the items — the request shapes the measure's rests instead, so a rest in a silence keeps
+     * the length it is given.
+     *
+     * @param track The track containing the span.
+     * @param bar The one-based measure number.
+     * @param start The exact start of the span within the measure.
+     * @param end The exact end of the span within the measure.
+     * @param newDuration The length the span should take, or undefined to remove it.
+     *
+     * @returns True when the track content changed.
+     */
+    private setSpan(track: ISbDmTrack, bar: number, start: IFraction, end: IFraction,
+        newDuration?: IFraction): boolean {
+        const measure = track.measures.at(bar - 1);
+        if (measure === undefined) {
+            return false;
+        }
+
+        // A span never crosses a bar line, so a request that reaches past it ends at the measure end.
         const room = subtractFractions(barLength, start);
         const requested = newDuration ?? { numerator: 0, denominator: 1 };
         const duration = compareFractions(requested, room) < 0 ? requested : room;
-        if (compareFractions(duration, event.duration) === 0) {
-            return false;
-        }
 
         const spanStart = this.absolutePositionOf(bar - 1, start);
-        const spanEnd = addFractions(spanStart, event.duration);
-        const delta = subtractFractions(duration, event.duration);
+        const spanEnd = this.absolutePositionOf(bar - 1, end);
+        const delta = subtractFractions(duration, subtractFractions(end, start));
         const items = this.collectAbsoluteItems(track);
         const before = ScoreBookDataModel.timelineSignature(items);
         const remaining: IAbsoluteTrackItem[] = [];
@@ -4230,8 +4449,8 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            // The changed event itself disappears when it is a note; an item reaching into the span is
-            // shortened at its start. A subdivision is never cut or dropped: such a request is refused.
+            // The items inside the span disappear; an item reaching into it is shortened at its start.
+            // A subdivision is never cut or dropped: such a request is refused.
             if (compareFractions(item.start, spanStart) >= 0) {
                 if (item.slots !== undefined) {
                     return false;
@@ -4304,7 +4523,18 @@ export class ScoreBookDataModel {
             return compareFractions(left.start, right.start);
         });
 
-        return this.setMeasureEvents(measure, events);
+        // Every rest the model writes holds a single standard note value (ADR-0006), because the staff draws one
+        // glyph per rest: a rest of an odd length is decomposed, starting from the event before it. The rests that
+        // were there keep their own values, and the addressed one keeps the length the request named, so a dotted
+        // rest stays whole and only the tail the span cuts off is split.
+        const protectedStarts = this.subdivisionSlotStarts(measure);
+        for (const event of measure.events) {
+            protectedStarts.add(this.fractionKey(event.start));
+        }
+
+        protectedStarts.add(this.fractionKey(start));
+
+        return this.setMeasureEvents(measure, this.normalizeRests(events, protectedStarts));
     }
 
     /**
@@ -4633,6 +4863,7 @@ export class ScoreBookDataModel {
             const protectedStarts = new Set<string>();
             const slotStarts = this.subdivisionSlotStarts(measure);
             let cursor = measureStart;
+            let previousLength: IFraction | undefined;
 
             while (itemIndex < items.length && compareFractions(items[itemIndex].start, measureEnd) < 0) {
                 const item = items[itemIndex];
@@ -4640,7 +4871,7 @@ export class ScoreBookDataModel {
 
                 if (compareFractions(item.start, cursor) > 0) {
                     events.push(...this.gapRests(measure, subtractFractions(cursor, measureStart), itemStart,
-                        slotStarts, protectedStarts));
+                        previousLength, slotStarts, protectedStarts));
                 }
 
                 const note = item.event;
@@ -4652,6 +4883,7 @@ export class ScoreBookDataModel {
                         start: itemStart,
                         duration: { ...duration },
                     });
+                    previousLength = duration;
                 }
 
                 const slots = item.slots;
@@ -4662,6 +4894,8 @@ export class ScoreBookDataModel {
                         protectedStarts.add(this.fractionKey(start));
                         events.push(this.cloneEvent({ ...slot, start }));
                     }
+
+                    previousLength = slots.at(-1)?.duration;
                 }
 
                 const subdivisions = item.subdivisions;
@@ -4680,7 +4914,7 @@ export class ScoreBookDataModel {
 
             if (compareFractions(cursor, measureEnd) < 0) {
                 events.push(...this.gapRests(measure, subtractFractions(cursor, measureStart), barLength,
-                    slotStarts, protectedStarts));
+                    previousLength, slotStarts, protectedStarts));
             }
 
             // A protected start never merges with a neighbouring rest, and the subdivision records are
@@ -4695,19 +4929,21 @@ export class ScoreBookDataModel {
     /**
      * Splits a gap of a measure into rest events. The rests the measure already held decide the split as
      * long as they cover the gap exactly — the structure the user shaped — while any other gap is
-     * derived from its length alone.
+     * derived from its length and the event before it.
      *
      * @param measure The measure whose rests supply the structure.
      * @param gapStart Start of the gap within the measure.
      * @param gapEnd End of the gap within the measure.
+     * @param previousLength The length of the event before the gap, if there is one.
      * @param slotStarts The measure's subdivision slot starts, which are no rest structure of their own.
      * @param protectedStarts The set the kept structure is registered in, so the merge keeps it.
      *
      * @returns The rest events filling the gap.
      */
     private gapRests(measure: ISbDmTrackPiece, gapStart: IFraction, gapEnd: IFraction,
-        slotStarts: Set<string>, protectedStarts?: Set<string>): IMeasureEvent[] {
-        const kept = this.keptRestStructure(measure, gapStart, gapEnd, slotStarts);
+        previousLength: IFraction | undefined, slotStarts: Set<string>,
+        protectedStarts?: Set<string>): IMeasureEvent[] {
+        const kept = this.keptRestStructure(measure, gapStart, gapEnd, previousLength, slotStarts);
         if (kept !== undefined) {
             for (const rest of kept) {
                 protectedStarts?.add(this.fractionKey(rest.start));
@@ -4718,7 +4954,7 @@ export class ScoreBookDataModel {
 
         const rests: IMeasureEvent[] = [];
         let position = { ...gapStart };
-        for (const part of decomposeRestSpan(subtractFractions(gapEnd, gapStart))) {
+        for (const part of decomposeRestSpan(subtractFractions(gapEnd, gapStart), previousLength)) {
             rests.push({ start: position, duration: { ...part } });
             position = addFractions(position, part);
         }
@@ -4735,12 +4971,13 @@ export class ScoreBookDataModel {
      * @param measure The measure whose rests supply the structure.
      * @param gapStart Start of the gap within the measure.
      * @param gapEnd End of the gap within the measure.
+     * @param previousLength The length of the event before the gap, if there is one.
      * @param slotStarts The measure's subdivision slot starts, which are no rest structure of their own.
      *
      * @returns The rests covering the gap, or undefined when the gap derives its own rests.
      */
     private keptRestStructure(measure: ISbDmTrackPiece, gapStart: IFraction, gapEnd: IFraction,
-        slotStarts: Set<string>): IMeasureEvent[] | undefined {
+        previousLength: IFraction | undefined, slotStarts: Set<string>): IMeasureEvent[] | undefined {
         const held = measure.events.filter((event) => {
             return event.noteStyleId === undefined
                 && compareFractions(event.start, gapStart) >= 0
@@ -4761,7 +4998,7 @@ export class ScoreBookDataModel {
             return undefined;
         }
 
-        const derived = decomposeRestSpan(subtractFractions(gapEnd, gapStart));
+        const derived = decomposeRestSpan(subtractFractions(gapEnd, gapStart), previousLength);
         const isDerived = derived.length === held.length && derived.every((part, index) => {
             return compareFractions(part, held[index].duration) === 0;
         });
@@ -5157,6 +5394,14 @@ export class ScoreBookDataModel {
         }, false);
 
         if (!res) {
+            // A session that no longer refreshes has ended, which the app has to know so it can ask for a login
+            // again. An anonymous session holds no access token to lose, so nothing changes there.
+            this.sessionRefreshFailed = true;
+
+            if (this.accessToken !== undefined) {
+                this.clearAuthState();
+            }
+
             return false;
         }
 
@@ -5237,13 +5482,20 @@ export class ScoreBookDataModel {
             return undefined;
         }
 
-        // Auto-refresh on 401 and retry once.
-        if (res.status === 401 && attachAuth && this.accessToken) {
-            const refreshed = await this.refreshAccessToken();
+        // A refusal for authentication is answered once with a fresh token, which the refresh cookie may still
+        // supply: a reload, or a module update in development, drops the token this model holds in memory.
+        if (res.status === 401 && attachAuth && !this.refreshing && !this.sessionRefreshFailed) {
+            this.refreshing = true;
+            let refreshed: boolean;
+
+            try {
+                refreshed = await this.refreshAccessToken();
+            } finally {
+                this.refreshing = false;
+            }
 
             if (refreshed) {
-                (mergedOptions.headers as Record<string, string>).Authorization =
-                    `Bearer ${this.accessToken}`;
+                (mergedOptions.headers as Record<string, string>).Authorization = `Bearer ${this.accessToken}`;
 
                 try {
                     res = await fetch(url, mergedOptions);

@@ -4,6 +4,7 @@
  */
 
 @use "animations";
+@use "badge";
 @use "barline-view";
 @use "button";
 @use "card";
@@ -13,7 +14,6 @@
 @use "drawer";
 @use "dropdown";
 @use "fieldset-legend";
-@use "gooey-group";
 @use "grid";
 @use "icon";
 @use "label";
@@ -23,14 +23,13 @@
 @use "portal";
 @use "popup";
 @use "progress-indicator";
-@use "radial-menu";
 @use "score-symbol-view";
+@use "segmented-switch";
 @use "slider-split";
 @use "split-container";
 @use "smufl-glyph-view";
-@use "statusbar";
 @use "tab-view";
 @use "tag-input";
 @use "toggle";
-@use "tooltip";
 @use "up-down";
+@use "value-dropdown";

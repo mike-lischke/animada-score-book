@@ -17,6 +17,7 @@
 import { NoteDisplayType } from "./ScoreBookDataModel.js";
 import { NoteLength } from "./rest-notation.js";
 import { SmuflGlyph } from "./smufl/SmuflGlyphs.js";
+import type { IRepeatBar } from "./types/general.js";
 
 /** A notation symbol the score draws, named by what it is in the score. */
 export enum ScoreSymbol {
@@ -88,6 +89,10 @@ export enum ScoreSymbol {
 
     /** The one-bar repeat (simile): the measure plays what the measure before it plays. */
     MeasureRepeat,
+
+    /** The ends of the bracket that groups the staves of a system. The line between them is drawn geometry. */
+    BracketTop,
+    BracketBottom,
 }
 
 /** What draws a symbol. */
@@ -242,9 +247,6 @@ export interface ISymbolBox {
 export interface IBarlineMarks {
     /** Whether the repeated section before the barline closes there (`:|`). */
     closesRepeat: boolean;
-
-    /** Whether the repeated section after the barline opens there (`|:`). */
-    opensRepeat: boolean;
 
     /** Whether the side is the end of the score, which a plain barline cannot state. */
     endsScore: boolean;
@@ -520,6 +522,18 @@ export class ScoreSymbols {
             anchor: GlyphAnchor.Centre,
         },
 
+        [ScoreSymbol.BracketTop]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketTop,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+
+        [ScoreSymbol.BracketBottom]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketBottom,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+
         [ScoreSymbol.BarlineSingle]: {
             source: ScoreSymbolSource.Barline,
             parts: [BarlinePart.ThinStroke],
@@ -592,27 +606,37 @@ export class ScoreSymbols {
     }
 
     /**
+     * Names the barline a bar closes with: the one its own repeat mark states, and none where the bar after it
+     * opens a repeat.
+     *
+     * @param repeatBars The repeat marks of the arrangement, keyed by 1-based bar number.
+     * @param bar The 1-based bar whose closing barline is wanted.
+     * @param isLastBar Whether the bar is the last of the score.
+     *
+     * @returns The symbol the closing barline is drawn with, or undefined where the bar after it opens a repeat.
+     */
+    public static closingBarlineAt(repeatBars: ReadonlyMap<number, IRepeatBar> | undefined, bar: number,
+        isLastBar: boolean): ScoreSymbol | undefined {
+        if (repeatBars?.get(bar + 1)?.start === true && repeatBars.get(bar)?.end !== true) {
+            return undefined;
+        }
+
+        return ScoreSymbols.barlineAt({ closesRepeat: repeatBars?.get(bar)?.end === true, endsScore: isLastBar });
+    }
+
+    /**
      * Names the barline the score draws on one side of a bar out of the marks it carries. A repeat mark wins
-     * over the final barline of the score, and a repeat that closes and opens at the same barline over the two
-     * single ones.
+     * over the final barline of the score.
      *
      * @param marks The marks at one side of a bar.
      *
      * @returns The symbol the barline is drawn with.
      */
     public static barlineAt(marks: IBarlineMarks): ScoreSymbol {
-        const { closesRepeat, opensRepeat, endsScore } = marks;
-
-        if (closesRepeat && opensRepeat) {
-            return ScoreSymbol.RepeatBoth;
-        }
+        const { closesRepeat, endsScore } = marks;
 
         if (closesRepeat) {
             return ScoreSymbol.RepeatEnd;
-        }
-
-        if (opensRepeat) {
-            return ScoreSymbol.RepeatStart;
         }
 
         return endsScore ? ScoreSymbol.BarlineFinal : ScoreSymbol.BarlineSingle;

@@ -24,6 +24,12 @@ export enum PlayerPlayState {
     Stopped,
 }
 
+/** A run of bars playback performs, both ends included. */
+interface IBarSpan {
+    from: number;
+    to: number;
+}
+
 /**
  * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s and
  * publishing UI-relevant updates (current timing and audible tracks).
@@ -69,7 +75,11 @@ export class ArrangementPlayer {
     /** The part of the song we want to play (in score time). If not set, the entire song is played. */
     private currentInterval?: IInterval;
 
-    private selectedPlayRange?: { from: number; to: number; };
+    /** The span the focused bars cover, or undefined to play the whole score. */
+    private focusedSpan?: IBarSpan;
+
+    /** The span the running playback performs, captured when it started. */
+    private activeSpan?: IBarSpan;
 
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
     private scheduledCallbackEvents: Array<{
@@ -92,12 +102,13 @@ export class ArrangementPlayer {
         this.refreshPerformance();
 
         this.updateTrackPlayers();
-        requisitions.register("arrangementChanged", this.handleArrangementChanged);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("arrangementReverted", this.handleArrangementMutated);
 
         this.updateCallbackEvents();
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.register("trackChanged", this.handleTrackChanged);
-        requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
+        requisitions.register("playFocusChanged", this.handlePlayFocusChanged);
 
         this.animationEngine = new AnimationEngine(this);
         this.metronome = new Metronome(this.timeCoordinator);
@@ -180,43 +191,19 @@ export class ArrangementPlayer {
         this.animationEngine.dispose();
 
         // Unsubscribe from arrangement changes and the event engine.
-        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("arrangementReverted", this.handleArrangementMutated);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
-        requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
+        requisitions.unregister("playFocusChanged", this.handlePlayFocusChanged);
 
         this.metronome.dispose();
         this.trackPlayers.clear();
     }
 
     /**
-     * Play an interval specified in bars. Bar numbers begin with 1.
-     * Playback will start at the beginning of `startBar` and stop after the given number of bars.
-     * If `loop` is true the interval will be looped.
-     *
-     * A repeat makes a bar appear more than once, so the interval runs from the first pass over its first bar to
-     * the end of the last pass over its last one.
-     *
-     * @param startBar The 1-based bar number to start playback at.
-     * @param numberOfBars The number of bars to play.
-     *
-     * @returns A promise that resolves when playback has stopped.
-     */
-    public async playBars(startBar: number, numberOfBars: number): Promise<void> {
-        const order = this.#playOrder;
-        const first = order.indexOf(startBar);
-        const last = order.lastIndexOf(startBar + numberOfBars - 1);
-        if (first < 0 || last < first) {
-            return;
-        }
-
-        const { secondsPerBar } = this.timeCoordinator.metrics;
-
-        return this.play({ start: first * secondsPerBar, end: (last + 1) * secondsPerBar });
-    }
-
-    /**
-     * Plays the entire score or the specified interval in real time.
+     * Plays the entire score or the specified interval in real time. A focus the user set restricts the
+     * performance to the span its bars cover.
      *
      * @param interval An optional interval to play instead of the entire score.
      *
@@ -227,18 +214,16 @@ export class ArrangementPlayer {
             return;
         }
 
-        if (interval === undefined && this.selectedPlayRange !== undefined) {
-            const { from, to } = this.selectedPlayRange;
-
-            return this.playBars(from, to - from + 1);
-        }
-
         await this.ensureContextIsRunning();
 
         // If already playing something, stop it first to clear schedules.
-        if (this.nextIterationId) {
+        if (this.#state !== PlayerPlayState.Stopped) {
             this.stop();
         }
+
+        this.activeSpan = interval === undefined ? this.focusedSpan : undefined;
+        this.refreshPerformance();
+        this.updateCallbackEvents();
 
         // Clear any interval restriction and start from 0.
         this.currentInterval = interval;
@@ -289,6 +274,10 @@ export class ArrangementPlayer {
             this.clearScheduledEvents();
             this.#state = PlayerPlayState.Stopped;
 
+            this.activeSpan = undefined;
+            this.refreshPerformance();
+            this.updateCallbackEvents();
+
             this.onStop();
         }
     }
@@ -313,6 +302,7 @@ export class ArrangementPlayer {
     }
 
     public renderToBlob = async (): Promise<Blob> => {
+        this.stop();
         this.currentInterval = undefined;
         const songDuration = this.timeCoordinator.metrics.realTimeLength;
         const countInDuration = this.dataModel.arrangement!.countIn
@@ -370,7 +360,7 @@ export class ArrangementPlayer {
         }
 
         const horizon = this.audioContext.currentTime + 0.25;
-        while (this.offset + this.timeCovered < horizon) {
+        while (this.timeCovered < horizon - this.offset) {
             if (this.timeCovered >= this.endOffset) {
                 if (!this.dataModel.arrangement!.loop) {
                     break;
@@ -439,16 +429,11 @@ export class ArrangementPlayer {
     };
 
     /**
-     * Handles arrangement structure changes (tracks added/removed).
+     * Keeps the performance and the track players in step with a finished edit or a restored snapshot.
      *
-     * @param arrangementId The id of the arrangement that changed.
-     * @returns True if this player handles the given arrangement.
+     * @returns Always true (the change is always handled).
      */
-    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
-        if (arrangementId !== this.dataModel.arrangement?.id) {
-            return Promise.resolve(false);
-        }
-
+    private handleArrangementMutated = (): Promise<boolean> => {
         this.refreshPerformance();
         this.updateTrackPlayers();
 
@@ -467,8 +452,19 @@ export class ArrangementPlayer {
         return Promise.resolve(true);
     };
 
-    private handlePlayRangeChanged = (range?: { from: number; to: number; }): Promise<boolean> => {
-        this.selectedPlayRange = range;
+    /**
+     * Adopts the bars the user focused for playback. Playback performs the span the focused bars cover, so focusing
+     * the first and the last bar plays the bars between them. The focus applies from the next start on, because a
+     * change must not alter a performance that is already running.
+     *
+     * @param bars The focused bars, or undefined to play the whole score.
+     *
+     * @returns Always true (the change is always handled).
+     */
+    private handlePlayFocusChanged = (bars?: readonly number[]): Promise<boolean> => {
+        this.focusedSpan = bars === undefined || bars.length === 0
+            ? undefined
+            : { from: Math.min(...bars), to: Math.max(...bars) };
 
         return Promise.resolve(true);
     };
@@ -484,7 +480,21 @@ export class ArrangementPlayer {
 
         this.#playOrder = PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
             arrangement.timeParams.length);
+        const activeSpan = this.activeSpan;
+        if (activeSpan !== undefined) {
+            const focused = this.#playOrder.filter((bar) => {
+                return bar >= activeSpan.from && bar <= activeSpan.to;
+            });
+
+            // A focus that names no played bar — its bars were deleted — performs the whole score again.
+            if (focused.length > 0) {
+                this.#playOrder = focused;
+            }
+        }
+
         this.timeCoordinator.setPerformedBars(this.#playOrder.length);
+        this.timeCoordinator.recomputeMetrics();
+        void requisitions.execute("playbackOrderChanged", { arrangementId: arrangement.id, bars: this.#playOrder });
     };
 
     /**
@@ -504,7 +514,7 @@ export class ArrangementPlayer {
 
         for (const track of this.dataModel.arrangement!.tracks) {
             if (!this.trackPlayers.get(track)) {
-                const trackPlayer = new TrackPlayer(track, this.timeCoordinator);
+                const trackPlayer = new TrackPlayer(track, this.timeCoordinator, this.#playOrder);
                 this.trackPlayers.set(track, trackPlayer);
                 somethingChanged = true;
             }
@@ -540,15 +550,28 @@ export class ArrangementPlayer {
             this.endOffset = this.timeCoordinator.metrics.realTimeLength;
         }
 
-        this.callbackEvents = this.dataModel.arrangement!.timeParams.timings.map((timing) => {
-            return {
-                kind: "callback",
-                realTime: this.timeCoordinator.convertToRealTime(timing),
-                callback: () => {
-                    this.timing = timing;
-                },
-                identifier: timing
-            };
+        const timingsByBar = new Map<number, ITiming[]>();
+        for (const timing of this.dataModel.arrangement!.timeParams.timings) {
+            const timings = timingsByBar.get(timing.bar);
+            if (timings) {
+                timings.push(timing);
+            } else {
+                timingsByBar.set(timing.bar, [timing]);
+            }
+        }
+
+        const { secondsPerBar, secondsPerStep } = this.timeCoordinator.metrics;
+        this.callbackEvents = [];
+        this.#playOrder.forEach((bar, index) => {
+            for (const timing of timingsByBar.get(bar) ?? []) {
+                this.callbackEvents.push({
+                    kind: "callback",
+                    realTime: (index * secondsPerBar) + ((timing.step - 1) * secondsPerStep),
+                    callback: () => {
+                        this.timing = timing;
+                    },
+                });
+            }
         });
     };
 

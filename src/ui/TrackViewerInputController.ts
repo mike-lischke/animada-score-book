@@ -5,9 +5,10 @@
 
 import type { Articulation } from "../core/articulation.js";
 import { NoteLength, type INoteValue } from "../core/rest-notation.js";
+import { EditEntryMode } from "../core/types/general.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import type { MeasureEditor } from "./MeasureEditor.js";
-import type { ISelectionDelta } from "./SelectionSerializer.js";
+import type { ISelectionDelta, ISelectionEntry } from "./SelectionSerializer.js";
 
 const noteLengthShortcuts = [
     NoteLength.Whole,
@@ -17,13 +18,6 @@ const noteLengthShortcuts = [
     NoteLength.Sixteenth,
     NoteLength.ThirtySecond,
 ];
-
-/** Where a long press started, to tell a press from a drag. */
-interface ILongPressOrigin {
-    pointerId: number;
-    x: number;
-    y: number;
-}
 
 /**
  * Translates user input into actions of the active measure editor (ADR-0005): pointer and key events
@@ -37,23 +31,20 @@ export class TrackViewerInputController {
      */
     public activeEditor?: MeasureEditor;
 
-    private static readonly longPressDuration = 500;
-    private static readonly longPressMoveTolerance = 10;
-
-    private longPressTimer?: ReturnType<typeof setTimeout>;
-    private longPressOrigin?: ILongPressOrigin;
+    /**
+     * Whether the active view offers the insert and overwrite modes. The grid view always enters with
+     * overwrite, so only the staff view offers the switch.
+     */
+    public hasEntryModeSwitch = false;
 
     public constructor(private readonly eventContainer: HTMLElement) {
     }
 
     public attach(): void {
         this.eventContainer.addEventListener("pointerdown", this.handlePointerDown);
-        this.eventContainer.addEventListener("pointerup", this.handlePointerUp);
-        this.eventContainer.addEventListener("pointercancel", this.handlePointerCancel);
-        this.eventContainer.addEventListener("pointermove", this.handlePointerMove);
-        this.eventContainer.addEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.addEventListener("keydown", this.handleKeyDown);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleCursorChanged);
         requisitions.register("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.register("restEntryRequested", this.handleRestEntryRequested);
@@ -64,67 +55,20 @@ export class TrackViewerInputController {
 
     public dispose(): void {
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
-        this.eventContainer.removeEventListener("pointerup", this.handlePointerUp);
-        this.eventContainer.removeEventListener("pointercancel", this.handlePointerCancel);
-        this.eventContainer.removeEventListener("pointermove", this.handlePointerMove);
-        this.eventContainer.removeEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleCursorChanged);
         requisitions.unregister("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.unregister("restEntryRequested", this.handleRestEntryRequested);
         requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
         requisitions.unregister("articulationChanged", this.handleArticulationChanged);
-        this.clearLongPress();
         this.activeEditor = undefined;
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
-        const editor = this.activeEditor;
-        if (!editor?.hitTest(event.target)) {
-            return;
-        }
-
-        if (event.pointerType === "mouse" && event.button === 2 && editor.hasNoteActionMenu) {
-            editor.openNoteActionMenu();
-            event.preventDefault();
-
-            return;
-        }
-
-        if (event.pointerType === "touch" && editor.hasNoteActionMenu) {
-            this.startLongPress(event);
-        }
-    };
-
-    private handlePointerUp = (event: PointerEvent): void => {
-        this.clearLongPress(event.pointerId);
-    };
-
-    private handlePointerCancel = (event: PointerEvent): void => {
-        this.clearLongPress(event.pointerId);
-    };
-
-    private handlePointerMove = (event: PointerEvent): void => {
-        const origin = this.longPressOrigin;
-        if (origin?.pointerId !== event.pointerId) {
-            return;
-        }
-
-        const movedX = Math.abs(event.clientX - origin.x);
-        const movedY = Math.abs(event.clientY - origin.y);
-        if (movedX > TrackViewerInputController.longPressMoveTolerance
-            || movedY > TrackViewerInputController.longPressMoveTolerance) {
-            this.clearLongPress(event.pointerId);
-        }
-    };
-
-    private handleContextMenu = (event: MouseEvent): void => {
-        const editor = this.activeEditor;
-        if (editor?.hasNoteActionMenu && editor.hitTest(event.target)) {
-            event.preventDefault();
-        }
+        this.activeEditor?.hitTest(event.target);
     };
 
     private handleKeyDown = (event: KeyboardEvent): void => {
@@ -166,6 +110,14 @@ export class TrackViewerInputController {
         }
 
         if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            const key = event.key.toLowerCase();
+
+            if (key === "i" || key === "o") {
+                this.switchEntryMode(editor, key === "i" ? EditEntryMode.Insert : EditEntryMode.Overwrite, event);
+
+                return;
+            }
+
             if (event.key === "0") {
                 if (editor.enterRest()) {
                     event.preventDefault();
@@ -186,6 +138,12 @@ export class TrackViewerInputController {
 
     private handleSelectionChanged = (delta: ISelectionDelta): Promise<boolean> => {
         this.activeEditor?.cursorFromSelection(delta);
+
+        return Promise.resolve(true);
+    };
+
+    private handleCursorChanged = (entry: ISelectionEntry): Promise<boolean> => {
+        this.activeEditor?.cursorFromSelection({ added: [entry], removed: [] });
 
         return Promise.resolve(true);
     };
@@ -219,6 +177,24 @@ export class TrackViewerInputController {
     };
 
     /**
+     * Switches the entry mode from the keyboard, where the active view offers the switch (ADR-0011).
+     *
+     * @param editor The editor that executes the entry.
+     * @param mode The mode the key asks for.
+     * @param event The key event, to prevent the default action when the shortcut applies.
+     */
+    private switchEntryMode(editor: MeasureEditor, mode: EditEntryMode, event: KeyboardEvent): void {
+        if (!this.hasEntryModeSwitch) {
+            return;
+        }
+
+        event.preventDefault();
+        if (editor.entryMode !== mode) {
+            void requisitions.execute("editEntryModeChanged", mode);
+        }
+    }
+
+    /**
      * Switches the augmentation dot of the note value used for entry and applies the result to the
      * selection. Only a value the view can represent is published.
      *
@@ -235,28 +211,5 @@ export class TrackViewerInputController {
 
         void requisitions.execute("noteLengthChanged", value);
         event.preventDefault();
-    }
-
-    private startLongPress(event: PointerEvent): void {
-        this.clearLongPress();
-        this.longPressOrigin = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-        this.longPressTimer = setTimeout(() => {
-            this.longPressTimer = undefined;
-            this.longPressOrigin = undefined;
-            this.activeEditor?.openNoteActionMenu();
-        }, TrackViewerInputController.longPressDuration);
-    }
-
-    private clearLongPress(pointerId?: number): void {
-        if (pointerId !== undefined && this.longPressOrigin?.pointerId !== pointerId) {
-            return;
-        }
-
-        if (this.longPressTimer) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = undefined;
-        }
-
-        this.longPressOrigin = undefined;
     }
 }

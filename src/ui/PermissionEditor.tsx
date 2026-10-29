@@ -3,8 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createRef, type ComponentChild } from "preact";
-import type { RefObject } from "preact";
+import { createRef, type ComponentChild, type RefObject } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { UIIcon } from "../components/ui/framework/UIIcon.js";
@@ -36,7 +35,7 @@ interface IPermissionEditorProperties extends ICommonUIProperties {
     onSaved: (entry: ISbDmScoreFolder | ISbDmScore) => void;
 
     /** Ref to the app-level ConfirmDialog for confirmation prompts. */
-    confirmRef: RefObject<ConfirmDialog>;
+    confirmRef: RefObject<ConfirmDialog | null>;
 }
 
 interface IPermissionEditorState {
@@ -61,7 +60,7 @@ interface IPermissionEditorState {
 const dragType = "application/x-perm-group";
 
 export class PermissionEditor extends UIComponent<IPermissionEditorProperties, IPermissionEditorState> {
-    private popupRef = createRef<Popup>();
+    private popupRef = createRef<Popup | null>();
     private dragGroupId: number | undefined;
 
     public constructor(props: IPermissionEditorProperties) {
@@ -80,18 +79,15 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
     /**
      * Opens the permission editor for the given score library entry.
      *
-     * @param target The DOM element or rect to anchor the popup to.
-     * @param entry  The data model entry whose permissions are being edited.
+     * @param target The viewport rectangle of the score entry.
+     * @param entry The data model entry whose permissions are being edited.
      */
-    public async open(target: HTMLElement | DOMRect,
-        entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
+    public async open(target: DOMRect, entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
         const { dataModel } = this.props;
         const entityType = entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
 
         this.setState({ errorMessage: "", entry }, () => {
-            const rect = target instanceof DOMRect ? target : target.getBoundingClientRect();
-
-            this.popupRef.current?.open(rect);
+            this.popupRef.current?.openAtRect(target);
         });
 
         try {
@@ -173,6 +169,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                 id="permissionEditor"
                 ref={this.popupRef}
                 showArrow
+                focusOnOpen
                 header={<Label id="permissionEditorHeader" caption={`Owner: ${ownerName}`} />}
                 placement={ComponentPlacement.RightCenter}
             >
@@ -248,7 +245,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                             className="du-btn-sm"
                             caption={resetting ? "Resetting…" : "Reset Children"}
                             disabled={resetting}
-                            data-tooltip="Removes explicit permissions from all sub-folders and scores"
+                            title="Removes explicit permissions from all sub-folders and scores"
                             onClick={() => {
                                 void this.handleResetChildren();
                             }}

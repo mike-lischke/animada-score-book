@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 /** Two quarter notes followed by a rest, so a subdivision has room in the bar. */
@@ -38,28 +39,29 @@ const snapshot = {
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
-    await page.addInitScript((packed: string) => {
+    await page.addInitScript((data: { packed: string; entryMode: EditEntryMode; }) => {
         const sessionId = "e2e-staff-subdivision";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
-            currentScore: packed,
+            currentScore: data.packed,
+            entryMode: data.entryMode,
             viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
         }));
-    }, stringifyPackedArrangement(snapshot));
+    }, { packed: stringifyPackedArrangement(snapshot), entryMode: EditEntryMode.Overwrite });
 
     await page.goto("/");
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
 });
 
 test("creates a subdivision from the notes selected in the staff view", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
-    await page.locator(".subdivisionToolbar button").first().click();
-    const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
+    await page.locator(".subdivision-toolbar button").first().click();
+    const quadruplet = page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
 
     // A quarter note is four grid steps long, so a 4:1 split must be offered for it.
     await expect(quadruplet).toBeVisible();
@@ -73,8 +75,9 @@ test("creates a subdivision from the notes selected in the staff view", async ({
 
 test("applies a length to a note beside a subdivision", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await page.locator(".subdivisionToolbar button").first().click();
-    const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await page.locator(".subdivision-toolbar button").first().click();
+    const quadruplet = page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
     await quadruplet.click({ force: true });
 
     // The quarter note behind the subdivision is an event of its own, so it takes a new length even
@@ -83,9 +86,34 @@ test("applies a length to a note beside a subdivision", async ({ page }) => {
     const noteSymbols = page.locator(".staff-measure-track-row .staff-note-head-symbol");
     await expect(noteSymbols).toHaveCount(2);
     await noteSymbols.nth(1).click();
-    await expect(page.locator(".noteLengthToolbar .noteLengthButton").first()).toBeEnabled();
+    await expect(page.locator(".note-length-toolbar .note-length-button").first()).toBeEnabled();
 
-    await page.locator(".noteLengthToolbar .noteDotButton").click();
+    await page.locator(".note-length-toolbar .note-dot-button").click();
 
-    await expect(page.locator(".noteLengthToolbar .noteDotButton.du-btn-primary")).toBeVisible();
+    await expect(page.locator(".note-length-toolbar .note-dot-button.du-btn-primary")).toBeVisible();
+});
+
+test("nests a subdivision inside a slot of the subdivision around it", async ({ page }) => {
+    const runsBefore = await page.locator(".staff-note-viewer-run").count();
+
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+        .click({ force: true });
+
+    // The triplet's second slot is a rest, so the run stands in for the slot's note head.
+    await page.locator(".staff-note-viewer-run").nth(1).click();
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+        .click({ force: true });
+
+    // The nested triplet and the two slots beside it are four runs more than the measure held before.
+    await expect.poll(() => {
+        return page.locator(".staff-note-viewer-run").count();
+    }).toBe(runsBefore + 4);
+
+    // The outer tuplet is labelled above the notes, the nested one below them.
+    await expect(page.locator(".staff-note-viewer-tuplet-above .staff-note-viewer-tuplet-text")).toHaveText("3");
+    await expect(page.locator(".staff-note-viewer-tuplet-below .staff-note-viewer-tuplet-text")).toHaveText("3");
 });

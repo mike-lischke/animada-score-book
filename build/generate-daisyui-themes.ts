@@ -7,16 +7,15 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { escapeCssIdent } from "../src/components/ui/framework/css-helpers.js";
 interface VSTheme {
     name: string;
     type: "light" | "dark" | "hc";
-    colors?: Record<string, string>;
+    colors?: Record<string, string | undefined>;
 }
 
 const sharedValues = `
     --radius-selector: 0.5rem;
-    --radius-field: 0.25rem;
+    --radius-field: 0.375rem;
     --radius-box: 0.5rem;
 
     --size-selector: 0.25rem;
@@ -39,7 +38,7 @@ const files = readdirSync(srcDir).filter((f) => {
 });
 
 const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
-    const c = theme.colors ?? {} as Record<string, string | undefined>;
+    const c = theme.colors ?? {};
     const type = theme.type === "dark" ? "dark" : "light";
 
     // Base colors.
@@ -56,17 +55,35 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     const success = c["gitDecoration.addedResourceForeground"] ?? c["minimapGutter.addedBackground"] ??
         c["charts.green"] ?? "#81b88b";
 
-    // Own color definitions. They are not used in daisyUI themes, but we can use them for for our
-    // own components, to achieve a more consistent look.
-    /*const selectionBg =
-        c["editor.selectionBackground"] ??
+    // App tokens that extend the daisyUI set, so our own surfaces follow the active theme.
+    const selection = c["editor.selectionBackground"] ??
         c["terminal.selectionBackground"] ??
         c["list.activeSelectionBackground"] ??
-        "#264f78";*/
+        "#264f78";
+    const shadow = c["widget.shadow"] ?? "#00000033";
+
+    // `--color-info` is a surface color, so it is unsuitable as a foreground; this is the icon/text color.
+    const infoForeground = c["notificationsInfoIcon.foreground"] ?? "#3794ff";
+
+    // The accent of a user's own identity marker, e.g. the avatar background of an administrator.
+    // Background and content are a deliberately fixed brand pair; the red is the lightest tone that still
+    // reaches a 3:1 contrast with the white content.
+    const identity = "#fc6246";
+    const identityContent = "#ffffff";
+
+    // The accent of the playback controls, i.e. the play glyph and their engaged state. Another fixed pair,
+    // because these controls are inverted surfaces: the mint reads on the dark pill of a light theme, the
+    // deep green on the light pill of a dark theme.
+    const playbackAccent = type === "dark" ? "#2a6140" : "#89cc9e";
+
+    // The accent of the tuplet tool, which the mockup draws as a filled violet button among the plain ones. No
+    // daisyUI role states a violet, so this is another fixed pair: each tone carries the surface color of a light
+    // resp. dark theme as the glyph, so the mark reads as punched out of the button.
+    const tupletAccent = type === "dark" ? "#a58ae6" : "#6f4bd0";
 
     return `@plugin "daisyui/theme" {
     /* Meta data */
-    name: "${escapeCssIdent(theme.name)}";
+    name: "${theme.name}";
     default: ${theme.name === "Light+" ? "true" : "false"};
     prefersdark: ${theme.name === "Dark+" ? "true" : "false"};
     color-scheme: ${type};
@@ -102,6 +119,15 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     --color-warning-content: ${c.foreground ?? "#ffffff"};
     --color-error: ${error};
     --color-error-content: ${c.foreground ?? "#ffffff"};
+
+    /* Selection highlight, overlay shadow, info foreground and identity accent, used by our own components. */
+    --color-selection: ${selection};
+    --shadow-color: ${shadow};
+    --color-info-foreground: ${infoForeground};
+    --color-identity: ${identity};
+    --color-identity-content: ${identityContent};
+    --color-playback-accent: ${playbackAccent};
+    --color-tuplet-accent: ${tupletAccent};
 
     ${sharedValues}
 }`;

@@ -21,11 +21,6 @@ export interface IContainerProperties extends ICommonUIProperties {
 
 /** A grouping element with flex layout. */
 export class Container extends UIComponent<IContainerProperties> {
-
-    public static override defaultProps = {
-        orientation: Orientation.LeftToRight,
-    };
-
     public override componentDidUpdate(prevProps: IContainerProperties): void {
 
         const { innerRef, scrollPosition } = this.props;
@@ -38,16 +33,14 @@ export class Container extends UIComponent<IContainerProperties> {
 
     public render(): ComponentChild {
         const {
-            id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef,
+            id, children, style, orientation = Orientation.LeftToRight, mainAlignment, crossAlignment, wrap, innerRef,
             onClick, onDblClick, onPointerDown, onPointerUp, onPointerMove, onPointerEnter, onPointerLeave,
             onDragStart, onDragEnd,
             title, gap, onScroll, onWheel,
         } = this.props;
 
         const newStyle: CSSProperties = { ...style };
-        if (orientation !== undefined) {
-            newStyle.flexDirection = orientation;
-        }
+        newStyle.flexDirection = orientation;
 
         if (mainAlignment !== undefined) {
             newStyle.justifyContent = mainAlignment;

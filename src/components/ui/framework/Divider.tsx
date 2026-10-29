@@ -11,22 +11,16 @@ interface IDividerProperties extends ICommonUIProperties {
     vertical?: boolean;
     thickness?: number;
 
-    innerRef?: preact.RefObject<HTMLDivElement>;
+    innerRef?: preact.RefObject<HTMLDivElement | null>;
 
     // data-text is supported to set a title on the divider.
 }
 
 export class Divider extends UIComponent<IDividerProperties> {
-
-    public static override defaultProps = {
-        vertical: false,
-        thickness: 4,
-    };
-
     private hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
     public render(): ComponentChild {
-        const { vertical, thickness, style, innerRef } = this.props;
+        const { vertical = false, thickness = 4, style, innerRef } = this.props;
 
         const className = this.generateFinalClassName([
             "divider",
@@ -36,7 +30,7 @@ export class Divider extends UIComponent<IDividerProperties> {
 
         const newStyle = {
             ...style,
-            "--thickness": `${(thickness ?? 4)}px`,
+            "--thickness": `${thickness}px`,
         };
 
         return (

@@ -1,0 +1,40 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.uiBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    padding: 1px 8px;
+    border: 1px solid color-mix(in srgb, var(--badge-color) 45%, transparent);
+    border-radius: var(--radius-field);
+    color: var(--badge-color);
+    background-color: color-mix(in srgb, var(--badge-color) 10%, var(--color-base-100));
+
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.uiBadge-neutral {
+    --badge-color: var(--color-base-content);
+}
+
+.uiBadge-primary {
+    --badge-color: var(--color-primary);
+}
+
+.uiBadge-success {
+    --badge-color: var(--color-success);
+}
+
+.uiBadge-warning {
+    --badge-color: var(--color-warning);
+}
+
+.uiBadge-error {
+    --badge-color: var(--color-error);
+}

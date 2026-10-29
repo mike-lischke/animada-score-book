@@ -5,6 +5,7 @@
 
 import { ComponentChild, render } from "preact";
 
+import { escapeStack } from "../../../supplement/EscapeStack.js";
 import { Stack } from "../../../supplement/Stack.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
@@ -26,6 +27,16 @@ export interface IPortalOptions {
     blockMouseEvents?: boolean;
 }
 
+export enum PortalCloseReason {
+    Escape,
+    OutsideClick,
+    Replaced,
+    Programmatic,
+
+    /** Another layer took over the screen, so the portal had to make room. */
+    Superseded,
+}
+
 export interface IPortalProperties extends ICommonUIProperties {
     /**
      * The element that hosts the portal. Defaults to document.body.
@@ -33,7 +44,7 @@ export interface IPortalProperties extends ICommonUIProperties {
     container?: HTMLElement;
 
     onOpen?: (props: IPortalProperties) => void;
-    onClose?: (cancelled: boolean, props: IPortalProperties) => void;
+    onClose?: (cancelled: boolean, props: IPortalProperties, reason: PortalCloseReason) => void;
 
     /** Called when Enter is pressed while this is the topmost portal. */
     onEnter?: (event: KeyboardEvent) => void;
@@ -49,11 +60,12 @@ interface IPortalState {
  * (default: `document.body`), ensuring correct stacking order.
  *
  * A static stack tracks all open portals. Only the topmost portal responds
- * to Escape. Each new portal receives an incrementally higher z-index.
+ * to Enter, and Escape is handled by the global escape stack. Each new portal
+ * receives an incrementally higher z-index.
  */
 export class Portal extends UIComponent<IPortalProperties, IPortalState> {
 
-    /** Stack of all currently open portals, for stacking and Escape handling. */
+    /** Stack of all currently open portals, for stacking and Enter handling. */
     private static portalStack = new Stack<Portal>();
 
     private host?: HTMLDivElement;
@@ -65,6 +77,19 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
             open: false,
             options: {},
         };
+    }
+
+    /**
+     * Closes every open portal, e.g. when the sidebar takes over the screen. A portal that cannot be
+     * closed by Escape is left alone, since it is meant to block the app.
+     */
+    public static closeAll(): void {
+        // A copy, because closing removes the portals from the stack.
+        for (const portal of [...Portal.portalStack]) {
+            if (portal.state.options.closeOnEscape) {
+                portal.close(true, PortalCloseReason.Superseded);
+            }
+        }
     }
 
     public override componentDidUpdate(): void {
@@ -90,7 +115,6 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 );
 
                 this.host.addEventListener("mousedown", this.handlePortalMouseDown);
-                this.host.addEventListener("wheel", this.handlePortalMouseWheel);
                 container.appendChild(this.host);
             }
 
@@ -104,6 +128,15 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
     public override componentWillUnmount(): void {
         this.host?.remove();
         this.host = undefined;
+
+        const index = Portal.portalStack.findIndex((portal) => {
+            return portal === this;
+        });
+        if (index >= 0) {
+            Portal.portalStack.splice(index, 1);
+        }
+
+        escapeStack.remove(this.handleEscape);
     }
 
     public render(): ComponentChild {
@@ -129,6 +162,7 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
 
             this.setState({ open: true, options: activeOptions }, () => {
                 Portal.portalStack.push(this);
+                escapeStack.push(this.handleEscape);
 
                 const { onOpen } = this.props;
                 onOpen?.(this.props);
@@ -136,13 +170,13 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         }
     }
 
-    public close(cancelled: boolean): void {
+    public close(cancelled: boolean, reason = PortalCloseReason.Programmatic): void {
         const { open } = this.state;
 
         if (open) {
             const { onClose } = this.props;
 
-            onClose?.(cancelled, this.props);
+            onClose?.(cancelled, this.props, reason);
 
             this.setState({ open: false, options: {} });
             const index = Portal.portalStack.findIndex((portal) => {
@@ -152,6 +186,8 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
             if (index > -1) {
                 Portal.portalStack.splice(index, 1);
             }
+
+            escapeStack.remove(this.handleEscape);
         }
     }
 
@@ -166,48 +202,28 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         const { open, options } = this.state;
 
         if (open && options.closeOnPortalClick && event.target === this.host) {
-            this.close(true);
+            this.close(true, PortalCloseReason.OutsideClick);
         }
     };
 
-    private handlePortalMouseWheel = (event: WheelEvent): void => {
+    private handleEscape = (): void => {
         const { open, options } = this.state;
 
-        if (open && !options.blockMouseEvents) {
-            event.preventDefault();
-            event.stopPropagation();
+        if (open && options.closeOnEscape) {
+            this.close(true, PortalCloseReason.Escape);
         }
     };
 
     static {
-        // A single keydown handler for all portals. Only the topmost portal responds: Escape closes it
-        // (respecting closeOnEscape), Enter is forwarded to its onEnter callback (e.g. the dialog's
-        // default action).
+        // A single keydown handler for all portals. Enter is forwarded to the topmost portal's onEnter
+        // callback (e.g. the dialog's default action). Escape runs through the escape stack, so that a
+        // single press never closes more than one layer.
         document.body.addEventListener("keydown", (e: KeyboardEvent): void => {
-            if (Portal.portalStack.length === 0) {
+            if (e.key !== "Enter" || Portal.portalStack.length === 0) {
                 return;
             }
 
-            const portal = Portal.portalStack.top;
-            if (!portal) {
-                return;
-            }
-
-            if (e.key === "Escape") {
-                const { options } = portal.state;
-
-                if (options.closeOnEscape) {
-                    e.stopImmediatePropagation();
-                    e.stopPropagation();
-                    portal.close(true);
-                }
-
-                return;
-            }
-
-            if (e.key === "Enter") {
-                portal.props.onEnter?.(e);
-            }
+            Portal.portalStack.top?.props.onEnter?.(e);
         });
     }
 }

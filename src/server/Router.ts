@@ -13,10 +13,13 @@ import { resolve } from "node:path";
 import { runMigrations } from "../../build/migration.js";
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
-import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import {
+    DatabaseEngine, isValidDatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig,
+} from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 import { type IServerConfig } from "./config.js";
+import { getConfigStatus } from "./config.js";
 import { RequestContext } from "./RequestContext.js";
 import { ScoreRoutes } from "./ScoreRoutes.js";
 import { AuthRoutes } from "./AuthRoutes.js";
@@ -82,7 +85,7 @@ export class Router {
             try {
                 switch (action) {
                     case "health":
-                        await this.handleHealth(req, res);
+                        await this.handleHealth(res);
 
                         break;
 
@@ -388,40 +391,76 @@ export class Router {
         console.log("Seeded anonymous system user.");
     };
 
-    private async handleHealth(req: IncomingMessage, res: ServerResponse) {
+    /**
+     * Reduces an exception to one line — stack traces and echoed SQL statements help nobody in the UI.
+     *
+     * @param e The exception to summarise.
+     *
+     * @returns The first line of the exception message, shortened to fit a message box.
+     */
+    private static summarizeError(e: unknown): string {
+        const details = convertErrorToString(e).split("\n")[0];
+
+        return details.length > 300 ? `${details.slice(0, 300)}…` : details;
+    }
+
+    /**
+     * @param adapter The database adapter to query.
+     * @param table The table to look for.
+     *
+     * @returns Whether the table exists and can be read.
+     */
+    private static async tableExists(adapter: IDatabaseAdapter, table: string): Promise<boolean> {
+        try {
+            await adapter.query(`SELECT 1 FROM ${table} LIMIT 1`);
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Installs the given adapter again after a failed database reset closed its pool.
+     *
+     * @param adapter The adapter used for the failed reset attempt.
+     */
+    private async restoreAdapter(adapter: IDatabaseAdapter): Promise<void> {
+        try {
+            await adapter.initialize(this.config.database);
+            await this.auth.adapter.shutdown();
+            this.auth.adapter = adapter;
+        } catch (e) {
+            console.error("Restoring the database adapter failed:", convertErrorToString(e));
+        }
+    }
+
+    private async handleHealth(res: ServerResponse) {
+        const { engine, host, port, database } = this.config.database;
+        const { loaded: configLoaded, error: configError } = getConfigStatus();
+        const responseBase = { configLoaded, configError, engine, host, port, database };
+
         // Auth may not be injected yet during early startup.
         if (!this.authenticator) {
             this.ctx.sendJson(res, {
-                status: "ok",
-                configLoaded: true,
-                initialized: false,
-                engine: this.config.database.engine,
-                host: this.config.database.host,
-                port: this.config.database.port,
-                database: this.config.database.database,
-                hasData: false,
-                hasUsers: false,
+                ...responseBase, status: "ok", initialized: false, hasData: false, hasUsers: false,
             });
 
             return;
         }
 
         if (!this.auth.adapter.isInitialized()) {
-            // Pool not created yet — the backend may have failed to auto-connect or
-            // is waiting for first-time setup. Test connectivity to distinguish the two.
+            // Pool not created yet: the start may have happened before the database existed. Open it now, but
+            // leave the schema to the setup dialog.
             const connResult = await this.auth.adapter.testConnection(this.config.database);
 
             if (!connResult.success) {
                 this.ctx.sendJson(res, {
+                    ...responseBase,
                     status: "error",
                     dbStatus: "db_unreachable",
                     dbError: `Database unreachable: ${connResult.error ?? "unknown reason"}`,
-                    configLoaded: true,
                     initialized: false,
-                    engine: this.config.database.engine,
-                    host: this.config.database.host,
-                    port: this.config.database.port,
-                    database: this.config.database.database,
                     hasData: false,
                     hasUsers: false,
                 });
@@ -429,32 +468,18 @@ export class Router {
                 return;
             }
 
-            // DB server is reachable — try to auto-initialise so the backend
-            // self-heals when the database becomes available after a temporary outage.
             try {
                 await this.auth.adapter.initialize(this.config.database);
-
-                const { engine, host, port, database } = this.config.database;
                 console.log(
-                    `Backend initialised via health check: ${engine} @ ${host}:${port}/${database}`,
+                    `Backend connected via health check: ${engine} @ ${host}:${port}/${database}`,
                 );
-
-                // Run the same seeding as normal startup (both steps are idempotent).
-                await this.seedIfExists(this.auth.adapter);
-                await this.seedAnonymousUser(this.auth.adapter);
-
-                // Fall through to the normal health path below (pool is now ready).
             } catch (e) {
                 this.ctx.sendJson(res, {
+                    ...responseBase,
                     status: "error",
                     dbStatus: "db_unreachable",
                     dbError: `Database initialisation failed: ${(e as Error).message}`,
-                    configLoaded: true,
                     initialized: false,
-                    engine: this.config.database.engine,
-                    host: this.config.database.host,
-                    port: this.config.database.port,
-                    database: this.config.database.database,
                     hasData: false,
                     hasUsers: false,
                 });
@@ -469,15 +494,11 @@ export class Router {
             await this.auth.adapter.ping();
         } catch (e) {
             this.ctx.sendJson(res, {
+                ...responseBase,
                 status: "error",
                 dbStatus: "db_unreachable",
                 dbError: `Database unreachable: ${(e as Error).message}`,
-                configLoaded: true,
-                initialized: true,
-                engine: this.config.database.engine,
-                host: this.config.database.host,
-                port: this.config.database.port,
-                database: this.config.database.database,
+                initialized: false,
                 hasData: false,
                 hasUsers: false,
             });
@@ -485,41 +506,42 @@ export class Router {
             return;
         }
 
-        // Connectivity is confirmed — schema and data queries are trusted to produce
-        // meaningful errors if they fail.
-        let hasData = false;
-        let anyUsers = false;
-        let dbError: string | undefined;
-        let dbStatus: string | undefined;
+        // An empty database gets its schema from the setup dialog, a half-migrated one needs a reset.
+        const hasMigrationHistory = await Router.tableExists(this.auth.adapter, "migration_history");
+        const hasUserTable = await Router.tableExists(this.auth.adapter, "users");
 
-        // Check if migration_history exists to confirm the DB was properly initialised.
-        try {
-            await this.auth.adapter.query("SELECT 1 FROM migration_history LIMIT 1");
-        } catch {
-            dbStatus = "schema_mismatch";
-            dbError = "Database has not been initialised with the migration system. "
-                + "Restart the server to apply migrations.";
+        if (!hasMigrationHistory && !hasUserTable) {
+            this.ctx.sendJson(res, {
+                ...responseBase, status: "ok", dbStatus: "missing_schema", initialized: false,
+                hasData: false, hasUsers: false,
+            });
+
+            return;
+        }
+
+        if (!hasMigrationHistory || !hasUserTable) {
+            this.ctx.sendJson(res, {
+                ...responseBase,
+                status: "error",
+                dbStatus: "schema_mismatch",
+                dbError: "The database schema is incomplete. Use Reset Database to rebuild it.",
+                initialized: true,
+                hasData: false,
+                hasUsers: false,
+            });
+
+            return;
         }
 
         const rows = await this.auth.adapter.query<{ cnt: number; }>(
             "SELECT COUNT(*) AS cnt FROM folders",
         );
 
-        hasData = (rows[0]?.cnt ?? 0) > 0;
-        anyUsers = await this.auth.hasUsers();
+        const hasData = (rows[0]?.cnt ?? 0) > 0;
+        const anyUsers = await this.auth.hasUsers();
 
         this.ctx.sendJson(res, {
-            status: dbStatus ? "error" : "ok",
-            configLoaded: true,
-            initialized: true,
-            engine: this.config.database.engine,
-            host: this.config.database.host,
-            port: this.config.database.port,
-            database: this.config.database.database,
-            hasData,
-            hasUsers: anyUsers,
-            dbStatus,
-            dbError,
+            ...responseBase, status: "ok", initialized: true, hasData, hasUsers: anyUsers,
         });
     };
 
@@ -548,8 +570,9 @@ export class Router {
 
         // Merge incoming config with defaults.
         this.config.database = {
-            engine: typeof body.engine === "string"
-                ? body.engine as DatabaseEngine : this.config.database.engine,
+            engine: typeof body.engine === "string" && isValidDatabaseEngine(body.engine)
+                ? body.engine
+                : this.config.database.engine,
             host: typeof body.host === "string" ? body.host : this.config.database.host,
             port: typeof body.port === "number" ? body.port : this.config.database.port,
             database: typeof body.database === "string" ? body.database : this.config.database.database,
@@ -581,14 +604,20 @@ export class Router {
                     this.ctx.sendJson(res, { success: true });
                 } catch (e) {
                     console.error("Overwrite failed:", convertErrorToString(e));
+
+                    // The reset closes the pool of the adapter it was given, so a failing reset
+                    // (e.g. a broken seed file) would leave the backend without a working adapter.
+                    await this.restoreAdapter(newAdapter);
                     this.ctx.sendError(
-                        res, "Database overwrite failed. Check server logs for details.", 500,
+                        res, `Database overwrite failed: ${Router.summarizeError(e)}`, 500,
                     );
                 }
 
                 return;
             }
 
+            // Creating the schema is what the dialog asks for: apply every pending migration first.
+            this.config.database.database = await runMigrations(this.config.database);
             await newAdapter.initialize(this.config.database);
 
             // Both seeding steps are idempotent: the seed data lands only in an empty database.
@@ -597,7 +626,7 @@ export class Router {
         } catch (e) {
             console.error("Database initialisation failed:", convertErrorToString(e));
             this.ctx.sendError(
-                res, "Database initialisation failed. Check server logs for details.", 500,
+                res, `Database initialisation failed: ${Router.summarizeError(e)}`, 500,
             );
 
             return;
@@ -632,7 +661,9 @@ export class Router {
         const body = await this.ctx.readJsonBody(req);
 
         const testConfig: IDatabaseConfig = {
-            engine: typeof body.engine === "string" ? body.engine as DatabaseEngine : DatabaseEngine.MySQL,
+            engine: typeof body.engine === "string" && isValidDatabaseEngine(body.engine)
+                ? body.engine
+                : DatabaseEngine.MySQL,
             host: typeof body.host === "string" ? body.host : "127.0.0.1",
             port: typeof body.port === "number" ? body.port : 3306,
             database: typeof body.database === "string" ? body.database : "",

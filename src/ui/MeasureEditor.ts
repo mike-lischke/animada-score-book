@@ -3,22 +3,20 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IRadialMenuHost, IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
-import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { AppStorage } from "../core/AppStorage.js";
 import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { defaultEntryValue, noteValueFraction, type INoteValue } from "../core/rest-notation.js";
-import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type {
     IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
+import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import { EditEntryMode, type IAudioData, type IFraction, type IMeasureEvent } from "../core/types/general.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
-import type { ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
-import { selectionEventsOf, selectionToClearRanges } from "./selection-ranges.js";
+import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
+import { selectionEventsOf, selectionToClearRanges } from "./selection-ranges.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteTarget, type ISelectionDelta,
@@ -55,9 +53,6 @@ export interface IMeasureEditorInput {
 
     selectionManager: SelectionManager;
     scoreElementRegistry: ScoreElementRegistry;
-
-    /** The menu that shows the note action menu. Views without one leave it undefined. */
-    noteActionMenu?: IRadialMenuHost;
 }
 
 /** A subdivision a selection covers completely, as the deletion needs to address it. */
@@ -97,7 +92,6 @@ export abstract class MeasureEditor {
     protected abstract readonly cursorElementKind: ScoreElementKind;
 
     private readonly eventContainer: HTMLElement;
-    private readonly noteActionMenu?: IRadialMenuHost;
     private currentEntryMode: EditEntryMode = EditEntryMode.Insert;
     private articulation?: Articulation;
 
@@ -107,7 +101,6 @@ export abstract class MeasureEditor {
         this.selectionManager = input.selectionManager;
         this.scoreElementRegistry = input.scoreElementRegistry;
         this.eventContainer = input.eventContainer;
-        this.noteActionMenu = input.noteActionMenu;
         this.noteValue = settings?.entryNoteValue ?? defaultEntryValue;
         this.articulation = settings?.entryArticulation;
     }
@@ -152,15 +145,6 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Whether the view offers a note action menu, which input opens on the secondary button.
-     *
-     * @returns True when the view has a menu.
-     */
-    public get hasNoteActionMenu(): boolean {
-        return this.noteActionMenu !== undefined;
-    }
-
-    /**
      * Resolves the element an input event addresses and makes it the cursor.
      *
      * @param target The event target to resolve.
@@ -183,30 +167,6 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Opens the note action menu of the view at the cursor. A view without a menu does nothing, so
-     * the action is safe to send to every view.
-     */
-    public openNoteActionMenu(): void {
-        const menu = this.noteActionMenu;
-        const cursor = this.cursor;
-        if (menu === undefined || cursor === undefined) {
-            return;
-        }
-
-        const element = this.elementAt(cursor);
-        const items = this.noteActionItems();
-        if (element === undefined || items.length === 0) {
-            return;
-        }
-
-        menu.open(element.getBoundingClientRect(), ComponentPlacement.TopCenter, items, 90, {
-            startAngle: 180,
-            angleSpan: items.length <= 5 ? 180 : 360,
-            clockwise: true,
-        });
-    }
-
-    /**
      * Writes a note of the given style. Insert mode writes at the cursor; overwrite mode writes at the
      * cursor for a single cell and restyles the selection when it addresses several elements (ADR-0011).
      *
@@ -220,6 +180,10 @@ export abstract class MeasureEditor {
         }
 
         const entries = this.selectionEntries();
+
+        if (this.rejectSimileEntry(entries)) {
+            return false;
+        }
 
         return this.entryMode === EditEntryMode.Overwrite && this.isMultiCellSelection(entries)
             ? this.enterNoteForSelection(entries, noteStyleId)
@@ -238,6 +202,10 @@ export abstract class MeasureEditor {
         }
 
         const entries = this.selectionEntries();
+        if (this.rejectSimileEntry(entries)) {
+            return false;
+        }
+
         const replacesSelection = this.entryMode === EditEntryMode.Overwrite && entries.length > 1;
 
         return replacesSelection ? this.deleteSelection() : this.writeRestAtCursor();
@@ -323,7 +291,8 @@ export abstract class MeasureEditor {
      * @returns True when the value applies.
      */
     public canApplyNoteLength(value: INoteValue): boolean {
-        return this.selectionManager.hasSelection && this.noteLengthAtCursor(value) !== undefined;
+        return (this.entryMode === EditEntryMode.Insert || this.selectionManager.hasSelection)
+            && this.noteLengthAtCursor(value) !== undefined;
     }
 
     /**
@@ -345,13 +314,18 @@ export abstract class MeasureEditor {
      */
     public cursorFromSelection(delta: ISelectionDelta): void {
         if (delta.added.length === 0 && !this.selectionManager.hasSelection) {
-            this.cursor = undefined;
+            const entry = this.selectionManager.currentCursor;
+            this.cursor = entry === undefined ? undefined : this.cursorOf(entry);
 
             return;
         }
 
-        const added = delta.added[0];
-        if (delta.added.length !== 1 || !this.isCursorEntry(added)) {
+        const fixedCursor = this.selectionManager.currentCursor;
+        const selection = this.selectionManager.currentSelection;
+        const added = fixedCursor ?? (selection.size === 1 ? selection.values().next().value : undefined);
+        if (added?.granularity !== SelectionGranularity.Note || !this.isCursorEntry(added)) {
+            this.cursor = undefined;
+
             return;
         }
 
@@ -711,8 +685,10 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Clears the content the selection describes and drops the selection, because the cleared
-     * elements no longer hold it.
+     * Clears the content the selection describes. A cleared piece still exists, so a selection that addresses
+     * one stays and its tools remain usable. A single note cell stays as well: the rest that takes its place
+     * holds the same span, so the cursor stands where the deleted note stood. A selection naming several notes
+     * is dropped instead, because the notes it holds are gone.
      *
      * @returns True when content was deleted.
      */
@@ -722,7 +698,14 @@ export abstract class MeasureEditor {
             return false;
         }
 
-        this.selectionManager.clearSelection();
+        const only = entries.length === 1 ? entries[0] : undefined;
+        if (only !== undefined && addressesNoteCells(only.target)) {
+            this.selectionManager.replaceSelection(this.refreshSelection(entries));
+        } else if (entries.some((entry) => {
+            return addressesNoteCells(entry.target);
+        })) {
+            this.selectionManager.clearSelection();
+        }
 
         return true;
     }
@@ -814,27 +797,6 @@ export abstract class MeasureEditor {
      */
     protected focusInput(): void {
         this.eventContainer.focus({ preventScroll: true });
-    }
-
-    /**
-     * Returns the items of the note action menu, in the order the menu shows them. The grid builds
-     * them from the addressed instrument; a view without a menu offers no items.
-     *
-     * @returns The menu items.
-     */
-    protected noteActionItems(): IRadialMenuItem[] {
-        return [];
-    }
-
-    /**
-     * Writes the note style an action menu picked at the cursor.
-     *
-     * @param noteStyleId The picked note-style id.
-     *
-     * @returns True when the edit was applied.
-     */
-    protected applyNoteActionStyle(noteStyleId: string): boolean {
-        return this.writeNoteAtCursor(noteStyleId);
     }
 
     /**
@@ -1022,6 +984,34 @@ export abstract class MeasureEditor {
      * @returns True when the selection changed.
      */
     protected abstract resizeSelectionForLengthChange(): boolean;
+
+    private rejectSimileEntry(entries: ISelectionEntry[]): boolean {
+        const hasSimile = entries.some(({ target }) => {
+            if (target.granularity === SelectionGranularity.Track) {
+                return target.track.measures.some((measure) => {
+                    return measure.simile === true;
+                });
+            }
+
+            if (target.granularity === SelectionGranularity.Measure) {
+                return this.dataModel.arrangement?.tracks.some((track) => {
+                    return track.measures[target.measure.number - 1]?.simile === true;
+                }) ?? false;
+            }
+
+            return this.resolveMeasure(target.measure.track.id, target.measure.number)?.simile === true;
+        });
+        const cursor = this.cursor;
+        const cursorIsSimile = entries.length === 0 && cursor !== undefined
+            && this.resolveMeasure(cursor.trackId, cursor.bar)?.simile === true;
+        if (!hasSimile && !cursorIsSimile) {
+            return false;
+        }
+
+        void requisitions.execute("showWarning", "Delete the simile before entering notes or rests.");
+
+        return true;
+    }
 
     /**
      * Adopts the articulation of the element the cursor addresses, so the overwrite mode writes what

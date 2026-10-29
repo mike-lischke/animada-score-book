@@ -31,7 +31,7 @@ interface IMenuBarState {
  * A horizontal bar of top-level items that each open a dropdown Menu.
  */
 export class MenuBar extends UIComponent<IMenuBarProperties, IMenuBarState> {
-    private menuRefs = new Map<string, preact.RefObject<Menu>>();
+    private menuRefs = new Map<string, preact.RefObject<Menu | null>>();
 
     public constructor(props: IMenuBarProperties) {
         super(props);
@@ -60,7 +60,7 @@ export class MenuBar extends UIComponent<IMenuBarProperties, IMenuBarState> {
                     let menuRef = this.menuRefs.get(refKey);
 
                     if (!menuRef) {
-                        menuRef = createRef<Menu>();
+                        menuRef = createRef<Menu | null>();
                         this.menuRefs.set(refKey, menuRef);
                     }
 

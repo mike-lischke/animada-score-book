@@ -5,35 +5,22 @@
 
 import type { ComponentChild } from "preact";
 
-import { staffSpacePx } from "../../../core/MeasureLayout.js";
-import { AppStorage } from "../../../core/AppStorage.js";
 import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import { NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
-import type { ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IFraction } from "../../../core/types/general.js";
-import { RepeatMark } from "../../../core/types/general.js";
-import { requisitions, RangeArticulationTool } from "../../../supplement/Requisitions.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { maxTupletLevels } from "../../../core/tuplets.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
-import { HairpinIcon } from "../Note/HairpinIcon.js";
-import { Separator } from "../Separator.js";
-import { Button } from "../framework/Button.js";
-import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
-import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface ISubdivisionToolbarProps extends ICommonUIProperties {
     selectionManager: SelectionManager;
-    dataModel: ScoreBookDataModel;
 }
 
 interface ISubdivisionToolbarState {
@@ -41,30 +28,6 @@ interface ISubdivisionToolbarState {
 
     /** How many slots the selection can hold: one per shortest note value that fits into its span. */
     maxSlots: number;
-
-    /** Whether the whole selection is track pieces the one-bar repeat mark can be toggled on. */
-    canToggleSimile: boolean;
-
-    /** Whether every addressed track piece carries the one-bar repeat mark. */
-    simileActive: boolean;
-
-    /** Whether every addressed bar can open a repeated section, which a bar closing it has to follow. */
-    canMarkRepeatStart: boolean;
-
-    /** Whether every addressed bar can close a repeated section, which a bar opening it has to precede. */
-    canMarkRepeatEnd: boolean;
-
-    /** Whether every addressed bar opens a repeated section. */
-    repeatStartActive: boolean;
-
-    /** Whether every addressed bar closes a repeated section. */
-    repeatEndActive: boolean;
-
-    /** The placing tool currently in effect. */
-    activeTool: RangeArticulationTool;
-
-    /** True while the staff view is shown, the only view that offers the dynamics and repeat controls. */
-    staffMode: boolean;
 }
 
 interface ISubdivisionOption {
@@ -95,36 +58,20 @@ const subdivisionOptions: ISubdivisionOption[] = [
 ];
 
 /**
- * Toolbar for creating subdivisions. A subdivision is created either from the current cursor
- * position (a single selected note cell) or from a contiguous selection within a single track.
- * The grid view shows the tuplet dropdown alone; the dynamics and repeat controls belong to the
- * staff view, which draws what they mark.
+ * Toolbar for creating subdivisions. A subdivision is created either from the current cursor position (a single
+ * selected note cell) or from a contiguous selection within a single track.
  */
 export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, ISubdivisionToolbarState> {
     public constructor(props: ISubdivisionToolbarProps) {
         super(props);
 
-        const settings = AppStorage.loadUISettings();
-        this.state = {
-            canCreate: false,
-            maxSlots: 1,
-            canToggleSimile: false,
-            simileActive: false,
-            canMarkRepeatStart: false,
-            canMarkRepeatEnd: false,
-            repeatStartActive: false,
-            repeatEndActive: false,
-            activeTool: RangeArticulationTool.None,
-            staffMode: (settings?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid") === "staff",
-        };
+        this.state = { canCreate: false, maxSlots: 1 };
     }
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("arrangementMutated", this.handleArrangementReverted);
-        requisitions.register("rangeArticulationToolChanged", this.handleToolChanged);
-        requisitions.register("trackViewModeToggled", this.handleViewModeToggled);
         this.refreshState();
     }
 
@@ -132,141 +79,20 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("arrangementMutated", this.handleArrangementReverted);
-        requisitions.unregister("rangeArticulationToolChanged", this.handleToolChanged);
-        requisitions.unregister("trackViewModeToggled", this.handleViewModeToggled);
-
-        // The toolbar owns the placing mode, so leaving edit mode has to end it. The score view keeps
-        // listening after this component is gone.
-        if (this.state.activeTool !== RangeArticulationTool.None) {
-            void requisitions.execute("rangeArticulationToolChanged", RangeArticulationTool.None);
-        }
     }
 
     public override render(): ComponentChild {
-        const { staffMode } = this.state;
-
-        const tupletGroup = this.renderTupletGroup();
-
-        let repeatGroup: ComponentChild;
-        if (staffMode) {
-            repeatGroup = this.renderRepeatGroup();
-        }
-
-        return (
-            <Container
-                className="subdivisionToolbarHost"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                {tupletGroup}
-                {repeatGroup}
-            </Container>
-        );
-    }
-
-    /**
-     * Builds the group the grid view keeps: the tuplet dropdown and, in the staff view, the dynamics buttons.
-     *
-     * @returns The group's content.
-     */
-    private renderTupletGroup(): ComponentChild {
-        const { canCreate, staffMode } = this.state;
+        const { canCreate } = this.state;
         const dropdownItems = this.buildDropdownItems();
 
-        let dynamicsButtons: ComponentChild;
-        if (staffMode) {
-            dynamicsButtons = this.renderDynamicsButtons();
-        }
-
         return (
-            <GooeyGroup
-                className="subdivisionToolbar"
-                background="var(--color-base-200)"
-            >
-                <Dropdown
-                    icon={<TupletIcon />}
-                    disabled={!canCreate}
-                    closeOnSelect
-                    items={dropdownItems}
-                    data-tooltip="Add subdivision"
-                />
-                {dynamicsButtons}
-            </GooeyGroup>
-        );
-    }
-
-    /**
-     * Builds the dynamics buttons, which start the placing modes the staff view draws.
-     *
-     * @returns The hairpin and forte buttons.
-     */
-    private renderDynamicsButtons(): ComponentChild {
-        const { activeTool } = this.state;
-
-        return (
-            <>
-                <Button
-                    isDefault={activeTool === RangeArticulationTool.Hairpin}
-                    data-tooltip="Draw crescendo / decrescendo hairpin"
-                    onClick={this.handleHairpinClick}
-                >
-                    <HairpinIcon />
-                </Button>
-                <Button
-                    isDefault={activeTool === RangeArticulationTool.Forte}
-                    className="forteButton"
-                    data-tooltip="Place forte (f)"
-                    onClick={this.handleForteClick}
-                >
-                    <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />
-                </Button>
-            </>
-        );
-    }
-
-    /**
-     * Builds the repeat group, whose marks the staff view draws on the barlines.
-     *
-     * @returns The separator and the simile and repeat buttons.
-     */
-    private renderRepeatGroup(): ComponentChild {
-        const { canToggleSimile, simileActive } = this.state;
-        const { canMarkRepeatStart, canMarkRepeatEnd, repeatStartActive, repeatEndActive } = this.state;
-
-        return (
-            <>
-                <Separator />
-                <GooeyGroup
-                    className="subdivisionToolbar"
-                    background="var(--color-base-200)"
-                >
-                    <Button
-                        isDefault={simileActive}
-                        disabled={!canToggleSimile}
-                        className="simileButton"
-                        data-tooltip="One-bar repeat (simile)"
-                        onClick={this.handleToggleSimile}
-                    >
-                        <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} icon />
-                    </Button>
-                    <Button
-                        isDefault={repeatStartActive}
-                        disabled={!canMarkRepeatStart}
-                        data-tooltip="Repeat start"
-                        onClick={this.handleToggleRepeatStart}
-                    >
-                        <ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} icon />
-                    </Button>
-                    <Button
-                        isDefault={repeatEndActive}
-                        disabled={!canMarkRepeatEnd}
-                        data-tooltip="Repeat end"
-                        onClick={this.handleToggleRepeatEnd}
-                    >
-                        <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} icon />
-                    </Button>
-                </GooeyGroup>
-            </>
+            <Dropdown
+                icon={<TupletIcon />}
+                disabled={!canCreate}
+                closeOnSelect
+                items={dropdownItems}
+                title="Add subdivision"
+            />
         );
     }
 
@@ -282,40 +108,10 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         return Promise.resolve(true);
     };
 
-    private handleToolChanged = (tool: RangeArticulationTool): Promise<boolean> => {
-        this.setState({ activeTool: tool });
-
-        return Promise.resolve(true);
-    };
-
-    private handleViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
-        this.setState({ staffMode: mode === "staff" });
-
-        return Promise.resolve(true);
-    };
-
-    private handleHairpinClick = (): void => {
-        this.startTool(RangeArticulationTool.Hairpin);
-    };
-
-    private handleForteClick = (): void => {
-        this.startTool(RangeArticulationTool.Forte);
-    };
-
-    /**
-     * Enters the placing mode of a tool. The mode owns the pointer until it is left, so picking a button starts a
-     * mode and never toggles one off.
-     *
-     * @param tool The tool the clicked button stands for.
-     */
-    private startTool(tool: RangeArticulationTool): void {
-        this.setState({ activeTool: tool });
-        void requisitions.execute("rangeArticulationToolChanged", tool);
-    }
-
     private buildDropdownItems(): IDropdownItem[] {
         const { maxSlots } = this.state;
-        const entries = [...this.props.selectionManager.currentSelection.values()];
+        const { selectionManager } = this.props;
+        const entries = [...selectionManager.currentSelection.values()];
         const selectedSubdivisionSlot = entries.length === 1
             && SelectionSerializer.addressesSubdivisionSlot(entries[0].target);
 
@@ -425,136 +221,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
             canCreate = this.shareTupletLevel(entries);
         }
 
-        const measures = this.selectedTrackPieces();
-        const canToggleSimile = measures.length > 0 && measures.every((measure) => {
-            return measure.number > 1;
-        });
-        const simileActive = canToggleSimile && measures.every((measure) => {
-            return measure.simile === true;
-        });
-
-        // A repeat mark is set on whole bars, and only where it can pair up with a counterpart: one that opens
-        // needs a bar after it that closes it, one that closes needs a bar before it that opens it. A mark that
-        // nothing can set or take off again is not shown as active either, so a button that does nothing is
-        // neither lit nor clickable.
-        const bars = this.selectedBars();
-        const repeats = this.props.dataModel.arrangement?.repeatBars;
-        const barCount = this.props.dataModel.arrangement?.timeParams.length ?? 0;
-        const canMarkRepeatStart = bars.length > 0 && bars.every((bar) => {
-            return bar < barCount;
-        });
-        const canMarkRepeatEnd = bars.length > 0 && bars.every((bar) => {
-            return bar > 1;
-        });
-        const repeatStartActive = canMarkRepeatStart && bars.every((bar) => {
-            return repeats?.get(bar)?.start === true;
-        });
-        const repeatEndActive = canMarkRepeatEnd && bars.every((bar) => {
-            return repeats?.get(bar)?.end === true;
-        });
-
-        this.setState({
-            canCreate,
-            maxSlots: this.getMaxSlots(entries),
-            canToggleSimile,
-            simileActive,
-            canMarkRepeatStart,
-            canMarkRepeatEnd,
-            repeatStartActive,
-            repeatEndActive,
-        });
-    }
-
-    /**
-     * Resolves the measures the selection addresses, but only when the whole selection is track pieces.
-     *
-     * @returns The addressed measures, or an empty list when the selection is mixed or empty.
-     */
-    private selectedTrackPieces(): ISbDmTrackPiece[] {
-        const entries = [...this.props.selectionManager.currentSelection.values()];
-        if (entries.length === 0) {
-            return [];
-        }
-
-        const measures: ISbDmTrackPiece[] = [];
-        for (const entry of entries) {
-            const { target } = entry;
-            if (target.granularity !== SelectionGranularity.TrackPiece) {
-                return [];
-            }
-
-            measures.push(target.measure);
-        }
-
-        return measures;
-    }
-
-    private handleToggleSimile = (): void => {
-        const { dataModel } = this.props;
-        const measures = this.selectedTrackPieces();
-        if (measures.length === 0) {
-            return;
-        }
-
-        const value = !measures.every((measure) => {
-            return measure.simile === true;
-        });
-
-        dataModel.setMeasureSimiles(measures.map((measure) => {
-            return { trackId: measure.track.id, bar: measure.number };
-        }), value);
-    };
-
-    private handleToggleRepeatStart = (): void => {
-        this.toggleRepeat(RepeatMark.Start);
-    };
-
-    private handleToggleRepeatEnd = (): void => {
-        this.toggleRepeat(RepeatMark.End);
-    };
-
-    /**
-     * Sets or clears a repeat mark on the selected bars, taking it off when every of them already carries it.
-     *
-     * @param mark The mark to toggle.
-     */
-    private toggleRepeat(mark: RepeatMark): void {
-        const { dataModel } = this.props;
-        const bars = this.selectedBars();
-        if (bars.length === 0) {
-            return;
-        }
-
-        const repeats = dataModel.arrangement?.repeatBars;
-        const value = !bars.every((bar) => {
-            return repeats?.get(bar)?.[mark] === true;
-        });
-
-        dataModel.setRepeatBars(bars, mark, value);
-    }
-
-    /**
-     * Resolves the bars the selection addresses, but only when the whole selection is whole bars.
-     *
-     * @returns The addressed 1-based bar numbers, or an empty list when the selection is mixed or empty.
-     */
-    private selectedBars(): number[] {
-        const entries = [...this.props.selectionManager.currentSelection.values()];
-        if (entries.length === 0) {
-            return [];
-        }
-
-        const bars: number[] = [];
-        for (const entry of entries) {
-            const { target } = entry;
-            if (target.granularity !== SelectionGranularity.Measure) {
-                return [];
-            }
-
-            bars.push(target.measure.number);
-        }
-
-        return bars;
+        this.setState({ canCreate, maxSlots: this.getMaxSlots(entries) });
     }
 
     /**

@@ -4,18 +4,22 @@
  */
 
 import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
+import { defineConfig } from "eslint/config";
+import { configs as tseslintConfigs, parser as tseslintParser } from "typescript-eslint";
 import stylistic from "@stylistic/eslint-plugin";
-import jsdoc from "eslint-plugin-jsdoc";
+import jsdocPlugin, { configs as jsdocConfigs } from "eslint-plugin-jsdoc";
 import preferArrow from "eslint-plugin-prefer-arrow";
-import importPlugin from "eslint-plugin-import";
+import { flatConfigs as importXConfigs } from "eslint-plugin-import-x";
+import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import globals from "globals";
 
-export default tseslint.config(
+export default defineConfig(
     eslint.configs.recommended,
-    tseslint.configs.strictTypeChecked,
-    tseslint.configs.stylisticTypeChecked,
-    jsdoc.configs["flat/recommended"],
+    tseslintConfigs.strictTypeChecked,
+    tseslintConfigs.stylisticTypeChecked,
+    jsdocConfigs["flat/recommended"],
+    importXConfigs.recommended,
+    importXConfigs.typescript,
     {
         files: ["*.ts", "*.tsx", "*.mjs" ],
     },
@@ -25,13 +29,20 @@ export default tseslint.config(
     {
         plugins: {
             "@stylistic": stylistic,
-            jsdoc,
+            jsdoc: jsdocPlugin,
             "prefer-arrow": preferArrow,
-            "import": importPlugin,
+        },
+        settings: {
+            "import-x/resolver-next": [
+                createTypeScriptImportResolver({
+                    project: ["tsconfig.json", "tests/tsconfig.json"],
+                    noWarnOnMultipleProjects: true,
+                }),
+            ],
         },
         languageOptions: {
             ecmaVersion: "latest",
-            parser: tseslint.parser,
+            parser: tseslintParser,
             parserOptions: {
                 projectService: {
                     allowDefaultProject: [
@@ -437,6 +448,13 @@ export default tseslint.config(
                     startLines: 1,
                 },
             ],
+        },
+    },
+    {
+        // jsonwebtoken is CJS without statically detectable named exports, so `jwt.sign` needs the default import.
+        files: ["src/server/**"],
+        rules: {
+            "import-x/no-named-as-default-member": "off",
         },
     },
 );

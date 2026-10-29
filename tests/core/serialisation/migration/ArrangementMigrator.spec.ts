@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../../../src/core/Arrangement.js";
 import { Track } from "../../../../src/core/Track.js";
-import type { ISbDmInstrument } from "../../../../src/core/ScoreBookDataModel.js";
+import { Damping, type ISbDmInstrument } from "../../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { IBananaDrumSnapshot } from "../../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import { getArrangementSnapshot } from "../../../../src/core/serialisation/snapshots.js";
@@ -83,12 +83,13 @@ describe("ArrangementMigrator", () => {
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
-        const stepsPerBar = 16;
-        const isPolyrhythmEvent = (event: { duration: { numerator: number; denominator: number; }; }) => {
-            return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
-        };
-
-        const polyrhythmEvents = track.measures[0].events.filter(isPolyrhythmEvent);
+        const measure = track.measures[0];
+        expect(measure.subdivisions).toHaveLength(1);
+        const subdivision = measure.subdivisions[0];
+        expect(subdivision.actual).toBe(4);
+        expect(subdivision.normal).toBe(3);
+        const polyrhythmEvents = measure.events.slice(subdivision.startIndex,
+            subdivision.startIndex + subdivision.actual);
         expect(polyrhythmEvents).toHaveLength(4);
     });
 
@@ -98,7 +99,7 @@ describe("ArrangementMigrator", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
@@ -144,7 +145,7 @@ describe("ArrangementMigrator", () => {
         (instrument as Mutable<ISbDmInstrument>).noteStyles = {
             "1": {
                 id: "1", audioBuffer: null, instrument,
-                sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+                sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
             } as IAudioData,
         };
 

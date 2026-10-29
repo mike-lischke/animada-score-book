@@ -8,12 +8,12 @@ import {
 } from "../core/ScoreBookDataModel.js";
 import type { IFraction } from "../core/types/general.js";
 import { RangeArticulations } from "../core/RangeArticulations.js";
-import { requisitions } from "../supplement/Requisitions.js";
+import { requisitions, type IPlaybackOrderChange } from "../supplement/Requisitions.js";
 import { PlaybackOrder } from "./PlaybackOrder.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import { Event, IInterval } from "./types.js";
 
-/** A note event and the time it sounds at, which the repeat barlines may move away from its written position. */
+/** A note event and the time it sounds at, which the repeat bar lines may move away from its written position. */
 interface IPerformedEvent {
     event: ISbDmNoteEvent;
     realTime: RealTime;
@@ -36,11 +36,13 @@ export class TrackPlayer {
     private readonly timeCoordinator: TimeCoordinator;
 
     private disposed = false;
+    private playOrder?: readonly number[];
+    private playbackSources: Array<ISbDmTrackPiece | undefined> = [];
 
     /**
      * The events playback reads, one entry per sounding event of the performance: a measure contributes its own
      * resolved events, a simile the events of the measure it repeats, re-timed to its own position. A measure the
-     * repeat barlines play more than once contributes its events once per pass, at the time that pass starts.
+     * repeat bar lines play more than once contributes its events once per pass, at the time that pass starts.
      * Kept apart from the measures' `noteEvents`, which stay the literal content the views draw and edit.
      */
     private readonly playbackEvents: IPerformedEvent[] = [];
@@ -50,10 +52,12 @@ export class TrackPlayer {
      *
      * @param track The track view to observe and play.
      * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
+     * @param playOrder The current performance order remembered by the arrangement player.
      */
-    public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator) {
+    public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator, playOrder?: readonly number[]) {
         this.track = track;
         this.timeCoordinator = timeCoordinator;
+        this.playOrder = playOrder;
 
         // Build runtime measure events immediately for UI/rendering, even if audio buffers are not loaded yet.
         this.rebuildEventCache();
@@ -66,7 +70,9 @@ export class TrackPlayer {
         // Subscriptions to keep internal caches in sync.
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
-        requisitions.register("arrangementChanged", this.handleArrangementDestroy);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("arrangementReverted", this.handleArrangementMutated);
+        requisitions.register("playbackOrderChanged", this.handlePlaybackOrderChanged);
     }
 
     /**
@@ -98,6 +104,10 @@ export class TrackPlayer {
         return events;
     };
 
+    public sourceOfBar(bar: number): ISbDmTrackPiece | undefined {
+        return this.playbackSources[bar - 1];
+    }
+
     /** No-op; retained for the IEventSource interface. */
     public onStop = (): void => {
         /* nothing transient to reset */
@@ -115,8 +125,21 @@ export class TrackPlayer {
         requisitions.unregister("instrumentLoaded", this.handleInstrumentLoaded);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
-        requisitions.unregister("arrangementChanged", this.handleArrangementDestroy);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("arrangementReverted", this.handleArrangementMutated);
+        requisitions.unregister("playbackOrderChanged", this.handlePlaybackOrderChanged);
     }
+
+    private handlePlaybackOrderChanged = (order: IPlaybackOrderChange): Promise<boolean> => {
+        if (order.arrangementId !== this.track.arrangement.id) {
+            return Promise.resolve(false);
+        }
+
+        this.playOrder = order.bars;
+        this.rebuildPlaybackEvents(this.track.measures);
+
+        return Promise.resolve(true);
+    };
 
     /** Rebuilds the resolved runtime note events from the persisted measure events. */
     private rebuildEventCache = (): void => {
@@ -132,22 +155,29 @@ export class TrackPlayer {
 
     /**
      * Builds the playback list: the events of every bar, and for a simile the events of the bar it repeats,
-     * re-timed to the simile's position. Bars the repeat barlines play more than once are expanded in play order,
+     * re-timed to the simile's position. Bars the repeat bar lines play more than once are expanded in play order,
      * each pass at the time it starts.
      *
      * @param measures The measures of the track, in measure order.
      */
     private rebuildPlaybackEvents(measures: readonly ISbDmTrackPiece[]): void {
         const sources = PlaybackOrder.sourcesOf(measures);
+        this.playbackSources = sources;
         const arrangement = this.track.arrangement;
-        const order = PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
+        const order = this.playOrder ?? PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
             arrangement.timeParams.length);
         const { secondsPerBar } = this.timeCoordinator.metrics;
         const events: IPerformedEvent[] = [];
         const markings = arrangement.rangeArticulations?.forTrack(this.track.id) ?? [];
 
         order.forEach((barNumber, index) => {
-            const measure = measures[barNumber - 1];
+            const measure = measures.at(barNumber - 1);
+            if (measure === undefined) {
+                // The order follows the arrangement's bar count, which a track reaches once its measures are in
+                // place: a bar it has no measure for has nothing to play until the next rebuild.
+                return;
+            }
+
             const barStart = index * secondsPerBar;
             const timeOf = (event: ISbDmNoteEvent): RealTime => {
                 return barStart + ((secondsPerBar * event.start.numerator) / event.start.denominator);
@@ -266,14 +296,9 @@ export class TrackPlayer {
     /**
      * Disposes this player if its track was removed from the arrangement.
      *
-     * @param arrangementId The id of the arrangement that changed.
-     * @returns True if this player handles the given arrangement.
+     * @returns Always true (the change is always handled).
      */
-    private handleArrangementDestroy = (arrangementId: number): Promise<boolean> => {
-        if (arrangementId !== this.track.arrangement.id) {
-            return Promise.resolve(false);
-        }
-
+    private handleArrangementMutated = (): Promise<boolean> => {
         if (!this.track.arrangement.tracks.includes(this.track)) {
             this.dispose();
         }

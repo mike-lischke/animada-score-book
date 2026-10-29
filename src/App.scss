@@ -24,19 +24,39 @@
 }
 
 :root {
-    --bar-decoration-color: rgb(72, 237, 188);
-    --selection-background: rgba(79, 195, 247, 0.4);
+    /* Selection highlight of list rows and overlays, taken from the active theme. */
+    --selection-background: var(--color-selection);
+
+    /* Room the framed app shell keeps from the window edges. */
+    --page-gap: 12px;
+
+    /* Corner radius of the app shell frame: rounder than a framed control. The mockup states about 9 px here. */
+    --radius-app: 10px;
 
     /* The SMuFL unit. Mirrors `staffSpacePx` in MeasureLayout.ts, which a test asserts. */
     --staff-space: 10px;
 
+    /* Tone of the staff lines: the notation's colour, dimmed towards the paper. Lighter than the notes on every
+       theme, and visible on those whose third surface tone equals their background. */
+    --staff-line-colour: color-mix(in srgb, var(--color-base-content) 30%, transparent);
+
+    /* Note height: the grid cell size. */
     --note-height: 80px;
+
+    /* Width of one base-grid step, which a measure column is laid out for. Mirrors `measureStepWidthPx` in
+       MeasureLayout.ts. It is independent of the grid cell height, which the staff geometry relies on. */
+    --measure-step-width: 80px;
 }
 
 body {
     margin: 0;
     width: 100vw;
     height: 100vh;
+
+    /* The app is one framed shell, which sits on this surface. */
+    box-sizing: border-box;
+    padding: var(--page-gap);
+    background-color: var(--color-base-200);
 
     font-family: system-ui, 'Open Sans', 'Helvetica Neue', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     line-height: 1.5;
@@ -58,8 +78,29 @@ h6 {
 }
 
 #appRoot {
-    height: 100vh;
+    height: calc(100vh - 2 * var(--page-gap));
     max-width: none;
+    min-height: 0;
+    overflow: hidden;
+
+    /* One frame around the whole app: the header, the action bar, the score and the footer are its sections. */
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-app);
+    background-color: var(--color-base-100);
+
+    /* The staff lines are drawn with a negative z-index, which an in-flow background would cover. Stating the
+       frame as a stacking context keeps them above its own surface. */
+    isolation: isolate;
+
+    /* Height of both tool rows above the score: the header and the action bar. */
+    --tool-row-height: 56px;
+
+    /* Side of a control in either tool row: a square icon button, a text button or a score action button. */
+    --control-size: 34px;
+
+    /* Corner radius of a framed control, and the subtle border the tool rows and their controls share. */
+    --radius-frame: 6px;
+    --border-subtle: color-mix(in srgb, var(--color-base-content) 10%, transparent);
 }
 
 @supports (height: 100dvh) {
@@ -68,7 +109,7 @@ h6 {
     }
 
     #appRoot {
-        height: 100dvh;
+        height: calc(100dvh - 2 * var(--page-gap));
     }
 }
 
@@ -153,7 +194,7 @@ h6 {
     padding: 2rem;
     background: var(--color-base-100);
     border-radius: 1rem;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 24px var(--shadow-color);
 
     h2 {
         margin: 0 0 0.75rem 0;
@@ -218,138 +259,267 @@ h6 {
 }
 
 #headerContent {
-    margin: 12px;
+    box-sizing: border-box;
     flex-shrink: 0;
     overflow: hidden;
     background: var(--color-base-100);
     user-select: none;
-    height: 200px;
-    transition: height 250ms ease;
+    height: var(--tool-row-height);
+    min-height: var(--tool-row-height);
+    padding: 0 20px;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+
+    /* Small square controls: save, new score, undo, redo. They keep the default corner radius. */
+    .headerIconButton {
+        height: var(--control-size);
+        min-height: var(--control-size);
+        width: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+        border: 1px solid var(--border-subtle);
+        background-color: var(--color-base-100);
+    }
+
+    /* Text controls: edit mode, print, export. They keep the default corner radius. */
+    .headerActionButton {
+        gap: 6px;
+        white-space: nowrap;
+        height: var(--control-size);
+        min-height: var(--control-size);
+        padding: 0 14px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--border-subtle);
+        background-color: var(--color-base-100);
+    }
+
+    /* The edit-mode switcher is a pill with a fixed width, so its two labels do not move the controls
+       beside it. Sized for the longer "Edit Mode" label. */
+    .headerSwitcherButton {
+        flex: 0 0 auto;
+        width: 108px;
+        border-radius: 9999px;
+    }
+
+    /* A tiny optical lift keeps the label's visual mass centred despite a hanging descender. */
+    .headerActionLabel {
+        transform: translateY(-0.04em);
+    }
+
+    /* The edit-mode switch carries a status dot: muted while not editing, primary while editing. The muted
+       value matches the dot the segmented switch shows on its tinted track. */
+    .header-mode-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #b4b4b4;
+    }
+
+    .headerActionButton.is-active {
+        border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+        background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
+
+        .header-mode-dot {
+            background-color: var(--color-primary);
+        }
+    }
+
+    /* Export is an emphasized action: an inverted surface, not a dialog default button. */
+    .headerActionButton.is-emphasis {
+        border-color: transparent;
+        background-color: var(--color-base-content);
+        color: var(--color-base-100);
+    }
+
+    /* Header icons follow the control's text color (e.g. white content on the dark export button). */
+    .icon {
+        color: inherit;
+    }
+
+    .icon:not(svg) {
+        background-color: currentColor;
+    }
+
+    /* Action icons stay small inside their control. */
+    .headerIconButton .icon,
+    .headerActionButton .icon {
+        font-size: 14px;
+        min-width: 14px;
+        min-height: 14px;
+    }
 }
 
-#headerContent.collapsed {
-    height: 74px;
-}
-
-.header-toolbar-extra {
+#mainDrawer {
     flex: 1 1 auto;
-    max-height: 200px;
-    transition: opacity 250ms ease, max-height 250ms ease;
-    overflow: hidden;
+    min-height: 0;
 }
 
-#headerContent.collapsed .header-toolbar-extra {
-    opacity: 0;
-    max-height: 0;
+#mainDrawer > .du-drawer-content {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#appContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+}
+
+.animation-diagnostics {
+    position: fixed;
+    top: 64px;
+    left: 8px;
+    z-index: 10000;
+    display: grid;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-base-300);
+    border-radius: 4px;
+    color: var(--color-base-content);
+    background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
+    font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    pointer-events: none;
 }
 
 #titleLogo {
-    width: 40px;
-    height: 40px;
-    margin-top: 8px;
-    padding: 8px;
+    width: var(--control-size);
+    height: var(--control-size);
     box-sizing: border-box;
+    flex: 0 0 auto;
+    border-radius: var(--radius-frame);
 }
 
-#arrangementStats {
-    margin: auto 0 12px 16px;
-    font-size: 100%;
+/* Button groups share one frame: the navigation buttons on the left and the document buttons on the right. */
+.toolbarButtonGroup {
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-frame);
+    background-color: var(--color-base-100);
 
-    @media (max-width: 1024px) {
-        font-size: 75%;
-        margin-left: 8px;
+    .btn {
+        height: var(--control-size);
+        min-height: var(--control-size);
+        width: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+        margin: 0;
+    }
+
+    .icon {
+        font-size: 18px;
+        min-width: 18px;
+        min-height: 18px;
     }
 }
 
-#mainToolbarButtons {
-    box-shadow: 4px 0 12px rgba(15, 23, 42, 0.08);
+/* The sign-in button joins the row of 34px controls instead of keeping its compact size and margins, so the
+   group keeps the tight top and bottom spacing of the document buttons. */
+#mainToolbarButtons .btn.compact.imageOnly {
+    width: var(--control-size);
+    min-width: var(--control-size);
+    height: var(--control-size);
+    min-height: var(--control-size);
+    padding: 0;
+    margin: 0;
 }
 
-#mainToolbarButtons .btn {
-    width: 40px;
-    height: 40px;
+/* The document actions sit flat inside the group's frame. */
+#headerDocumentButtons {
+    .headerIconButton {
+        border: none;
+        background-color: transparent;
+
+        &:not(:disabled):hover {
+            background-color: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        }
+    }
+
+    .undoRedoGroup {
+        gap: 2px;
+    }
 }
 
-#mainToolbarButtons svg.icon {
-    font-size: 24px;
+.headerSeparator {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-subtle);
 }
 
-.header-content-rows {
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 8px 12px;
+#headerActions {
+    flex: 0 0 auto;
+    gap: 8px;
 }
 
-.header-breadcrumb {
-    min-width: 0;
-    margin-bottom: 8px;
+/* The header's overflow menu takes the size of the header's icon controls. */
+.headerOverflowMenu {
+    flex: 0 0 auto;
+
+    > .btn {
+        height: var(--control-size);
+        min-height: var(--control-size);
+        width: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+        border: 1px solid var(--border-subtle);
+        background-color: var(--color-base-100);
+    }
+
+    .dropdown-popup {
+        width: max-content;
+        min-width: 13rem;
+        max-width: calc(100vw - 24px);
+    }
+
+    /* The framework forces dropdown icons to 32 px; these rows keep the control's size. */
+    .icon {
+        width: 16px;
+        min-width: 16px;
+        height: 16px;
+        min-height: 16px;
+    }
 }
 
 #arrangementPlayControls {
-    margin-bottom: 8px;
+    width: max-content;
+    flex: 0 0 auto;
 }
 
-.header-breadcrumb,
-#editControlsHost {
-    transition: opacity 250ms ease, height 250ms ease, margin-bottom 250ms ease;
-}
-
-#headerContent.collapsed .header-breadcrumb,
-#headerContent.collapsed #editControlsHost {
-    opacity: 0;
-    height: 0;
-    margin-bottom: 0;
-}
-
-#headerContent.collapsed #arrangementPlayControls {
-    margin-bottom: 0;
-}
-
-.header-breadcrumb,
-#arrangementPlayControls,
-#editControlsHost {
-    height: 56px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-
-    .playControlSetting {
-        flex-shrink: 0;
-        margin-right: 8px;
-    }
-}
-
-.undoRedoGooey {
-    margin-left: 8px;
-}
-
-#editControlsHost {
-    .separator {
-        width: 1px;
-        height: 50%;
-        margin: 0 12px;
-    }
-
-    > .undoRedoGooey,
-    > .entryModeGooey,
-    > .noteLengthToolbarHost,
-    > .articulationToolbarHost,
-    > .noteStyleBarHost {
-        margin-left: 0;
-    }
-}
-
-.header-breadcrumb-root {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--color-base-content);
-    opacity: 0.7;
-}
-
-#header-breadcrumb-title {
+.arrangementIdentity {
     flex: 1 1 auto;
-    font-size: 16px;
-    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    gap: 0;
+}
+
+.arrangementIdentityRow {
+    min-width: 0;
+    gap: 8px;
+}
+
+.arrangementIdentitySection {
+    flex: 0 0 auto;
+    font-size: 13px;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--color-base-content) 55%, transparent);
+}
+
+.arrangementIdentityChevron {
+    flex: 0 0 auto;
+    font-size: 13px;
+    color: color-mix(in srgb, var(--color-base-content) 35%, transparent);
+}
+
+#arrangementIdentityTitle {
+    flex: 0 1 auto;
+    field-sizing: content;
+    font-size: 15px;
+    font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -357,20 +527,855 @@ h6 {
     color: var(--color-base-content);
 }
 
-.header-row-label {
-    flex-shrink: 0;
-    margin-right: 16px;
-    color: var(--color-base-content);
+.arrangementIdentityStats {
+    max-width: 100%;
+    font-size: 11px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.65;
+}
+
+.arrangement-save-chip {
+    flex: 0 0 auto;
+}
+
+#appOverlay {
+    position: absolute;
+    z-index: 10;
+    inset: var(--tool-row-height) 0 0;
+    pointer-events: none;
+}
+
+/* The view and entry switches float where the grid/staff switch sat at the action bar's left end. */
+#arrangementModeBar {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    background: var(--color-base-100);
+    box-shadow: 0 4px 16px var(--shadow-color);
+    pointer-events: auto;
+    cursor: grab;
+
+    .btn {
+        cursor: pointer;
+    }
+
+    .mode-bar-heading {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+        user-select: none;
+        pointer-events: none;
+    }
+
+    .mode-bar-divider {
+        flex: 0 0 auto;
+        width: 1px;
+        height: 22px;
+        background: var(--border-subtle);
+    }
+}
+
+/* The tools bar floats on the action bar's right end, the way the mockup shows it on the score's top edge. */
+#toolsBarHost {
+    position: absolute;
+    top: 6px;
+    right: 12px;
+    gap: 8px;
+    pointer-events: none;
+
+    .tools-bar,
+    .tools-mode-status {
+        pointer-events: auto;
+    }
+
+    /* The bar is the gray surface, its tools are the light controls sitting on it. */
+    .tools-bar {
+        height: calc(var(--control-size) + 8px);
+        padding: 0 10px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--color-base-content) 3%, var(--color-base-100));
+        box-shadow: 0 4px 16px var(--shadow-color);
+    }
+
+    .toolsBarHeading {
+        position: relative;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+        cursor: grab;
+        user-select: none;
+    }
+
+    /* The title is the bar's handle, so the band the bar is dragged by reaches around it. */
+    .toolsBarHeading::before {
+        content: "";
+        position: absolute;
+        inset: -12px -5px;
+    }
+
+    .toolsBarDivider {
+        flex: 0 0 auto;
+        width: 1px;
+        height: 20px;
+        background: var(--border-subtle);
+    }
+
+    .toolsBarTool {
+        height: calc(var(--control-size) - 4px);
+        gap: 6px;
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--border-subtle);
+        background: var(--color-base-100);
+
+        .icon {
+            font-size: 16px;
+        }
+
+        /* The mockup draws the dynamic `f` at about the caption's height. The ink states the side it is scaled
+           to in staff spaces, so a smaller side shrinks the `f` alone and leaves the notation untouched. */
+        .score-symbol-icon {
+            --icon-ink-spaces: 0.9;
+
+            /* The glyph is narrower than its icon box, so the box's empty side holds the caption off. */
+            margin-right: -4px;
+        }
+    }
+
+    /* The compact bar measures the full one in this hidden twin, so it folds only when the width no longer fits. */
+    .toolsBarMeasure {
+        position: absolute;
+        top: 0;
+        right: 0;
+        visibility: hidden;
+        pointer-events: none;
+
+        .tools-bar {
+            pointer-events: none;
+        }
+    }
+
+    /* The placing tools fold into this menu while the bar is compact. */
+    .toolsBarOverflowMenu {
+        > .btn {
+            width: calc(var(--control-size) - 4px);
+            min-width: calc(var(--control-size) - 4px);
+            height: calc(var(--control-size) - 4px);
+            min-height: calc(var(--control-size) - 4px);
+            padding: 0;
+            border: 1px solid var(--border-subtle);
+            background: var(--color-base-100);
+        }
+
+        .toolsBarOverflowIcon {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toolsBarOverflowDot {
+            position: absolute;
+            top: -3px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-primary);
+        }
+
+        .dropdown-popup {
+            width: max-content;
+            min-width: 12rem;
+            max-width: calc(100vw - 24px);
+        }
+
+        .icon {
+            width: 16px;
+            min-width: 16px;
+            height: 16px;
+            min-height: 16px;
+        }
+    }
+
+    .toolsBarTool.is-active {
+        border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+        background: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
+
+        .toolsBarToolDot {
+            background: var(--color-primary);
+        }
+    }
+
+    /* The dot marks the active tool, so only that one carries it. */
+    .toolsBarToolDot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    /* An active tool reports itself in the mockup's black mode popup: an inverted surface, the hint in bold and
+       the cancel action as a lighter pill sitting on it. */
+    .tools-mode-status {
+        max-width: min(420px, calc(100vw - 24px));
+        height: 40px;
+        padding: 0 8px 0 14px;
+        gap: 8px;
+        border-radius: 8px;
+        background: var(--color-base-content);
+        color: var(--color-base-100);
+        box-shadow: 0 4px 16px var(--shadow-color);
+
+        /* The dot carries the mode, so it sits on the hint; the action stands apart from both. */
+        .tools-mode-status-dot {
+            flex: 0 0 auto;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-primary);
+        }
+
+        .label {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .btn {
+            height: 28px;
+            min-height: 28px;
+            margin-left: 8px;
+            padding: 0 12px;
+            border: none;
+            border-radius: var(--radius-frame);
+            background: color-mix(in srgb, var(--color-base-100) 14%, transparent);
+            color: var(--color-base-100);
+            font-size: 12px;
+            font-weight: 600;
+        }
+    }
+
+    .toolsBarToolCaption {
+        font-size: 11px;
+    }
+}
+
+#playbackControlsHost {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 9999px;
+    background: var(--color-base-100);
+    box-shadow: 16px 16px 32px 4px var(--shadow-color);
+    pointer-events: auto;
+    scrollbar-width: thin;
+
+    /* The bar is one control row high, so its rounded ends meet the controls inside it. */
+    .btn {
+        height: var(--control-size);
+        min-height: var(--control-size);
+    }
+
+    /* Related controls share a pill of their own, which the bar reads as one row of groups. */
+    .tempoStepper,
+    .volumeControl {
+        height: var(--control-size);
+        padding: 2px 6px;
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
+    }
+
+    /* The tempo steps are round, borderless buttons sitting on the pill, as in the mockup. Their glyphs are
+       smaller than the framework's 16px minimum for icons. */
+    .tempo-step-button {
+        width: 23px;
+        min-width: 23px;
+        height: 23px;
+        min-height: 23px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: var(--color-base-100);
+
+        .icon {
+            width: 11px;
+            min-width: 11px;
+            height: 11px;
+            min-height: 11px;
+        }
+    }
+
+    /* The unit is a hint, not a value: smaller and dimmer than the tempo itself. The framework's `.label` rule
+       sets `color: currentColor`, so this needs the id's specificity. */
+    .tempoUnit {
+        font-size: 9px;
+        color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
+        white-space: nowrap;
+    }
+
+    /* The bar's switches take the pill shape of the header's edit-mode switch. */
+    .play-control-switch {
+        gap: 6px;
+        padding: 0 9px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 9999px;
+        background-color: var(--color-base-100);
+
+        .icon {
+            font-size: 18px;
+        }
+    }
+
+    /* Muted until the switch is on; the value matches the dot the segmented switch shows on its tinted track. */
+    .play-control-switch-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #b4b4b4;
+    }
+
+    .play-control-switch.is-active {
+        border-color: var(--color-playback-accent);
+        background-color: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
+
+        .icon {
+            color: var(--color-playback-accent);
+        }
+
+        .play-control-switch-dot {
+            background-color: var(--color-playback-accent);
+        }
+    }
+
+    /* Secondary controls live in this menu while the bar is compact. */
+    .playbackOverflowMenu {
+        flex: 0 0 auto;
+
+        > .btn {
+            position: relative;
+            width: var(--control-size);
+            min-width: var(--control-size);
+            height: var(--control-size);
+            min-height: var(--control-size);
+            padding: 0;
+            border: 1px solid var(--border-subtle);
+            border-radius: 9999px;
+            background-color: var(--color-base-100);
+        }
+
+        .playbackOverflowIcon {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .playbackOverflowDot {
+            position: absolute;
+            top: -3px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-playback-accent);
+        }
+
+        .dropdown-popup {
+            width: max-content;
+            min-width: 14rem;
+            max-width: calc(100vw - 24px);
+        }
+
+        .icon {
+            width: 16px;
+            min-width: 16px;
+            height: 16px;
+            min-height: 16px;
+        }
+
+        .playbackVolumeItem {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .playbackVolumeItem .du-range {
+            width: 90px;
+        }
+
+        .volumeValue {
+            font-size: 11px;
+            white-space: nowrap;
+        }
+    }
+}
+
+#viewerScrollHost {
+    box-sizing: border-box;
+
+    overscroll-behavior: none;
+}
+
+/* The room the floating playback bar needs below the score. The spacer also carries the side panels' vertical
+   edges, so they reach down to the footer however tall the score content is. */
+.viewer-bottom-spacer {
+    flex: 1 1 auto;
+    min-height: 79px;
+}
+
+#appRoot:not(.zen-mode) .viewer-bottom-spacer {
+    margin-left: var(--track-controls-divider-left, 0);
+    border-left: 1px solid var(--border-subtle);
+}
+
+#appRoot:not(.zen-mode) .score-editing .viewer-bottom-spacer {
+    margin-right: var(--track-actions-divider-right, 0);
+    border-right: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 600px) {
+    #titleLogo {
+        display: none;
+    }
+
+    #headerContent {
+        gap: 4px;
+        padding: 0 4px;
+    }
+
+    /* The framework's badge and label rules load after this file, so the header hides by id specificity. */
+    #headerContent {
+
+        .arrangementIdentityStats,
+        .arrangementIdentitySection,
+        .arrangementIdentityChevron,
+        .arrangement-save-chip,
+        .displayOptionsButton {
+            display: none;
+        }
+    }
+
+    #headerActions {
+        gap: 4px;
+    }
+
+    /* The edit-mode switch drops its label, so the identity keeps room beside it. */
+    #headerContent .headerSwitcherButton {
+        width: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+    }
+
+    #headerContent .headerSwitcherButton .headerActionLabel {
+        display: none;
+    }
+
+    #toolsBarHost {
+        right: 4px;
+    }
+
+    #arrangementModeBar {
+        padding: 4px 6px;
+
+        /* Phones have no room for the headings; the switches state their choices anyway. */
+        .mode-bar-heading,
+        .mode-bar-divider {
+            display: none;
+        }
+
+        .segmented-switch-segment {
+            padding: 0 8px;
+            font-size: 11px;
+        }
+    }
+
+    #playbackControlsHost {
+        left: 4px;
+        bottom: 4px;
+        max-width: calc(100% - 8px);
+    }
+}
+
+@media (max-width: 360px) {
+
+    #mainToolbarButtons,
+    #headerActions {
+        gap: 0;
+    }
+}
+
+/* Footer: status and navigation strip. It is the last section of the app frame. */
+#appRoot.zen-mode {
+    .zen-arrangement-identity-host {
+        position: absolute;
+        top: 4px;
+        left: 16px;
+        height: 28px;
+        max-width: calc(100% - 32px);
+        overflow: hidden;
+        background: var(--color-base-100);
+        pointer-events: auto;
+        z-index: 6;
+
+        .arrangementIdentityRow {
+            width: 100%;
+        }
+
+        .arrangementIdentityStats {
+            display: inline;
+            font-weight: 400;
+        }
+    }
+
+    #trackViewerHost {
+        min-width: 0;
+        touch-action: none;
+        cursor: grab;
+    }
+
+    #playbackControlsHost {
+        box-sizing: border-box;
+        max-width: calc(100% - 24px);
+    }
+
+    .range-articulation,
+    .range-articulation-handle {
+        pointer-events: none;
+    }
+
+    @media (max-width: 600px) {
+        #playbackControlsHost {
+            max-width: calc(100% - 8px);
+        }
+
+        #appFooter {
+            gap: 8px;
+            padding: 0 8px;
+
+            .appFooterRange {
+                flex: 0 1 auto;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .appFooterNavigator {
+                min-width: 16px;
+            }
+
+            .appFooterActions {
+                gap: 4px;
+            }
+        }
+    }
+}
+
+#appFooter {
+    --footer-chip-surface: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+
+    flex: 0 0 40px;
+    gap: 12px;
+    padding: 0 16px;
+    border-top: 1px solid var(--border-subtle);
+    color: var(--color-base-content);
+    font-size: 11px;
+    user-select: none;
+
+    .appFooterRange {
+        flex: 0 0 auto;
+
+        /* The caption swings between one measure and a range, which is 25 px wider. Reserving the longer form
+           keeps the navigator beside it in place while the visible range changes. Sized for bar counts up to
+           three digits. */
+        min-width: 12.5em;
+        white-space: nowrap;
+        color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+    }
+
+    .appFooterNavigator {
+        flex: 1 1 auto;
+        min-width: 40px;
+    }
+
+    .appFooterActions {
+        flex: 0 0 auto;
+        gap: 8px;
+
+        .btn {
+            height: 25px;
+            min-height: 25px;
+            padding: 0 10px;
+            font-size: 11px;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-frame);
+            background: var(--footer-chip-surface);
+            color: var(--color-base-content);
+        }
+
+        /* The zoom controls share one chip, so the value reads as the step between the two ends. */
+        .appFooterZoom {
+            flex: 0 0 auto;
+            gap: 2px;
+            height: 25px;
+            padding: 0 3px;
+            border-radius: var(--radius-frame);
+            background: var(--footer-chip-surface);
+
+            .btn {
+                width: 21px;
+                min-width: 21px;
+                padding: 0;
+                background: transparent;
+
+                /* The framework's icons take a 16 px floor, which is too wide for this chip. */
+                .icon {
+                    width: 10px;
+                    min-width: 10px;
+                    height: 10px;
+                    min-height: 10px;
+                }
+            }
+        }
+
+        .appFooterZoomValue {
+            min-width: 32px;
+            text-align: center;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .appFooterDivider {
+            flex: 0 0 auto;
+            width: 1px;
+            height: 15px;
+            background: var(--border-subtle);
+        }
+
+        .appFooterZenButton {
+            width: 25px;
+            min-width: 25px;
+            padding: 0;
+
+            .icon {
+                width: 16px;
+                height: 16px;
+            }
+
+            &[aria-pressed="true"] {
+                background: var(--color-primary);
+                color: var(--color-primary-content);
+            }
+        }
+
+        .appFooterNotificationButton {
+            position: relative;
+            width: 25px;
+            min-width: 25px;
+            padding: 0;
+            background: transparent;
+
+            .icon {
+                font-size: 18px;
+            }
+        }
+
+        /* The count of new notifications sits on the bell's shoulder, as the mockup draws it. */
+        .appFooterNotificationBadge {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            min-width: 14px;
+            height: 14px;
+            padding: 0 3px;
+            border-radius: 9999px;
+            background: var(--color-error);
+            color: var(--color-base-100);
+            font-size: 9px;
+            font-weight: 600;
+            line-height: 14px;
+            text-align: center;
+        }
+
+        /* Zoom and version fold into this menu while the footer is compact. */
+        .footerOverflowMenu {
+            flex: 0 0 auto;
+
+            > .btn {
+                width: 25px;
+                min-width: 25px;
+                height: 25px;
+                min-height: 25px;
+                padding: 0;
+                background: transparent;
+            }
+
+            .icon {
+                width: 16px;
+                min-width: 16px;
+                height: 16px;
+                min-height: 16px;
+            }
+
+            .dropdown-popup {
+                width: max-content;
+                min-width: 13rem;
+                max-width: calc(100vw - 24px);
+            }
+        }
+    }
+}
+
+/* The compact footer folds zoom and version into its menu; these bounds keep the rest inside the frame. */
+@media (max-width: 600px) {
+    #appFooter {
+        gap: 8px;
+        padding: 0 8px;
+
+        .appFooterNavigator {
+            min-width: 16px;
+        }
+
+        .appFooterActions {
+            gap: 4px;
+        }
+    }
+}
+
+.scoreNavigator {
+    position: relative;
+    align-self: stretch;
+    margin: 2px 0;
+    cursor: pointer;
+    touch-action: none;
+    overflow: hidden;
+}
+
+.scoreNavigatorTrack {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 16px;
+    transform: translateY(-50%);
+    border-radius: 8px;
+    background-color: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+    pointer-events: none;
+}
+
+.scoreNavigatorWindow {
+    position: absolute;
+    top: 50%;
+    height: 16px;
+    transform: translateY(-50%);
+    border-radius: 8px;
+    background-color: var(--color-primary);
+    cursor: grab;
+    pointer-events: none;
+}
+
+/* Playback toolbar (floating, bottom right). */
+.tempoStepper {
+    flex: 0 0 auto;
+    gap: 2px;
+    color: var(--color-base-content);
+}
+
+.tempoValue {
+    min-width: 22px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tempo-step-button {
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
+}
+
+.volumeControl {
+    flex: 0 0 auto;
+}
+
+.volumeValue {
+    min-width: 34px;
+    font-size: 80%;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Release notes dialog. */
+.releaseNotesBody {
+    gap: 6px;
+    max-width: 560px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.releaseNotesTitle {
+    margin: 0;
+    font-size: 18px;
+}
+
+.releaseNotesHeading {
+    margin: 8px 0 0 0;
+    font-size: 15px;
+}
+
+.releaseNotesItem,
+.releaseNotesParagraph {
+    margin: 0;
+}
+
+.releaseNotesItem {
+    padding-left: 14px;
+}
+
+.releaseNotesItem::before {
+    content: "\2022";
+    margin-left: -14px;
+    margin-right: 6px;
+}
+
+.releaseNotesSpacer {
+    height: 6px;
 }
 
 #signInButton,
 #userMenu .btn {
-    width: 40px;
-    height: 40px;
+    flex: 0 0 auto;
 }
 
-#signInButton svg.icon,
-#userMenu svg.icon {
-    font-size: 24px;
+/* Touch devices get a wider hit area than the compact shell controls draw. */
+@media (pointer: coarse) {
+
+    #headerContent .btn,
+    #playbackControlsHost .btn,
+    #toolsBarHost .btn {
+        position: relative;
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset: -4px;
+        }
+    }
 }

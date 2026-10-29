@@ -6,7 +6,7 @@
 import { uuid } from "../string-helpers.js";
 import type { Articulation } from "./articulation.js";
 import type { INoteValue } from "./rest-notation.js";
-import type { EditEntryMode } from "./types/general.js";
+import type { EditEntryMode, IPoint, TrackViewMode } from "./types/general.js";
 
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
@@ -16,13 +16,10 @@ export interface IArrangementViewSettings {
     zoomLevel?: number;
 
     /** The current note display mode of the arrangement viewer. */
-    displayMode?: "grid" | "staff";
+    displayMode?: TrackViewMode;
 
     /** Whether to animate transitions when toggling between grid and staff mode. */
     animateModeTransitions?: boolean;
-
-    /** The position of the current play range in the arrangement. */
-    playRangePosition?: number;
 
     /** The position of the play beam in the arrangement. */
     markerPosition?: number;
@@ -55,6 +52,18 @@ export interface IScoreCreationSettings {
     instruments?: number[];
 }
 
+/** Where a score was last scrolled to, so a session picks up where it was left. */
+export interface IScoreScrollPosition {
+    /** The score the position belongs to. */
+    scoreId: number;
+
+    /** Horizontal scroll position in px, as the score's scroll host reports it. */
+    x: number;
+
+    /** Vertical scroll position in px, as the score's scroll host reports it. */
+    y: number;
+}
+
 export interface IUISettings {
     /** Theme selection for the user interface. */
     theme?: string;
@@ -69,6 +78,12 @@ export interface IUISettings {
      * The score the user has currently opened - stored as snapshot.
      */
     currentScore?: string;
+
+    /**
+     * Where the score cached in {@link IUISettings.currentScore} was left scrolled to. It names the score it
+     * belongs to, so a position can never put another score somewhere in the middle.
+     */
+    currentScoreScroll?: IScoreScrollPosition;
 
     /** The last-used values for the new score dialog. */
     scoreCreationSettings?: IScoreCreationSettings;
@@ -91,11 +106,20 @@ export interface IUISettings {
     /** Whether to show the permission matrix in the Score Library tree. Defaults to true. */
     showPermMatrix?: boolean;
 
-    /** Whether to show the tutorial wizard on app startup. Defaults to true. */
-    tutorialEnabled?: boolean;
-
     /** Whether edit mode was active when the app was last closed. */
     editMode?: boolean;
+
+    /**
+     * Where the staff placing tools bar sits, in px inside the overlay it floats in, as the user last dragged
+     * it. Missing means the bar's default place at the overlay's top right.
+     */
+    toolsBarPosition?: IPoint;
+
+    /**
+     * Where the view and entry switch bar sits, in px inside the overlay it floats in, as the user last dragged
+     * it. Missing means the bar's default place at the overlay's top left.
+     */
+    modeBarPosition?: IPoint;
 
     /**
      * The entry mode to start the staff view with. It is remembered across view mode switches and sessions;
@@ -141,6 +165,7 @@ export class AppStorage {
     /** Top-level UI settings that should be isolated per session/tab. */
     static #sessionScopedKeys = new Set<keyof IUISettings>([
         "currentScore",
+        "currentScoreScroll",
         "viewSettings",
     ]);
 
@@ -458,7 +483,7 @@ export class AppStorage {
             }
         }
 
-        return result as IUISettings;
+        return result;
     }
 
     /**

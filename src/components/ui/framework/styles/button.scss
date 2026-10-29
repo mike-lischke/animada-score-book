@@ -9,6 +9,22 @@
     min-width: 0;
 }
 
+.btn.compact {
+    box-sizing: border-box;
+    height: 40px;
+    min-height: 40px;
+}
+
+.btn.imageOnly.compact {
+    width: 40px;
+    min-width: 40px;
+    padding: 2px;
+}
+
+.btn.compact .icon {
+    font-size: 24px;
+}
+
 .btn.default {
     background-color: var(--color-primary);
     color: var(--color-primary-content);
@@ -18,12 +34,13 @@
     }
 }
 
-/* Disabled buttons swallow pointer events (daisyUI), which also kills the
-   hover-based tooltip. Re-enable pointer events only for tooltip-carrying
-   disabled buttons and signal the non-interactive state via the cursor. */
-.btn:disabled[data-tooltip] {
+/* Disabled buttons swallow pointer events (daisyUI), which also kills the native
+   title tooltip. Re-enable pointer events only for title-carrying disabled
+   buttons; the tooltip explains why nothing happens, so a plain arrow is enough
+   and the oversized not-allowed glyph would cover that tooltip. */
+.btn:disabled[title] {
     pointer-events: all;
-    cursor: not-allowed;
+    cursor: default;
 }
 
 .btn:disabled > svg {

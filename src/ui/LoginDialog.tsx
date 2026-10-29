@@ -48,9 +48,9 @@ interface ILoginDialogState {
  * A modal dialog for user authentication, styled like {@link SettingsDialog}.
  */
 export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialogState> {
-    private dialogRef = createRef<Dialog>();
-    private passwordRef = createRef<HTMLElement>();
-    private groupPasswordRef = createRef<HTMLElement>();
+    private dialogRef = createRef<Dialog | null>();
+    private passwordRef = createRef<HTMLElement | null>();
+    private groupPasswordRef = createRef<HTMLElement | null>();
     private loginSucceeded = false;
     private signal?: Semaphore<boolean>;
 

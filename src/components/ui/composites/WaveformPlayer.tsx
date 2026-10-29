@@ -22,7 +22,7 @@ interface IWaveformPlayerState {
 }
 
 export class WaveformPlayer extends UIComponent<IWaveformPlayerProps, IWaveformPlayerState> {
-    private containerRef = createRef<HTMLDivElement>();
+    private containerRef = createRef<HTMLDivElement | null>();
     private wavesurfer?: WaveSurfer;
 
     private seekTimeout?: ReturnType<typeof setTimeout>;

@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-    MeasureLayout, barActionStripWidth, minEventGap, minEventWidth, noteHeightPx, staffMeasureInsets, staffSpacePx,
+    MeasureLayout, barActionStripWidth, measureStepWidthPx, minEventWidth, minRestWidth, noteHeightPx,
+    staffMeasureInsets, staffSpacePx, type IRowItem,
 } from "../../src/core/MeasureLayout.js";
 import type { ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
@@ -25,6 +26,7 @@ const equalTiles = (count: number): IMeasureEvent[] => {
         return {
             start: { numerator: index, denominator: count },
             duration: { numerator: 1, denominator: count },
+            noteStyleId: "test-note",
         };
     });
 };
@@ -145,6 +147,12 @@ describe("MeasureLayout and the stylesheet constants it mirrors", () => {
         expect(appScss).toContain(`--staff-space: ${staffSpacePx}px`);
     });
 
+    it("matches the measure step width declared in App.scss", () => {
+        const appScss = readFileSync("src/App.scss", "utf8");
+
+        expect(appScss).toContain(`--measure-step-width: ${measureStepWidthPx}px`);
+    });
+
     it("matches the steps per measure the staff measure viewer is laid out for", () => {
         const componentStyles = readFileSync("src/components/component-styles.scss", "utf8");
 
@@ -154,27 +162,40 @@ describe("MeasureLayout and the stylesheet constants it mirrors", () => {
 });
 
 describe("MeasureLayout.minimumWidthOfMeasure", () => {
-    it("gives a measure of sixteenths the room its symbols and the air between them need", () => {
+    it("gives a measure of sixteenths the room its symbols take", () => {
+        // Each event needs its own symbol's room; the empty tails of longer events are not part of the floor.
         expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(equalTiles(16)), 1))
-            .toBe((16 * (minEventWidth + minEventGap)) + staffMeasureInsets);
+            .toBe((16 * minEventWidth) + staffMeasureInsets);
     });
 
     it("keeps a measure wide enough for the bar action strip", () => {
-        // A single whole rest needs 43 px, which the strip's own width overrides.
-        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(equalTiles(1)), 1))
+        // A single whole rest needs 47 px, which the strip's own width overrides.
+        const wholeRest = [{
+            start: { numerator: 0, denominator: 1 },
+            duration: { numerator: 1, denominator: 1 },
+        }];
+
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(wholeRest), 1))
             .toBe(barActionStripWidth);
     });
 
-    it("lets the tightest slot of the measure decide", () => {
+    it("lets the sum of the measure's symbols decide, not its tightest slot", () => {
         const events: IMeasureEvent[] = [
-            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 } },
-            { start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 } },
+            {
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 },
+                noteStyleId: "test-note",
+            },
+            {
+                start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 },
+                noteStyleId: "test-note",
+            },
             { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
         ];
 
-        // The 32nd pair sets the floor; the whole-bar rest behind it asks for far less.
-        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(events), 1))
-            .toBe((32 * (minEventWidth + minEventGap)) + staffMeasureInsets);
+        // Two 32nds and one whole-bar rest hold three symbols' rooms, which the strip's width overrides.
+        expect(MeasureLayout.contentMinimumWidthOfMeasure(arrangementOf(events), 1))
+            .toBe((2 * minEventWidth) + minRestWidth + staffMeasureInsets);
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(events), 1)).toBe(barActionStripWidth);
     });
 
     it("lets the widest track decide", () => {
@@ -182,7 +203,52 @@ describe("MeasureLayout.minimumWidthOfMeasure", () => {
             tracks: [{ measures: [{ events: equalTiles(4) }] }, { measures: [{ events: equalTiles(8) }] }],
         } as unknown as ISbDmArrangement;
 
-        expect(MeasureLayout.minimumWidthOfMeasure(arrangement, 1))
-            .toBe((8 * (minEventWidth + minEventGap)) + staffMeasureInsets);
+        expect(MeasureLayout.contentMinimumWidthOfMeasure(arrangement, 1))
+            .toBe((8 * minEventWidth) + staffMeasureInsets);
+    });
+});
+
+describe("MeasureLayout.spacedWidths", () => {
+    /**
+     * @returns A row of four equal events, which need a quarter of the row each.
+     */
+    const quarters = (): IRowItem[] => {
+        return Array.from({ length: 4 }, () => {
+            return { fraction: 0.25, minimumPx: minEventWidth };
+        });
+    };
+
+    it("gives every event its duration's share where the row has room to spare", () => {
+        expect(MeasureLayout.spacedWidths(quarters(), 400)).toEqual([100, 100, 100, 100]);
+    });
+
+    it("leaves each event the room its symbol takes at the row's floor", () => {
+        // Four symbols of 25 px need exactly 100 px, which is the row's floor.
+        expect(MeasureLayout.spacedWidths(quarters(), 4 * minEventWidth))
+            .toEqual([minEventWidth, minEventWidth, minEventWidth, minEventWidth]);
+    });
+
+    it("blends between the room its symbols take and the proportional layout", () => {
+        const items: IRowItem[] = [
+            { fraction: 0.75, minimumPx: minEventWidth },
+            { fraction: 0.25, minimumPx: minEventWidth },
+        ];
+
+        // The symbols take 50 px; the proportional layout needs 100 px before the short event reaches its room.
+        expect(MeasureLayout.spacedWidths(items, 50)).toEqual([minEventWidth, minEventWidth]);
+
+        // Half way, both events stand half way between their room and their proportional share at 100 px.
+        expect(MeasureLayout.spacedWidths(items, 75)).toEqual([50, 25]);
+        expect(MeasureLayout.spacedWidths(items, 100)).toEqual([75, 25]);
+        expect(MeasureLayout.spacedWidths(items, 400)).toEqual([300, 100]);
+    });
+
+    it("keeps the proportional share of unequal events above the floor", () => {
+        const items: IRowItem[] = [
+            { fraction: 0.5, minimumPx: minEventWidth },
+            { fraction: 0.5, minimumPx: minEventWidth },
+        ];
+
+        expect(MeasureLayout.spacedWidths(items, 1000)).toEqual([500, 500]);
     });
 });

@@ -5,9 +5,8 @@
 
 import "./App.scss";
 import "./print.scss";
+import "./print-preview.scss";
 import "./tailwind.css";
-
-import timbauImage from "./assets/images/instrument-icons/timbau.svg";
 
 import { createRef, type ComponentChild } from "preact";
 import { lazy, Suspense } from "preact/compat";
@@ -16,41 +15,37 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Dropdown, type IDropdownItem } from "./components/ui/framework/Dropdown.js";
-import { GooeyGroup } from "./components/ui/framework/GooeyGroup.js";
-import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
-import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
-import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
-import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
+import { NotificationCenter, renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
+import { AppFooter } from "./components/ui/Navigation/AppFooter.js";
+import { ArrangementIdentity, ArrangementSaveState } from "./components/ui/Header/ArrangementIdentity.js";
 
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
-import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
+import { AnimationDiagnostics } from "./components/ui/Arrangement/AnimationDiagnostics.js";
+import { ArrangementModeBar } from "./components/ui/Arrangement/ArrangementModeBar.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
-import { ArticulationToolbar } from "./components/ui/Arrangement/ArticulationToolbar.js";
-import { EntryModeButton } from "./components/ui/Arrangement/EntryModeButton.js";
-import { NoteLengthToolbar } from "./components/ui/Arrangement/NoteLengthToolbar.js";
-import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
-import { SubdivisionToolbar } from "./components/ui/Arrangement/SubdivisionToolbar.js";
+import { ToolsBar } from "./components/ui/Arrangement/ToolsBar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
+import type { ReleaseNotesDialog } from "./components/ui/composites/ReleaseNotesDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
-import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
+import { Dialog, DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
-import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
+import { Label } from "./components/ui/framework/Label.js";
+import { Portal } from "./components/ui/framework/Portal.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
-import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
-import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
 import {
-    SbDmEntityType, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore, type ISbDmScoreFolder
+    SbDmEntityType, ScoreBookChangeReason, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore,
+    type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult,
@@ -58,29 +53,41 @@ import {
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { SmuflFontLoader } from "./core/smufl/SmuflFontLoader.js";
-import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
-import { EditEntryMode, type IArrangementSnapshot } from "./core/types/general.js";
+import { EditEntryMode, TrackViewMode, type IArrangementSnapshot } from "./core/types/general.js";
 import { SelectionGranularity } from "./ui/SelectionSerializer.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
-import { requisitions } from "./supplement/Requisitions.js";
+import { requisitions, type INotificationState } from "./supplement/Requisitions.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
-import { PermissionEditor } from "./ui/PermissionEditor.js";
+import type { PermissionEditor } from "./ui/PermissionEditor.js";
+import { PrintSession } from "./ui/PrintSession.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
-import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { TutorialWizard } from "./ui/TutorialWizard.js";
-import { UserGroupEditor } from "./ui/UserGroupEditor.js";
-import { Separator } from "./components/ui/Separator.js";
+import type { SettingsDialog } from "./ui/SettingsDialog.js";
+import type { UserGroupEditor } from "./ui/UserGroupEditor.js";
+import { isMobile } from "./ui/index.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
         return { default: m.ScoreLibrary };
+    });
+});
+
+// The print document and its preview are only needed while printing, so the initial bundle leaves them out.
+const PrintDocument = lazy(() => {
+    return import("./components/ui/Print/PrintDocument.js").then((m) => {
+        return { default: m.PrintDocument };
+    });
+});
+
+const PrintPreview = lazy(() => {
+    return import("./components/ui/Print/PrintPreview.js").then((m) => {
+        return { default: m.PrintPreview };
     });
 });
 
@@ -101,14 +108,27 @@ enum AppPhase {
     Running,
 }
 
+/**
+ * The dialog components `App` has loaded so far, keyed by their class name.
+ *
+ * A dialog's module is imported when the user opens it the first time; from then on the loaded component stays mounted
+ * and is opened through its ref. The PascalCase keys are deliberate: the render tree uses them directly as components.
+ */
+interface IAppDialogs {
+    SettingsDialog?: typeof SettingsDialog;
+    UserGroupEditor?: typeof UserGroupEditor;
+    PermissionEditor?: typeof PermissionEditor;
+    ReleaseNotesDialog?: typeof ReleaseNotesDialog;
+}
+
 interface IAppState {
     phase: AppPhase;
     editMode: boolean;
+    zenMode: boolean;
     sidebarOpen: boolean;
-    headerCollapsed: boolean;
 
     /** The active arrangement view mode (grid or staff notation). */
-    trackViewMode: "grid" | "staff";
+    trackViewMode: TrackViewMode;
 
     /**
      * The entry mode the staff view was last set to. The grid view always works with overwrite, so the
@@ -122,57 +142,81 @@ interface IAppState {
     /** Conflict info when another user holds the lock. */
     lockConflict?: { username: string; lockedAt: string; };
 
-    /** When true, the print view is rendered into the DOM and `window.print()` will be triggered. */
+    /** When true, the printed document is rendered into the DOM and `window.print()` will be triggered. */
     printing: boolean;
-    printOptions?: IPrintOptions;
 
-    instrumentEditorEnabled: boolean;
+    /** When true, the full-window print preview overlay is shown. */
+    printPreviewOpen: boolean;
+
+    /** The notification center's summary, for the footer's notification button. */
+    notificationState: INotificationState;
+
+    /** Track viewer zoom in percent, mirrored from the UI settings. */
+    zoom: number;
+
+    /** True when the header folds its secondary actions into a menu. */
+    compactHeader: boolean;
+
+    /** True when the floating bars and the footer fold controls into menus. */
+    compactLayout: boolean;
+
+    /** True once the current score was saved during this session. */
+    scoreSaved: boolean;
 
     /** When true, the backend health endpoint was unreachable. */
     backendUnreachable: boolean;
 
     /** Error message shown during startup when the backend or database is unreachable. */
     startupError?: string;
+
+    /** Dialog components loaded on demand; empty until the user opens one of them. */
+    dialogs: IAppDialogs;
 }
 
 export class App extends UIComponent<{}, IAppState> {
-    private scoreLibraryRef = createRef<DrawerSidebar>();
-    private settingsDialogRef = createRef<SettingsDialog>();
-    private backendSetupDialogRef = createRef<BackendSetupDialog>();
-    private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
-    private loginDialogRef = createRef<LoginDialog>();
-    private adminSetupDialogRef = createRef<AdminSetupDialog>();
-    private userGroupEditorRef = createRef<UserGroupEditor>();
-    private permissionEditorRef = createRef<PermissionEditor>();
-    private printDialogRef = createRef<PrintDialog>();
-    private tutorialWizardRef = createRef<TutorialWizard>();
-    private valueDialogRef = createRef<ValueDialog>();
-    private confirmDialogRef = createRef<ConfirmDialog>();
-    private newScoreDialogRef = createRef<NewScoreDialog>();
+    private scoreLibraryRef = createRef<DrawerSidebar | null>();
+    private settingsDialogRef = createRef<SettingsDialog | null>();
+    private backendSetupDialogRef = createRef<BackendSetupDialog | null>();
+    private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog | null>();
+    private loginDialogRef = createRef<LoginDialog | null>();
+    private adminSetupDialogRef = createRef<AdminSetupDialog | null>();
+    private userGroupEditorRef = createRef<UserGroupEditor | null>();
+    private permissionEditorRef = createRef<PermissionEditor | null>();
+    private exportDialogRef = createRef<Dialog | null>();
+    private valueDialogRef = createRef<ValueDialog | null>();
+    private confirmDialogRef = createRef<ConfirmDialog | null>();
+    private newScoreDialogRef = createRef<NewScoreDialog | null>();
+    private releaseNotesDialogRef = createRef<ReleaseNotesDialog | null>();
 
-    /** Saved theme/title to restore after the print job finishes. */
-    private printRestoreState?: { theme: string; documentTitle: string; };
+    /** Document title to restore after the native print dialog finishes. */
+    private printDocumentTitle?: string;
+
+    /** Resolves once the on-demand print document is mounted, so the native dialog waits for its content. */
+    private printDocumentReady?: Promise<void>;
+    private resolvePrintDocumentReady?: () => void;
 
     private dataModel = new ScoreBookDataModel();
     private scoreClipboard = new ScoreClipboard(this.dataModel);
     private smuflFontLoader = new SmuflFontLoader();
 
+    /** Print settings of the application session, retained while the preview is closed. */
+    private printSession = new PrintSession();
+
     private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
 
-    private currentPlayRange?: { startBar: number; endBar: number; };
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    private compactHeaderQuery = window.matchMedia("(max-width: 900px)");
+    private compactLayoutQuery = window.matchMedia("(max-width: 600px)");
+
+    /** Both breakpoints can change independently, so one handler listens to each of their emitters. */
+    private compactQueries = [this.compactHeaderQuery, this.compactLayoutQuery];
     private signInFromRunning = false;
-    private statsItem?: IStatusBarItem;
-    private notificationItem?: IStatusBarItem;
-    private versionItem?: IStatusBarItem;
 
-    private currentTutorialStep = 0;
-
-    /** Scroll offset (px) at which the header starts collapsing. */
-    private readonly headerCollapseThreshold = 16;
+    /** True while an MP3 export is running, to keep the export button disabled. */
+    private exporting = false;
 
     public constructor(props: {}) {
         super(props);
@@ -180,13 +224,20 @@ export class App extends UIComponent<{}, IAppState> {
         this.state = {
             phase: AppPhase.Checking,
             editMode: false,
+            zenMode: false,
             sidebarOpen: false,
-            headerCollapsed: false,
-            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
+            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
+                ?? TrackViewMode.Grid,
             preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
-            instrumentEditorEnabled: false,
+            printPreviewOpen: false,
+            notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
+            zoom: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100,
+            compactHeader: this.compactHeaderQuery.matches,
+            compactLayout: this.compactLayoutQuery.matches,
+            scoreSaved: false,
             backendUnreachable: false,
+            dialogs: {},
         };
 
         this.selectionManager = new SelectionManager(this.dataModel);
@@ -198,12 +249,17 @@ export class App extends UIComponent<{}, IAppState> {
         this.selectedThemePreference = AppStorage.loadUISettings()?.theme ?? "Light+";
         this.applyThemePreference(this.selectedThemePreference);
         this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
+        for (const query of this.compactQueries) {
+            query.addEventListener("change", this.handleViewportResize);
+        }
+
         window.addEventListener("afterprint", this.handleAfterPrint);
+        escapeStack.setFallback(this.handleEscapeFallback);
         escapeStack.attach();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
-        requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
+        requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
         requisitions.register("authChanged", this.handleAuthChanged);
         requisitions.register("notesClicked", this.handleNoteClicked);
@@ -218,37 +274,43 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { editMode, sidebarOpen, phase, headerCollapsed, trackViewMode, printing, backendUnreachable,
-            startupError, preferredEntryMode } = this.state;
+        const { editMode, zenMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
+            startupError, preferredEntryMode, notificationState, zoom, compactHeader, compactLayout,
+            scoreSaved, printPreviewOpen, dialogs } = this.state;
 
         return editMode !== nextState.editMode
+            || zenMode !== nextState.zenMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
-            || headerCollapsed !== nextState.headerCollapsed
             || trackViewMode !== nextState.trackViewMode
             || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
+            || printPreviewOpen !== nextState.printPreviewOpen
             || backendUnreachable !== nextState.backendUnreachable
-            || startupError !== nextState.startupError;
-    }
-
-    public override componentDidUpdate(prevProps: {}, prevState: IAppState): void {
-        const { phase } = this.state;
-
-        if (prevState.phase !== AppPhase.Running && phase === AppPhase.Running) {
-            this.updateStatsItem();
-            this.updateVersionItem();
-        }
+            || startupError !== nextState.startupError
+            || notificationState !== nextState.notificationState
+            || zoom !== nextState.zoom
+            || compactHeader !== nextState.compactHeader
+            || compactLayout !== nextState.compactLayout
+            || scoreSaved !== nextState.scoreSaved
+            || dialogs !== nextState.dialogs;
     }
 
     public override componentWillUnmount() {
+        this.selectionManager.dispose();
+
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
+        for (const query of this.compactQueries) {
+            query.removeEventListener("change", this.handleViewportResize);
+        }
+
         window.removeEventListener("afterprint", this.handleAfterPrint);
+        escapeStack.setFallback(undefined);
         escapeStack.detach();
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
-        requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
         requisitions.unregister("authChanged", this.handleAuthChanged);
         requisitions.unregister("notesClicked", this.handleNoteClicked);
@@ -260,12 +322,20 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, editMode, sidebarOpen, headerCollapsed, trackViewMode, instrumentEditorEnabled,
-            printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
+        const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
+            printing, printPreviewOpen, backendUnreachable, startupError, preferredEntryMode,
+            compactHeader, compactLayout, dialogs } = this.state;
+
+        const editMode = requestedEditMode && !zenMode;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
-        const headerClassName = `rounded-3xl shadow-md border border-base-200/70 gap-4`
-            + (headerCollapsed ? " collapsed" : "");
+        const showAnimationDiagnostics = import.meta.env.DEV
+            && new URLSearchParams(window.location.search).get("debugAnimation") === "1";
+
+        let animationDiagnostics: ComponentChild;
+        if (showAnimationDiagnostics && this.arrangementPlayer !== undefined) {
+            animationDiagnostics = <AnimationDiagnostics engine={this.arrangementPlayer.animationEngine} />;
+        }
 
         let splashContent: ComponentChild;
         switch (phase) {
@@ -306,106 +376,99 @@ export class App extends UIComponent<{}, IAppState> {
                 break;
         }
 
-        let breadcrumb: ComponentChild;
         let userButton: ComponentChild;
-        let editModeButton;
-        let newSongButton;
-        let isAdmin = false;
+        let saveButton: ComponentChild;
+        let newScoreButton: ComponentChild;
+        let headerUndoRedo: ComponentChild;
+        let editModeButton: ComponentChild;
+        let printButton: ComponentChild;
+        let exportButton: ComponentChild;
         if (isRunning) {
-            isAdmin = this.dataModel.user?.isAdmin ?? false;
-            breadcrumb = this.renderHeaderBreadcrumb();
             userButton = this.renderUserButton();
 
+            saveButton = <Button
+                id="saveButton"
+                className="headerIconButton"
+                title="Save Score"
+                disabled={!this.undoManager?.canUndo}
+                onClick={this.handleSaveClick}
+            >
+                <Icon src={UIIcon.TrayArrowDown} />
+            </Button>;
+
+            newScoreButton = <Button
+                id="newScoreButton"
+                className="headerIconButton"
+                title="New Score"
+                disabled={editMode}
+                onClick={this.handleNewScoreClick}
+            >
+                <Icon src={UIIcon.NewScore} />
+            </Button>;
+
             if (this.arrangementPlayer) {
-                newSongButton = <Button
-                    plain
-                    data-role="new-song"
-                    className="editSaveButton large"
-                    disabled={editMode}
-                    data-tooltip="New Song"
-                    onClick={() => {
-                        void this.handleNewSong();
-                    }}
-                >
-                    <Icon
-                        src={UIIcon.Add}
-                        width={24}
-                        height={24}
-                        data-tooltip="inherit"
-                    />
-                </Button>;
+                const editModeButtonClass = editMode
+                    ? "headerActionButton headerSwitcherButton is-active"
+                    : "headerActionButton headerSwitcherButton";
 
                 editModeButton = <Button
-                    plain
-                    className="editSaveButton large"
-                    data-tooltip={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+                    id="editModeButton"
+                    className={editModeButtonClass}
+                    title={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+                    data-tutorial="edit-mode"
                     onClick={this.handleEditModeToggle}
                 >
-                    <Icon
-                        src={UIIcon.Edit}
-                        width={24}
-                        height={24}
-                        data-tooltip="inherit"
-                    />
+                    <span className="header-mode-dot" />
+                    <span className="headerActionLabel">{editMode ? "Editing" : "Edit Mode"}</span>
+                </Button>;
+
+                printButton = <Button
+                    id="printButton"
+                    className="headerActionButton"
+                    title="Print / Export to PDF"
+                    data-tutorial="print"
+                    onClick={this.handlePrintClick}
+                >
+                    <Icon src={UIIcon.Printer} />
+                    <span className="headerActionLabel">Print</span>
+                </Button>;
+
+                exportButton = <Button
+                    id="exportButton"
+                    className="headerActionButton is-emphasis"
+                    title="Export as MP3"
+                    data-tutorial="export"
+                    disabled={this.exporting}
+                    onClick={() => {
+                        void this.handleExportClick();
+                    }}
+                >
+                    <Icon src={UIIcon.Export} />
+                    <span className="headerActionLabel">{this.exporting ? "Exporting…" : "Export"}</span>
                 </Button>;
             }
         }
 
-        let saveButton: ComponentChild;
-        let printButton: ComponentChild;
-        if (isRunning && this.arrangementPlayer) {
-            saveButton = <Button
-                plain
-                data-role="save-score"
-                className="editSaveButton"
-                disabled={!this.undoManager?.canUndo}
-                data-tooltip="Save Score (Ctrl+S)"
-                onClick={() => {
-                    void this.saveScore();
-                }}
-            >
-                <Icon
-                    src={UIIcon.Save}
-                    width={24}
-                    height={24}
-                    data-tooltip="inherit"
-                />
-            </Button>;
-
-            printButton = <Button
-                plain
-                id="printButton"
-                className="editSaveButton"
-                data-tooltip="Print / Export to PDF"
-                data-tutorial="print"
-                onClick={this.handlePrintClick}
-            >
-                <Icon
-                    src={UIIcon.Printer}
-                    width={24}
-                    height={24}
-                    data-tooltip="inherit"
-                />
-            </Button>;
+        if (isRunning && this.undoManager) {
+            headerUndoRedo = <UndoRedoControls undoManager={this.undoManager} />;
         }
 
-        let instrumentEditorButton: ComponentChild;
-        if (isAdmin && instrumentEditorEnabled) {
-            instrumentEditorButton = <Button
-                id="instrumentEditor"
-                imageOnly
-                className="du-btn-ghost"
-                data-tooltip="Instrument Editor"
-                disabled
-                onClick={this.handleInstrumentEditorClick}
-            >
-                <Icon
-                    src={timbauImage}
-                    width={24}
-                    height={24}
-                    data-tooltip="inherit"
-                />
-            </Button>;
+        let headerOverflow: ComponentChild;
+        if (isRunning) {
+            headerOverflow = this.renderHeaderOverflow();
+        }
+
+        let arrangementIdentity: ComponentChild;
+        const currentArrangement = this.dataModel.arrangement;
+        if (isRunning && currentArrangement) {
+            arrangementIdentity = <ArrangementIdentity
+                arrangement={currentArrangement}
+                dataModel={this.dataModel}
+                editMode={editMode}
+                stats={this.arrangementStats()}
+                saveState={this.arrangementSaveState()}
+                compact={zenMode}
+            />;
         }
 
         let checkingContent: ComponentChild;
@@ -426,12 +489,102 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
+        const headerNavigation = (
+            <Container
+                id="mainToolbarButtons"
+                className="toolbarButtonGroup"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
+                <img id="titleLogo" src="/logo.svg" />
+                <Button
+                    className="du-btn-ghost displayOptionsButton"
+                    title="Settings"
+                    data-tutorial="display-options"
+                    onClick={this.handleDisplayOptionsClick}
+                >
+                    <Icon src={UIIcon.Gear} />
+                </Button>
+                <Button
+                    id="scoreLibraryButton"
+                    className="du-btn-ghost"
+                    title="Score Library"
+                    data-tutorial="score-library"
+                    onClick={this.handleScoreLibraryClick}
+                >
+                    <Icon src={UIIcon.Library} />
+                </Button>
+                {userButton}
+            </Container>
+        );
+
+        const documentButtons = (
+            <Container
+                id="headerDocumentButtons"
+                className="toolbarButtonGroup"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
+                {saveButton}
+                {newScoreButton}
+                {headerUndoRedo}
+            </Container>
+        );
+
+        let headerActions: ComponentChild;
+        if (compactHeader) {
+            headerActions = (
+                <Container
+                    id="headerActions"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {saveButton}
+                    {editModeButton}
+                    {headerOverflow}
+                </Container>
+            );
+        } else {
+            headerActions = (
+                <Container
+                    id="headerActions"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {documentButtons}
+                    {editModeButton}
+                    <div className="headerSeparator" />
+                    {printButton}
+                    {exportButton}
+                </Container>
+            );
+        }
+
+        const appHeader = zenMode
+            ? undefined : this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
+
+        let toolsBar: ComponentChild;
+        if (editMode && trackViewMode === TrackViewMode.Staff) {
+            toolsBar = <ToolsBar />;
+        }
+
+        const modeBarEntryMode = editMode && trackViewMode === TrackViewMode.Staff ? entryMode : undefined;
+        let modeBar: ComponentChild;
+        if (!zenMode) {
+            modeBar = <ArrangementModeBar
+                trackViewMode={trackViewMode}
+                entryMode={modeBarEntryMode}
+                onTrackViewModeChange={this.handleTrackViewModeChange}
+            />;
+        }
+
         return (
             <>
                 {isRunning && (
                     <ErrorBoundary>
                         <Container
                             id="appRoot"
+                            className={zenMode ? "zen-mode" : undefined}
                             orientation={Orientation.TopDown}
                             crossAlignment={ChildAlignment.Stretch}
                         >
@@ -457,134 +610,36 @@ export class App extends UIComponent<{}, IAppState> {
                             >
                                 <Container
                                     id="appContent"
+                                    className={editMode ? "score-editing" : undefined}
                                     orientation={Orientation.TopDown}
                                     crossAlignment={ChildAlignment.Stretch}
-                                    style={{ height: "100dvh", minHeight: 0, overflow: "hidden" }}
+                                    style={{
+                                        flex: "1 1 auto",
+                                        minHeight: 0,
+                                        position: "relative",
+                                    }}
                                 >
-                                    <Container
-                                        id="headerContent"
-                                        orientation={Orientation.LeftToRight}
-                                        className={headerClassName}
-                                    >
-                                        <Container
-                                            id="mainToolbarButtons"
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Start}
-                                            className="bg-base-100/80 p-2"
-                                        >
-                                            <img id="titleLogo" src="/logo.svg" />
-                                            <Container
-                                                className="header-toolbar-extra"
-                                                orientation={Orientation.TopDown}
-                                                mainAlignment={ChildAlignment.Center}
-                                                crossAlignment={ChildAlignment.Stretch}
-                                            >
-                                                <Button
-                                                    imageOnly
-                                                    className="du-btn-ghost"
-                                                    data-tooltip="Display Options"
-                                                    data-tutorial="display-options"
-                                                    onClick={this.handleDisplayOptionsClick}
-                                                >
-                                                    <Icon
-                                                        src={UIIcon.Gear}
-                                                        data-tooltip="inherit"
-                                                    />
-                                                </Button>
-                                                <Button
-                                                    id="scoreLibraryButton"
-                                                    imageOnly
-                                                    className="du-btn-ghost"
-                                                    data-tooltip="Score Library"
-                                                    data-tutorial="score-library"
-                                                    onClick={this.handleScoreLibraryClick}
-                                                >
-                                                    <Icon
-                                                        src={UIIcon.Library}
-                                                        data-tooltip="inherit"
-                                                    />
-                                                </Button>
-                                                {instrumentEditorButton}
-                                                {userButton}
-                                            </Container>
-                                        </Container>
-                                        <Container
-                                            className="header-content-rows"
-                                            orientation={Orientation.TopDown}
-                                            crossAlignment={ChildAlignment.Stretch}
-                                        >
-                                            {breadcrumb}
+                                    {appHeader}
+                                    <div id="appOverlay">
+                                        {modeBar}
+                                        {toolsBar}
+                                        {animationDiagnostics}
+                                        <div id="playbackControlsHost">
                                             <ArrangementPlayControls
                                                 arrangementPlayer={this.arrangementPlayer!}
                                                 dataModel={this.dataModel}
                                                 editMode={editMode}
+                                                compact={compactLayout}
                                                 data-tutorial="playback"
                                             />
-                                            <Container
-                                                id="editControlsHost"
-                                                orientation={Orientation.LeftToRight}
-                                                mainAlignment={ChildAlignment.Start}
-                                                crossAlignment={ChildAlignment.Center}
-                                            >
-                                                <GooeyGroup
-                                                    className="editSaveGooey"
-                                                    background="var(--color-base-200)"
-                                                >
-                                                    {newSongButton}
-                                                    {editModeButton}
-                                                    {saveButton}
-                                                    {printButton}
-                                                </GooeyGroup>
-                                                {editMode && (
-                                                    <>
-                                                        <Separator />
-                                                        <UndoRedoControls
-                                                            undoManager={this.undoManager!}
-                                                        />
-                                                        <Separator />
-                                                        {trackViewMode === "staff" && (
-                                                            <EntryModeButton entryMode={entryMode} />
-                                                        )}
-                                                        <SubdivisionToolbar
-                                                            selectionManager={this.selectionManager}
-                                                            dataModel={this.dataModel}
-                                                        />
-                                                        {trackViewMode === "staff" && (
-                                                            <>
-                                                                <Separator />
-                                                                <NoteLengthToolbar
-                                                                    dataModel={this.dataModel}
-                                                                    selectionManager={this.selectionManager}
-                                                                    entryMode={entryMode}
-                                                                />
-                                                            </>
-                                                        )}
-                                                        <Separator />
-                                                        <ArticulationToolbar
-                                                            dataModel={this.dataModel}
-                                                            selectionManager={this.selectionManager}
-                                                            entryMode={entryMode}
-                                                        />
-                                                        <Separator />
-                                                        <NoteStyleBar
-                                                            dataModel={this.dataModel}
-                                                            selectionManager={this.selectionManager}
-                                                            trackViewMode={trackViewMode}
-                                                            entryMode={entryMode}
-                                                        />
-                                                    </>)}
-                                            </Container>
-                                        </Container>
-                                    </Container>
+                                        </div>
+                                    </div>
                                     <div
                                         id="viewerScrollHost"
-                                        onScroll={this.handleViewerScroll}
-                                        onWheel={this.handleViewerWheel}
                                         style={{
                                             flex: "1 1 auto",
                                             minHeight: 0,
                                             overflow: "auto",
-                                            overscrollBehaviorX: "none",
                                         }}
                                     >
                                         {this.arrangementPlayer && <ArrangementViewer
@@ -592,25 +647,32 @@ export class App extends UIComponent<{}, IAppState> {
                                             dataModel={this.dataModel}
                                             selectionManager={this.selectionManager}
                                             inEditMode={editMode}
+                                            zenMode={zenMode}
+                                            zenIdentity={zenMode ? arrangementIdentity : undefined}
                                             entryMode={entryMode}
                                         />}
                                     </div>
                                 </Container>
                             </DrawerSidebar>
-                            {renderStatusBar()}
+                            <AppFooter
+                                barCount={this.arrangementPlayer?.scoreMetrics.bars ?? 0}
+                                zoom={zoom}
+                                compact={compactLayout}
+                                zenMode={zenMode}
+                                version={appVersion}
+                                notifications={notificationState}
+                                data-tutorial="footer"
+                                onZoomChange={this.handleZoomChange}
+                                onToggleZenMode={this.handleToggleZenMode}
+                                onToggleNotifications={this.handleToggleNotifications}
+                                onShowReleaseNotes={this.handleShowReleaseNotes}
+                            />
                             {renderNotificationCenter()}
                         </Container>
-                        <TooltipProvider />
                         <ValueDialog ref={this.valueDialogRef} />
-                        <SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
-                        <TutorialWizard
-                            ref={this.tutorialWizardRef}
-                            steps={tutorialSteps}
-                            tutorialEnabled={AppStorage.loadUISettings()?.tutorialEnabled ?? true}
-                            onTutorialEnabledChange={this.handleTutorialEnabledChange}
-                            onStepChange={this.handleTutorialStepChange}
-                            onClose={this.handleTutorialClose}
-                        />
+                        {dialogs.SettingsDialog &&
+                            <dialogs.SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
+                        }
                         <BackendDisconnectedDialog
                             ref={this.backendDisconnectedDialogRef}
                             onReconnected={() => {
@@ -624,30 +686,50 @@ export class App extends UIComponent<{}, IAppState> {
                         <BackendSetupDialog
                             ref={this.backendSetupDialogRef}
                         />
-                        <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
-                        <UserGroupEditor
-                            ref={this.userGroupEditorRef}
-                            dataModel={this.dataModel}
-                            showUsers={this.dataModel.user?.isAdmin === true}
-                        />
-                        <PermissionEditor
-                            ref={this.permissionEditorRef}
-                            dataModel={this.dataModel}
-                            confirmRef={this.confirmDialogRef}
-                            onSaved={(entry) => {
-                                void requisitions.execute("permChanged", entry);
-                            }}
-                        />
+                        {dialogs.UserGroupEditor &&
+                            <dialogs.UserGroupEditor
+                                ref={this.userGroupEditorRef}
+                                dataModel={this.dataModel}
+                                showUsers={this.dataModel.user?.isAdmin === true}
+                            />
+                        }
+                        {dialogs.PermissionEditor &&
+                            <dialogs.PermissionEditor
+                                ref={this.permissionEditorRef}
+                                dataModel={this.dataModel}
+                                confirmRef={this.confirmDialogRef}
+                                onSaved={(entry) => {
+                                    void requisitions.execute("permChanged", entry);
+                                }}
+                            />
+                        }
                         {
-                            printing && this.dataModel.arrangement && printOptions
-                            && this.arrangementPlayer && this.undoManager && (
-                                <PrintView
-                                    arrangement={this.dataModel.arrangement as Arrangement}
-                                    options={printOptions}
-                                    dataModel={this.dataModel}
-                                    arrangementPlayer={this.arrangementPlayer}
-                                    selectionManager={this.selectionManager}
-                                />
+                            printPreviewOpen && this.dataModel.arrangement && this.arrangementPlayer && (
+                                <Suspense fallback={undefined}>
+                                    <PrintPreview
+                                        dataModel={this.dataModel}
+                                        arrangementPlayer={this.arrangementPlayer}
+                                        selectionManager={this.selectionManager}
+                                        session={this.printSession}
+                                        viewMode={trackViewMode}
+                                        onClose={this.handlePrintPreviewClose}
+                                        onPrint={this.handlePrintPreviewPrint}
+                                    />
+                                </Suspense>
+                            )
+                        }
+                        {
+                            printing && this.arrangementPlayer && (
+                                <Suspense fallback={undefined}>
+                                    <PrintDocument
+                                        dataModel={this.dataModel}
+                                        arrangementPlayer={this.arrangementPlayer}
+                                        selectionManager={this.selectionManager}
+                                        session={this.printSession}
+                                        viewMode={trackViewMode}
+                                        onReady={this.handlePrintDocumentReady}
+                                    />
+                                </Suspense>
                             )
                         }
                     </ErrorBoundary>
@@ -655,6 +737,22 @@ export class App extends UIComponent<{}, IAppState> {
 
                 <ConfirmDialog ref={this.confirmDialogRef} />
                 <NewScoreDialog ref={this.newScoreDialogRef} />
+                {dialogs.ReleaseNotesDialog && <dialogs.ReleaseNotesDialog ref={this.releaseNotesDialogRef} />}
+                <Dialog
+                    id="exportDialog"
+                    ref={this.exportDialogRef}
+                    caption="Exporting Arrangement"
+                    onClose={this.handleExportDialogClose}
+                >
+                    <Container
+                        orientation={Orientation.TopDown}
+                        gap={10}
+                        style={{ minWidth: "280px" }}
+                    >
+                        <Label caption="Please wait while the MP3 file is being created..." />
+                        <ProgressIndicator linear indicatorHeight={8} style={{ flex: "0 0 auto" }} />
+                    </Container>
+                </Dialog>
 
                 {checkingContent}
 
@@ -673,6 +771,16 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     /**
+     * @param target The event target to check.
+     *
+     * @returns True when the target accepts typed text, so shortcuts leave the key to it.
+     */
+    private static isEditableTarget(target: EventTarget | null): boolean {
+        return target instanceof HTMLElement
+            && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+    }
+
+    /**
      * Retries the backend health check after a connection failure.
      */
     private handleRetryConnection = (): void => {
@@ -681,85 +789,121 @@ export class App extends UIComponent<{}, IAppState> {
         });
     };
 
-    private renderHeaderBreadcrumb(): ComponentChild {
-        const { editMode } = this.state;
-        const arrangement = this.dataModel.arrangement!;
-
+    private renderAppHeader(
+        navigation: ComponentChild,
+        identity: ComponentChild,
+        actions: ComponentChild,
+    ): ComponentChild {
         return (
             <Container
-                className="header-breadcrumb"
+                id="headerContent"
                 orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.Start}
                 crossAlignment={ChildAlignment.Center}
-                gap={4}
             >
-                <Label className="header-breadcrumb-root" caption="Score Library" />
-                <Icon src={UIIcon.ChevronRight} width={16} height={16} />
-                <ArrangementTitle
-                    id="header-breadcrumb-title"
-                    arrangement={arrangement}
-                    dataModel={this.dataModel}
-                    editMode={editMode}
-                />
+                {navigation}
+                <div className="headerSeparator" />
+                {identity}
+                {actions}
             </Container>
         );
+    }
+
+    /**
+     * Renders the menu that holds the header's secondary actions while the window is too narrow to show them.
+     *
+     * @returns The overflow menu.
+     */
+    private renderHeaderOverflow(): ComponentChild {
+        const { editMode } = this.state;
+
+        const items: IDropdownItem[] = [
+            {
+                label: "Settings",
+                icon: <Icon src={UIIcon.Gear} />,
+                onClick: this.handleDisplayOptionsClick,
+            },
+            {
+                label: "New Score",
+                icon: <Icon src={UIIcon.NewScore} />,
+                disabled: editMode,
+                onClick: this.handleNewScoreClick,
+            },
+            {
+                label: "Undo",
+                icon: <Icon src={UIIcon.Discard} />,
+                disabled: !this.undoManager?.canUndo,
+                onClick: () => {
+                    this.undoManager?.undo();
+                },
+            },
+            {
+                label: "Redo",
+                icon: <Icon src={UIIcon.Redo} />,
+                disabled: !this.undoManager?.canRedo,
+                onClick: () => {
+                    this.undoManager?.redo();
+                },
+            },
+            {
+                label: "Print",
+                icon: <Icon src={UIIcon.Printer} />,
+                onClick: this.handlePrintClick,
+            },
+            {
+                label: this.exporting ? "Exporting…" : "Export",
+                icon: <Icon src={UIIcon.Export} />,
+                disabled: this.exporting,
+                onClick: () => {
+                    void this.handleExportClick();
+                },
+            },
+        ];
+
+        return <Dropdown
+            className="headerOverflowMenu"
+            icon={<Icon src={UIIcon.Ellipsis} />}
+            title="More actions"
+            items={items}
+            closeOnSelect
+        />;
     }
 
     private renderUserButton(): ComponentChild {
         const isAdmin = this.dataModel.user?.isAdmin ?? false;
 
         if (this.dataModel.authenticated) {
+            // The identity accent is a fixed brand pair, so its foreground is fixed as well instead of following
+            // the theme's text colour.
+            const userMenuStyle = isAdmin
+                ? {
+                    backgroundColor: "var(--color-identity)",
+                    color: "var(--color-identity-content)",
+                }
+                : undefined;
+
             return <Dropdown
                 id="userMenu"
                 icon={<Icon src={UIIcon.Account} />}
+                compact
                 items={this.buildUserMenuItems()}
                 closeOnSelect
-                style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
+                style={userMenuStyle}
             />;
         }
 
         return <Button
             id="signInButton"
             imageOnly
+            compact
             className="du-btn-ghost"
-            data-tooltip="Sign In"
+            title="Sign In"
             onClick={this.handleSignInClick}
         >
             <Icon
                 src={UIIcon.SignIn}
-                data-tooltip="inherit"
             />
         </Button>;
     }
-
-    private handleViewerScroll = (event: Event): void => {
-        const host = event.currentTarget as HTMLElement;
-        const { headerCollapsed } = this.state;
-
-        const hasOverflow = host.scrollHeight > host.clientHeight;
-
-        if (headerCollapsed) {
-            // Expand on a real scroll back to the top of a still-overflowing host. When the
-            // content fits after collapsing, the browser clamps scrollTop to 0; that event must
-            // not re-expand the header (the wheel handler covers that case).
-            if (host.scrollTop === 0 && hasOverflow) {
-                this.setState({ headerCollapsed: false });
-            }
-        } else if (host.scrollTop > this.headerCollapseThreshold) {
-            this.setState({ headerCollapsed: true });
-        }
-    };
-
-    private handleViewerWheel = (event: WheelEvent): void => {
-        const host = event.currentTarget as HTMLElement;
-        const { headerCollapsed } = this.state;
-
-        // With no scrollbar (content fits when collapsed) scroll events never fire, so a
-        // wheel-up gesture is the only way to re-expand the header.
-        if (headerCollapsed && event.deltaY < 0 && host.scrollHeight <= host.clientHeight) {
-            this.setState({ headerCollapsed: false });
-        }
-    };
 
     private renderBackendUnreachable(): ComponentChild {
         return (
@@ -850,7 +994,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (!health.initialized) {
             await this.setStatePromise({ phase: AppPhase.Setup });
             await this.backendSetupDialogRef.current?.show({
-                mode: BackendSetupMode.Initial,
+                mode: BackendSetupMode.Initialize,
                 dbError: health.dbError,
             });
 
@@ -864,7 +1008,7 @@ export class App extends UIComponent<{}, IAppState> {
             await this.setStatePromise({ phase: AppPhase.Setup });
 
             const setupResult = await this.backendSetupDialogRef.current?.show({
-                mode: BackendSetupMode.Admin,
+                mode: BackendSetupMode.Reset,
                 dbError: health.dbError,
             });
 
@@ -1080,20 +1224,6 @@ export class App extends UIComponent<{}, IAppState> {
         ]);
 
         const params = new URL(window.location.href).searchParams;
-        const hasBananaDrum = params.has("a") || params.has("a2");
-        const hasScoreParam = params.has("score");
-
-        const showTutorial = !hasBananaDrum && !hasScoreParam
-            && (AppStorage.loadUISettings()?.tutorialEnabled ?? true);
-
-        if (showTutorial) {
-            this.initAppState();
-            this.setState({ phase: AppPhase.Running }, () => {
-                this.tutorialWizardRef.current?.open();
-            });
-
-            return;
-        }
 
         await this.loadInitialScore(params);
     }
@@ -1139,56 +1269,29 @@ export class App extends UIComponent<{}, IAppState> {
         });
     }
 
-    private handleTutorialClose = (completed: boolean): void => {
-        this.tutorialWizardRef.current?.close(completed);
-        this.loadScorebook(undefined);
-    };
-
-    private handleTutorialStepChange = (stepIndex: number): void => {
-        const prevStep = this.currentTutorialStep;
-        this.currentTutorialStep = stepIndex;
-
-        if (stepIndex === mixerStepIndex) {
-            this.toggleMixerIf(!this.isMixerExpanded());
-        }
-
-        if (prevStep === mixerStepIndex && stepIndex !== mixerStepIndex) {
-            this.toggleMixerIf(this.isMixerExpanded());
-        }
-    };
-
-    private isMixerExpanded(): boolean {
-        return document.querySelector(".trackControlsList")?.classList.contains("expanded") ?? false;
-    }
-
-    private toggleMixerIf(condition: boolean): void {
-        if (!condition) {
-            return;
-        }
-
-        document.querySelector<HTMLElement>(".trackControlsToggle")?.click();
-    }
-
-    private handleTutorialEnabledChange = (enabled: boolean): void => {
-        AppStorage.saveSetting("tutorialEnabled", enabled);
-    };
-
     private handleGithubClick = () => {
         window.open("https://github.com/mike-lischke/animada-score-book", "_blank");
     };
 
     private handleScoreLibraryClick = () => {
+        // The sidebar covers the screen, so overlays that are still open would float above it.
+        Portal.closeAll();
+
         this.setState({ sidebarOpen: true }, () => {
             escapeStack.push(this.onSidebarEscape);
         });
     };
 
-    private handleInstrumentEditorClick = () => {
-        alert("Instrument Editor is not yet implemented.");
+    private handlePrintClick = () => {
+        this.openPrintPreview();
     };
 
-    private handlePrintClick = () => {
-        this.openPrintDialog();
+    private handleSaveClick = (): void => {
+        void this.saveScore();
+    };
+
+    private handleNewScoreClick = (): void => {
+        void this.handleNewSong();
     };
 
     private handleSignInClick = () => {
@@ -1210,11 +1313,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.undoManager?.dispose();
         this.undoManager = undefined;
-
-        // Clear status bar item references — they belong to the old (now-unmounted) Statusbar.
-        this.statsItem = undefined;
-        this.notificationItem = undefined;
-        this.versionItem = undefined;
 
         this.setState({ phase: AppPhase.Login }, () => {
             void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
@@ -1250,9 +1348,19 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
-        await this.dataModel.resetDatabase();
+        const result = await this.dataModel.resetDatabase();
 
-        // Restart the boot sequence; the health check reports the result of the reset.
+        if (!result.ok) {
+            // The toast center is not mounted outside the running phase, so the failure uses the dialog.
+            await this.confirmDialogRef.current?.show(
+                result.error ?? "The database reset failed.",
+                { accept: "OK" },
+                "Database Reset Failed",
+                ["The database may be empty now. Check the server log for details."],
+            );
+        }
+
+        // Restart the boot sequence; the health check reports the state the database is in now.
         await this.checkBackendThenInitialize();
     }
 
@@ -1277,7 +1385,7 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "Users & Groups",
                 icon: <Icon src={UIIcon.Organization} />,
                 onClick: () => {
-                    this.userGroupEditorRef.current?.open();
+                    void this.openUserGroupEditor();
                 },
             });
             items.push({
@@ -1294,7 +1402,7 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "My Groups",
                 icon: <Icon src={UIIcon.Organization} />,
                 onClick: () => {
-                    this.userGroupEditorRef.current?.open();
+                    void this.openUserGroupEditor();
                 },
             });
         }
@@ -1310,112 +1418,121 @@ export class App extends UIComponent<{}, IAppState> {
         return items;
     }
 
-    private openPrintDialog(): void {
-        if (!this.dataModel.arrangement) {
+    private openPrintPreview(): void {
+        if (!this.dataModel.arrangement || !this.arrangementPlayer) {
             return;
         }
 
-        const settings = AppStorage.loadUISettings() ?? {};
-        const viewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
-
-        const availableTracks = this.dataModel.arrangement.tracks.map((track) => {
-            return { id: track.id, name: track.name || track.instrument.displayName };
-        });
-
-        this.printDialogRef.current?.open({ viewMode, }, availableTracks);
+        this.setState({ printPreviewOpen: true });
     }
 
-    private handlePrintAccept = (options: IPrintOptions): void => {
-        this.startPrint(options);
+    private handlePrintPreviewClose = (): void => {
+        this.setState({ printPreviewOpen: false });
     };
 
-    private startPrint(options: IPrintOptions): void {
-        this.printRestoreState = {
-            theme: this.selectedThemePreference,
-            documentTitle: document.title,
-        };
+    /**
+     * Prints through the native dialog. The preview stays mounted, so closing or cancelling the dialog returns to
+     * the unchanged preview.
+     */
+    private handlePrintPreviewPrint = (): void => {
+        this.startPrint();
+    };
 
-        // Always print with the Light+ theme for consistent, paper-friendly output.
-        document.documentElement.setAttribute("data-theme", "Light+");
-
-        // Inject a dynamic @page rule so the browser uses the chosen paper size and orientation,
-        // and place a running header on every printed page: arrangement title left, "Page N" right.
+    /**
+     * Opens the native print dialog on the print document. The document is drawn from the preview's layout data and
+     * renderers at the print scale only: the preview's magnification, controls and margin guides are not part of it.
+     */
+    private startPrint(): void {
         const arrangement = this.dataModel.arrangement;
-        const headerTitle = (arrangement?.title ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        if (!arrangement) {
+            return;
+        }
+
+        this.printDocumentTitle = document.title;
+        document.title = `${arrangement.title} \u2014 Animada Score Book`;
+
+        // The sheets state their own margins, running headers and page numbers, so a page holds them edge to edge.
         const pageStyle = document.createElement("style");
         pageStyle.id = "print-page-style";
-        pageStyle.textContent =
-            `@page { ` +
-            // Slightly bigger top margin so the header band fits without clipping the
-            // 14pt title glyphs.
-            `margin: 25mm 15mm 15mm 15mm; ` +
-            `@top-left { ` +
-            `content: "${headerTitle}"; ` +
-            `font-family: system-ui, sans-serif; ` +
-            `font-size: 14pt; ` +
-            `font-weight: 700; ` +
-            `color: #000; ` +
-            `vertical-align: middle; ` +
-            `} ` +
-            `@top-right { ` +
-            `content: "Page " counter(page); ` +
-            `font-family: system-ui, sans-serif; ` +
-            `font-size: 10pt; ` +
-            `color: #444; ` +
-            `vertical-align: middle; ` +
-            `} ` +
-            `}`;
+        pageStyle.textContent = `@page { size: A4 ${this.printSession.pageSetup.orientation}; margin: 0; }`;
         document.head.appendChild(pageStyle);
-
-        // Use the arrangement title as default PDF filename.
-        if (arrangement) {
-            document.title = `${arrangement.title} \u2014 Animada Score Book`;
-        }
 
         document.body.classList.add("printing");
 
-        this.setState({ printing: true, printOptions: options }, () => {
-            // Wait for layout, fonts, then trigger the browser print dialog.
-            const fontsReady = (document as { fonts?: { ready?: Promise<unknown>; }; }).fonts?.ready
-                ?? Promise.resolve();
-            void fontsReady.then(() => {
-                // One more rAF tick so the print DOM is laid out.
-                requestAnimationFrame(() => {
-                    window.print();
-                });
+        // The document is loaded on demand, so printing waits for the mount that its component reports.
+        this.printDocumentReady = new Promise<void>((resolve) => {
+            this.resolvePrintDocumentReady = resolve;
+        });
+
+        this.setState({ printing: true }, () => {
+            void this.printAfterLayout();
+        });
+    }
+
+    /**
+     * Waits for the print document's fonts and layout, then opens the native print dialog.
+     */
+    private async printAfterLayout(): Promise<void> {
+        await this.printDocumentReady;
+
+        const fontsReady = (document as { fonts?: { ready?: Promise<unknown>; }; }).fonts?.ready
+            ?? Promise.resolve();
+        await fontsReady;
+
+        // One more frame, so the print DOM is laid out before the dialog takes its snapshot.
+        await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+                resolve();
             });
         });
+
+        window.print();
     }
 
     private handleAfterPrint = (): void => {
         document.body.classList.remove("printing");
+        document.getElementById("print-page-style")?.remove();
 
-        const pageStyle = document.getElementById("print-page-style");
-        if (pageStyle) {
-            pageStyle.remove();
+        if (this.printDocumentTitle !== undefined) {
+            document.title = this.printDocumentTitle;
+            this.printDocumentTitle = undefined;
         }
 
-        if (this.printRestoreState) {
-            const { theme, documentTitle } = this.printRestoreState;
-            this.applyThemePreference(theme);
-            document.title = documentTitle;
-            this.printRestoreState = undefined;
-        }
-
-        this.setState({ printing: false, printOptions: undefined });
+        this.setState({ printing: false });
     };
 
-    private handleDisplayOptionsClick = () => {
-        this.settingsDialogRef.current?.open();
+    /** Releases the print handshake once the on-demand document is in the DOM. */
+    private handlePrintDocumentReady = (): void => {
+        this.resolvePrintDocumentReady?.();
+    };
+
+    private handleDisplayOptionsClick = (): void => {
+        void this.openSettingsDialog();
     };
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
         this.applyThemePreference(settings.theme);
 
+        const zoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
+        const { zoom: currentZoom } = this.state;
+        if (zoom !== currentZoom) {
+            this.setState({ zoom });
+        }
+
         return Promise.resolve(true);
     };
 
-    private handleTrackViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
+    private handleTrackViewModeChange = (mode: TrackViewMode): void => {
+        const settings = AppStorage.loadUISettings() ?? {};
+        settings.viewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings.displayMode = mode;
+        AppStorage.saveUISettings(settings);
+
+        void requisitions.execute("trackViewModeToggled", mode);
+    };
+
+    private handleTrackViewModeToggled = (mode: TrackViewMode): Promise<boolean> => {
         this.setState({ trackViewMode: mode });
 
         return Promise.resolve(true);
@@ -1437,13 +1554,24 @@ export class App extends UIComponent<{}, IAppState> {
      *
      * @returns The entry mode in effect.
      */
-    private effectiveEntryMode(viewMode: "grid" | "staff", preferred: EditEntryMode): EditEntryMode {
-        return viewMode === "staff" ? preferred : EditEntryMode.Overwrite;
+    private effectiveEntryMode(viewMode: TrackViewMode, preferred: EditEntryMode): EditEntryMode {
+        return viewMode === TrackViewMode.Staff ? preferred : EditEntryMode.Overwrite;
     }
 
     private handleSystemThemeChange = (): void => {
         if (this.selectedThemePreference === "Auto") {
             this.applyThemePreference("Auto");
+        }
+    };
+
+    /** Re-evaluates both breakpoints when the viewport size changed and updates only the flags that differ. */
+    private handleViewportResize = (): void => {
+        const compactHeader = this.compactHeaderQuery.matches;
+        const compactLayout = this.compactLayoutQuery.matches;
+        const { compactHeader: currentHeader, compactLayout: currentLayout } = this.state;
+
+        if (compactHeader !== currentHeader || compactLayout !== currentLayout) {
+            this.setState({ compactHeader, compactLayout });
         }
     };
 
@@ -1478,7 +1606,7 @@ export class App extends UIComponent<{}, IAppState> {
                             content: "",
                             placeholder: "Name of the new folder",
                             displayWidth: 6,
-                        } as IValueEditorValueEntry],
+                        }],
                     );
 
                     if (result?.closure !== DialogResponseClosure.Accept) {
@@ -1546,7 +1674,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 content,
                                 placeholder: "https://<host-name>/?t=...",
                                 displayWidth: 6,
-                            } as IValueEditorValueEntry],
+                            }],
                         );
 
                         if (result) {
@@ -1609,6 +1737,7 @@ export class App extends UIComponent<{}, IAppState> {
                             type: ValueEditorEntryType.Value,
                             id: "folderName",
                             content: data.name,
+                            autoFocus: true,
                             displayWidth: 6,
                         }],
                     );
@@ -1679,17 +1808,12 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "managePerm": {
-                if (!this.permissionEditorRef.current) {
-                    return false;
-                }
-
                 const row = document.querySelector<HTMLElement>(
-                    `.scoreTreeEntry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
+                    `.score-tree-entry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
                 );
 
                 if (row) {
-                    const rowRect = row.getBoundingClientRect();
-                    void this.permissionEditorRef.current.open(rowRect, data);
+                    void this.openPermissionEditor(row.getBoundingClientRect(), data);
                 }
 
                 return false;
@@ -1713,12 +1837,6 @@ export class App extends UIComponent<{}, IAppState> {
         return new UndoManager(this.dataModel, () => {
             return this.selectionManager.serialisedSelection;
         });
-    }
-
-    private initAppState(): void {
-        this.undoManager?.dispose();
-        this.undoManager = this.createUndoManager();
-        this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
     }
 
     private loadScorebook(source?: IArrangementSnapshot | URLSearchParams | ISbDmScore) {
@@ -1770,10 +1888,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.forceUpdate();
 
-        const { phase, editMode } = this.state;
-        if (phase === AppPhase.Running) {
-            this.updateStatsItem();
-        }
+        const { editMode } = this.state;
 
         const settings = AppStorage.loadUISettings();
         if (settings?.editMode && !editMode) {
@@ -1795,8 +1910,18 @@ export class App extends UIComponent<{}, IAppState> {
         this.setState({ sidebarOpen: false });
     };
 
+    /** Runs for Escape only when no portal, popup or popover is open. */
+    private handleEscapeFallback = (): void => {
+        const { zenMode } = this.state;
+
+        if (!zenMode) {
+            this.selectionManager.clearSelection();
+        }
+    };
+
     private handleKeyDown(event: KeyboardEvent): void {
-        const { editMode } = this.state;
+        const { editMode: requestedEditMode, zenMode } = this.state;
+        const editMode = requestedEditMode && !zenMode;
 
         // Ctrl/Cmd+S saves the score in edit mode.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "s") {
@@ -1808,10 +1933,10 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        // Ctrl/Cmd+P opens the print preview dialog instead of the native print dialog.
+        // Ctrl/Cmd+P opens the print preview instead of the native print dialog.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "p") {
             event.preventDefault();
-            this.openPrintDialog();
+            this.openPrintPreview();
 
             return;
         }
@@ -1821,9 +1946,7 @@ export class App extends UIComponent<{}, IAppState> {
             const key = event.key.toLowerCase();
 
             if (key === "x" || key === "c" || key === "v") {
-                const target = event.target as HTMLElement | null;
-                const editable = target !== null && (target.tagName === "INPUT" || target.tagName === "TEXTAREA"
-                    || target.isContentEditable);
+                const editable = App.isEditableTarget(event.target);
                 const selection = window.getSelection();
                 const hasTextSelection = selection !== null && !selection.isCollapsed;
 
@@ -1845,13 +1968,18 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
-        switch (event.key) {
-            case "Escape": {
-                this.selectionManager.clearSelection();
+        // G and S switch the score view, the shortcuts the mode bar names in its tooltips.
+        if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+            const key = event.key.toLowerCase();
+            if ((key === "g" || key === "s") && !App.isEditableTarget(event.target)) {
+                event.preventDefault();
+                this.handleTrackViewModeChange(key === "g" ? TrackViewMode.Grid : TrackViewMode.Staff);
 
-                break;
+                return;
             }
+        }
 
+        switch (event.key) {
             case "Alt": {
                 event.preventDefault();
 
@@ -1863,7 +1991,7 @@ export class App extends UIComponent<{}, IAppState> {
             // Mac: command+z / command+shift+z
             // We allow overlap for maximum cross-browser consistency, except where it actually causes confusion
             case "z": {
-                if (event.ctrlKey || event.metaKey) {
+                if (!zenMode && (event.ctrlKey || event.metaKey)) {
                     if (event.shiftKey) {
                         this.undoManager?.redo();
                     } else {
@@ -1878,7 +2006,7 @@ export class App extends UIComponent<{}, IAppState> {
             case "y": {
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
-                if (event.ctrlKey) {
+                if (!zenMode && event.ctrlKey) {
                     this.undoManager?.redo();
                 }
 
@@ -1897,13 +2025,14 @@ export class App extends UIComponent<{}, IAppState> {
 
     private async pasteSelection(): Promise<void> {
         const entries = [...this.selectionManager.currentSelection.values()];
+        const { trackViewMode } = this.state;
 
         // The grid shortens content that does not fit its cells, while the staff keeps the copied
         // notes as they are and lets the following notes give way. The display mode is read from the
         // same setting the viewers render with, because the state value only follows the toggle.
         const displayMode = AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
-            ?? this.state.trackViewMode;
-        const overflowMode = displayMode === "staff"
+            ?? trackViewMode;
+        const overflowMode = displayMode === TrackViewMode.Staff
             ? PasteOverflowMode.Shift
             : PasteOverflowMode.Truncate;
 
@@ -2020,6 +2149,14 @@ export class App extends UIComponent<{}, IAppState> {
         } else {
             void requisitions.execute("editModeChanged", true);
         }
+    };
+
+    private handleToggleZenMode = (): void => {
+        const { zenMode } = this.state;
+        const enabled = !zenMode;
+        this.setState({ zenMode: enabled, sidebarOpen: false });
+        escapeStack.remove(this.onSidebarEscape);
+        void requisitions.execute("zenModeChanged", enabled);
     };
 
     private confirmExitEditMode = async (): Promise<boolean> => {
@@ -2144,11 +2281,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.forceUpdate();
 
-        const { phase } = this.state;
-        if (phase === AppPhase.Running) {
-            this.updateStatsItem();
-        }
-
         void requisitions.execute("editModeChanged", true);
     }
 
@@ -2181,6 +2313,26 @@ export class App extends UIComponent<{}, IAppState> {
                     void requisitions.execute("showWarning",
                         `Score is being edited by ${data.username}`
                         + ` (since ${this.formatLockTimestamp(data.lockedAt!)})`);
+
+                    return Promise.resolve(true);
+                }
+
+                // The backend refused the lock for a reason of its own. Editing without it would only fail at the
+                // save, so the mode stays off and the reason is stated. A session that ended can be renewed with a
+                // login; a missing permission cannot.
+                if (data.status === 401) {
+                    AppStorage.saveSetting("editMode", false);
+                    this.setState({ editMode: false });
+                    void requisitions.execute("showWarning", "Your session has ended. Log in again to edit.");
+                    void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+
+                    return Promise.resolve(true);
+                }
+
+                if (data.status === 403) {
+                    AppStorage.saveSetting("editMode", false);
+                    this.setState({ editMode: false });
+                    void requisitions.execute("showError", "You do not have permission to edit this score.");
 
                     return Promise.resolve(true);
                 }
@@ -2252,12 +2404,14 @@ export class App extends UIComponent<{}, IAppState> {
                 AppStorage.saveSetting("currentScore", content);
                 this.undoManager.clearHistory();
 
+                this.setState({ scoreSaved: true });
                 void requisitions.execute("showInfo", "Score saved.");
 
                 return true;
             }
 
-            void requisitions.execute("showError", "Save failed — backend returned no content.");
+            // The backend refused the save without content, which only happens when it could not be reached.
+            void requisitions.execute("showError", "Save failed — the backend could not be reached.");
 
             return false;
         } catch (error) {
@@ -2270,14 +2424,12 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         this.forceUpdate();
-        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
 
     private handleArrangementMutated = (): Promise<boolean> => {
         this.dataModel.persistCurrentScore();
-        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
@@ -2288,120 +2440,198 @@ export class App extends UIComponent<{}, IAppState> {
         return Promise.resolve(true);
     };
 
-    private handlePlayRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
-        this.currentPlayRange = range ? { startBar: range.from, endBar: range.to } : undefined;
+    private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
+        // A newly loaded arrangement starts unsaved; library refreshes and renames leave the edit state alone. The
+        // temporary print widths and the print track selection belong to the score that was shown before.
+        if (reason === ScoreBookChangeReason.ScoreLoaded) {
+            this.printSession.forgetAllArrangements();
+            this.setState({ scoreSaved: false });
+        }
+
+        return Promise.resolve(true);
+    };
+
+    private handleNotificationStateChanged = (state: INotificationState): Promise<boolean> => {
+        this.setState({ notificationState: state });
+
+        return Promise.resolve(true);
+    };
+
+    private handleToggleNotifications = (): void => {
+        NotificationCenter.toggleHistory();
+    };
+
+    private handleZoomChange = (zoom: number): void => {
+        const settings = AppStorage.loadUISettings() ?? {};
+        settings.viewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings.zoomLevel = zoom;
+        AppStorage.saveUISettings(settings);
+        this.setState({ zoom });
+        void requisitions.execute("settingsChanged", settings);
+    };
+
+    private handleShowReleaseNotes = (): void => {
+        void this.openReleaseNotesDialog();
+    };
+
+    /**
+     * Opens the settings dialog, importing its code on first use.
+     */
+    private async openSettingsDialog(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.SettingsDialog) {
+            this.settingsDialogRef.current?.open();
+
+            return;
+        }
+
+        const { SettingsDialog } = await import("./ui/SettingsDialog.js");
+        this.setState({ dialogs: { ...dialogs, SettingsDialog } }, () => {
+            this.settingsDialogRef.current?.open();
+        });
+    }
+
+    /**
+     * Opens the users and groups editor, importing its code on first use.
+     */
+    private async openUserGroupEditor(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.UserGroupEditor) {
+            this.userGroupEditorRef.current?.open();
+
+            return;
+        }
+
+        const { UserGroupEditor } = await import("./ui/UserGroupEditor.js");
+        this.setState({ dialogs: { ...dialogs, UserGroupEditor } }, () => {
+            this.userGroupEditorRef.current?.open();
+        });
+    }
+
+    /**
+     * Opens the permission editor for a score or folder, importing its code on first use.
+     *
+     * @param target The rectangle the editor is anchored at.
+     * @param entry The score or folder the permissions belong to.
+     */
+    private async openPermissionEditor(target: DOMRect, entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
+        const { dialogs } = this.state;
+        if (!dialogs.PermissionEditor) {
+            const { PermissionEditor } = await import("./ui/PermissionEditor.js");
+            await new Promise<void>((resolve) => {
+                this.setState({ dialogs: { ...dialogs, PermissionEditor } }, resolve);
+            });
+        }
+
+        await this.permissionEditorRef.current?.open(target, entry);
+    }
+
+    /**
+     * Opens the release notes, importing their code on first use.
+     */
+    private async openReleaseNotesDialog(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.ReleaseNotesDialog) {
+            this.releaseNotesDialogRef.current?.open();
+
+            return;
+        }
+
+        const { ReleaseNotesDialog } = await import("./components/ui/composites/ReleaseNotesDialog.js");
+        this.setState({ dialogs: { ...dialogs, ReleaseNotesDialog } }, () => {
+            this.releaseNotesDialogRef.current?.open();
+        });
+    }
+
+    private handleExportClick = async (): Promise<void> => {
+        const { arrangementPlayer } = this;
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangementPlayer || !arrangement || this.exporting) {
+            return;
+        }
+
+        this.exporting = true;
+        this.exportDialogRef.current?.open();
         this.forceUpdate();
 
-        return Promise.resolve(true);
-    };
-
-    /**
-     * Creates or updates the status bar item that shows the metrics of the performance (time signature, the bars it
-     * plays, duration) on the right side of the status bar.
-     */
-    private updateStatsItem(): void {
-        const player = this.arrangementPlayer;
-        if (!player) {
-            return;
-        }
-
-        const metrics = player.scoreMetrics;
-        const bars = metrics.performedBars === 1 ? "1 bar" : `${metrics.performedBars} bars`;
-        const text = `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ` +
-            `${Math.round(100 * metrics.realTimeLength) / 100} s`;
-
-        if (!this.statsItem) {
-            try {
-                this.statsItem = Statusbar.createStatusBarItem({
-                    id: "scoreStats",
-                    text,
-                    alignment: StatusBarAlignment.Right,
-                    priority: 10,
-                });
-            } catch {
-                // Statusbar is not mounted yet — the item will be created on
-                // the next updateStatsItem call (e.g. when timeParamsChanged fires).
-                return;
-            }
-        } else {
-            this.statsItem.text = text;
-        }
-    }
-
-    /**
-     * Creates the fixed status bar item that shows the app version. The item is created once per
-     * Statusbar mount and survives because it never expires.
-     */
-    private updateVersionItem(): void {
-        if (this.versionItem) {
-            return;
-        }
-
         try {
-            this.versionItem = Statusbar.createStatusBarItem({
-                id: "appVersion",
-                text: `v${appVersion}`,
-                tooltip: "Animada Score Book version",
-                alignment: StatusBarAlignment.Right,
-                priority: -10,
-            });
-        } catch {
-            // Statusbar is not mounted yet — it will be created on the next transition to Running.
+            const blob = await arrangementPlayer.renderToBlob();
+            const fileName = `${arrangement.title}.mp3`;
+
+            if (isMobile && typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+                const exportFile = new File([blob], fileName, { type: "audio/mpeg" });
+                if (navigator.canShare({ files: [exportFile] })) {
+                    try {
+                        await navigator.share({ files: [exportFile], title: fileName });
+
+                        return;
+                    } catch (error) {
+                        if (!(error instanceof DOMException) || error.name !== "AbortError") {
+                            console.warn("File share failed, falling back to direct download.", error);
+                        } else {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = fileName;
+            anchor.rel = "noopener";
+            anchor.target = "_blank";
+            anchor.click();
+
+            // Keep the URL alive briefly so Safari can consume it before revoking.
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 1000);
+        } catch (error) {
+            console.error("MP3 export failed", error);
+            void requisitions.execute("showError", "The MP3 could not be exported. Please try again.");
+        } finally {
+            this.exporting = false;
+            this.exportDialogRef.current?.close(true);
+            this.forceUpdate();
         }
+    };
+
+    /** Keeps the waiting dialog open while an export is still running. */
+    private handleExportDialogClose = (): void => {
+        if (this.exporting) {
+            setTimeout(() => {
+                this.exportDialogRef.current?.open();
+            }, 0);
+        }
+    };
+
+    /**
+     * @returns The arrangement's performance metrics as a single caption line.
+     */
+    private arrangementStats(): string {
+        const metrics = this.arrangementPlayer?.scoreMetrics;
+        if (!metrics) {
+            return "";
+        }
+
+        const bars = metrics.performedBars === 1 ? "1 bar" : `${metrics.performedBars} bars`;
+        const duration = Math.round(100 * metrics.realTimeLength) / 100;
+
+        return `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ${duration} s`;
     }
 
-    private handleNotificationStateChanged = (state: {
-        newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
-    }): Promise<boolean> => {
-        const { newCount, totalCount, silent, showHistory } = state;
-
-        let text: string;
-        let tooltip: string;
-        let icon: ComponentChild;
-
-        if (showHistory) {
-            tooltip = "Hide Notifications";
-            text = "";
-            icon = <Icon src={silent ? UIIcon.BellSlash : UIIcon.Bell} width="16px" height="16px" />;
-        } else {
-            if (silent) {
-                icon = <Icon src={newCount === 0 ? UIIcon.BellSlash : UIIcon.BellSlashDot}
-                    width="16px" height="16px" />;
-            } else {
-                icon = <Icon src={newCount === 0 ? UIIcon.Bell : UIIcon.BellDot}
-                    width="16px" height="16px" />;
-            }
-
-            text = newCount === 0 ? "" : newCount.toString();
-            tooltip = newCount === 0 ? "No" : newCount.toString();
-            if (newCount === 0) {
-                if (totalCount > 0) {
-                    tooltip += " New Notifications";
-                } else {
-                    tooltip += " Notifications";
-                }
-            } else {
-                tooltip += " New Notification" + (newCount > 1 ? "s" : "");
-            }
+    /**
+     * @returns How the current score stands towards the backend: unsaved changes win over a prior save.
+     */
+    private arrangementSaveState(): ArrangementSaveState {
+        const { scoreSaved } = this.state;
+        if (this.undoManager?.canUndo) {
+            return ArrangementSaveState.Unsaved;
         }
 
-        if (!this.notificationItem) {
-            this.notificationItem = Statusbar.createStatusBarItem({
-                id: "showNotificationHistory",
-                text,
-                icon,
-                tooltip,
-                command: "notifications:toggleHistory",
-                alignment: StatusBarAlignment.Right,
-                priority: 0,
-            });
-        } else {
-            this.notificationItem.text = text;
-            this.notificationItem.icon = icon;
-            this.notificationItem.tooltip = tooltip;
-        }
-
-        return Promise.resolve(true);
-    };
+        return scoreSaved ? ArrangementSaveState.Saved : ArrangementSaveState.Unchanged;
+    }
 
 }

@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.segmented-switch {
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9999px;
+    background-color: color-mix(in srgb, var(--color-base-content) 6%, var(--color-base-100));
+    user-select: none;
+
+    /* The pill slides under the selected choice, so the segments themselves carry no surface. */
+    .segmented-switch-thumb {
+        position: absolute;
+        top: 3px;
+        height: 26px;
+        border-radius: 9999px;
+        background-color: var(--color-base-content);
+        visibility: hidden;
+        pointer-events: none;
+        transition: left 0.2s ease, width 0.2s ease, background-color 0.2s ease;
+
+        &.is-placed {
+            visibility: visible;
+        }
+    }
+
+    /* The thumb lightens while the selected choice is hovered, like the play button does. */
+    &:has(.segmented-switch-segment.is-selected:hover) .segmented-switch-thumb {
+        background-color: color-mix(in srgb, var(--color-base-content) 85%, var(--color-base-100));
+    }
+
+    .segmented-switch-segment {
+        position: relative;
+        z-index: 1;
+        gap: 6px;
+        height: 26px;
+        min-height: 26px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 9999px;
+        background-color: transparent;
+        box-shadow: none;
+        color: var(--color-base-content);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:not(.is-selected):hover {
+            background-color: color-mix(in srgb, var(--color-base-content) 5%, transparent);
+        }
+
+        &.is-selected {
+            color: var(--color-base-100);
+
+            .segmented-switch-dot {
+                background-color: var(--color-playback-accent);
+            }
+        }
+    }
+
+    .segmented-switch-dot {
+        flex: 0 0 8px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: color-mix(in srgb, var(--color-base-content) 25%, transparent);
+        pointer-events: none;
+    }
+
+    /* The caption is part of the button's face, so it leaves the pointer to the button and never selects. */
+    .segmented-switch-label {
+        pointer-events: none;
+        user-select: none;
+    }
+}

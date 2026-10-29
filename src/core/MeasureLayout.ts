@@ -4,7 +4,7 @@
  */
 
 import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
-import { subtractFractions } from "./serialisation/numeric-functions.js";
+import type { IFraction, IMeasureEvent } from "./types/general.js";
 import { clampValue } from "./utils.js";
 
 /**
@@ -19,11 +19,18 @@ import { clampValue } from "./utils.js";
  * the print scaling) converts at its own boundary.
  */
 
-/** Note height in px at 100% zoom. Mirrors `--note-height` in App.scss, which a test asserts. */
+/** Note height in px at 100% zoom: the grid cell size. Mirrors `--note-height` in App.scss, which a test asserts. */
 export const noteHeightPx = 80;
 
 /** Height of one staff space in px at 100% zoom. Four of them make a SMuFL em. */
 export const staffSpacePx = 10;
+
+/**
+ * Width of one base-grid step in px at 100% zoom, which a measure's default column width derives from.
+ * Mirrors `--measure-step-width` in App.scss. It is deliberately its own value and not the grid cell size:
+ * the horizontal step width and the grid height are independent again, which the staff row geometry relies on.
+ */
+export const measureStepWidthPx = 80;
 
 /** Steps a measure is laid out for when it carries no width of its own. Mirrors `--steps-per-bar` in CSS. */
 const defaultStepsPerMeasure = 16;
@@ -34,8 +41,23 @@ export const staffPrefixWidth = 48;
 /** Width an event keeps at least, in px at 100% zoom: a notehead plus the room for its stem and flags. */
 export const minEventWidth = 25;
 
-/** Distance two adjacent event anchors keep at least, in px at 100% zoom, so noteheads do not collide. */
-export const minEventGap = 12;
+/** Air a rest keeps on either side of its symbol, in px at 100% zoom. */
+export const minRestAir = 4;
+
+/**
+ * Width of the widest rest glyph of the standard values, in px at 100% zoom. Mirrors the SMuFL rest boxes:
+ * the thirty-second rest is the widest of them.
+ */
+export const restGlyphWidth = 15;
+
+/**
+ * Room the augmentation dot of a dotted rest takes beside its glyph, in px at 100% zoom: the gap the dot keeps
+ * from the glyph plus the dot's own ink.
+ */
+export const restDotWidth = 8;
+
+/** Width a rest keeps at least, in px at 100% zoom: the widest rest glyph and the air on both of its sides. */
+export const minRestWidth = restGlyphWidth + (2 * minRestAir);
 
 /** Width the one-bar repeat (simile) mark keeps at least, in px at 100% zoom: the glyph plus its air. */
 export const minMeasureRepeatWidth = 3 * staffSpacePx;
@@ -43,12 +65,22 @@ export const minMeasureRepeatWidth = 3 * staffSpacePx;
 /** Horizontal insets of a staff measure column — its padding plus the closing barline — in px at 100% zoom. */
 export const staffMeasureInsets = 24;
 
+/** One child of a measure row, whose room the row distributes. */
+export interface IRowItem {
+    /** Part of the row the item spans, as a fraction of the row. */
+    readonly fraction: number;
+
+    /** Least room the item takes, in px at 100 % zoom. */
+    readonly minimumPx: number;
+}
+
 /**
- * Width of the bar action strip — five 48 px buttons with 4 px gaps — in px at 100% zoom. Mirrors
- * `.bar-action-button` and `.bar-action-group` in component-styles: the strip is centred on the measure, so the
- * measure has to be at least this wide for the strip to fit.
+ * Width of the bar action strip — seven 34 px buttons, with 4 px between the per-bar actions and 16 px to the
+ * insert actions that frame them — in px at 100% zoom. Mirrors `.bar-action-button` and `.bar-action-group` in
+ * component-styles: the strip is centred on the measure, so the measure has to be at least this wide for the
+ * strip to fit.
  */
-export const barActionStripWidth = (5 * 48) + (4 * 4);
+export const barActionStripWidth = (7 * 34) + (4 * 4) + (2 * 16);
 
 /** A half-open range of 1-based measure numbers. */
 export interface IMeasureRange {
@@ -59,7 +91,7 @@ export interface IMeasureRange {
 export class MeasureLayout {
     /** @returns The default column width of a measure, in px at 100% zoom. */
     public static defaultWidth(): number {
-        return defaultStepsPerMeasure * noteHeightPx;
+        return defaultStepsPerMeasure * measureStepWidthPx;
     }
 
     /**
@@ -208,17 +240,8 @@ export class MeasureLayout {
     }
 
     /**
-     * Resolves the smallest column width a measure of an arrangement still draws in.
-     *
-     * The staff lays its events out proportionally, so both quantities that have to hold scale with the
-     * column: an event's slot is its duration fraction of the column, and the distance between two anchors is
-     * the fraction between their starts. Two requirements follow — every event's slot holds its symbol
-     * ({@link minEventWidth}), and two neighbouring symbols keep their air (`minEventWidth + minEventGap`).
-     * Because the events tile the measure, the neighbouring rule dominates every event but the last one, whose
-     * symbol is bounded by its own slot. The widest track decides.
-     *
-     * The measure also carries the bar action strip, which is centred on it and therefore has to fit inside it
-     * ({@link barActionStripWidth}).
+     * Resolves the smallest column width a measure of an arrangement still draws in, the room the editor's bar
+     * action strip needs included.
      *
      * @param arrangement The arrangement the measure belongs to.
      * @param bar The 1-based measure number.
@@ -226,8 +249,25 @@ export class MeasureLayout {
      * @returns The smallest column width in px at 100% zoom, the column insets included.
      */
     public static minimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
-        let shortestDuration = Number.POSITIVE_INFINITY;
-        let tightestGap = Number.POSITIVE_INFINITY;
+        return Math.max(MeasureLayout.contentMinimumWidthOfMeasure(arrangement, bar), barActionStripWidth);
+    }
+
+    /**
+     * Resolves the smallest column width a measure still draws its notation in, without the room the editor's bar
+     * action strip takes. A view that shows no editor controls — the print layout — may go down to this width.
+     *
+     * Every event of a row takes the room its own symbol needs ({@link minimumRoomOf}), and whatever the column
+     * holds beyond that is shared by duration ({@link spacedWidths}). The floor is therefore the sum of those
+     * rooms, not the room a proportionally laid out slot would need: a column may narrow until the long events
+     * have given up their empty tails, and only the symbols themselves set the limit.
+     *
+     * @param arrangement The arrangement the measure belongs to.
+     * @param bar The 1-based measure number.
+     *
+     * @returns The smallest column width in px at 100% zoom, the column insets included.
+     */
+    public static contentMinimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
+        let contentWidth = 0;
         let hasSimile = false;
 
         for (const track of arrangement.tracks) {
@@ -236,27 +276,94 @@ export class MeasureLayout {
                 hasSimile = true;
             }
 
-            const events = measure.events;
+            const trackWidth = measure.events.reduce((sum, event) => {
+                return sum + MeasureLayout.minimumRoomOf(event);
+            }, 0);
+            contentWidth = Math.max(contentWidth, trackWidth);
+        }
 
-            for (let index = 0; index < events.length; index++) {
-                const duration = events[index].duration;
-                if (duration.denominator > 0 && duration.numerator > 0) {
-                    shortestDuration = Math.min(shortestDuration, duration.numerator / duration.denominator);
-                }
+        const minimumWidth = Math.max(hasSimile ? minMeasureRepeatWidth : 0, contentWidth);
 
-                const gap = index > 0 ? subtractFractions(events[index].start, events[index - 1].start) : undefined;
-                if (gap !== undefined && gap.denominator > 0 && gap.numerator > 0) {
-                    tightestGap = Math.min(tightestGap, gap.numerator / gap.denominator);
-                }
+        return Math.ceil(minimumWidth) + staffMeasureInsets;
+    }
+
+    /**
+     * @param event The measure event to measure.
+     *
+     * @returns The smallest room the event's symbol takes, in px at 100% zoom. Where two events of that room
+     *          stand next to each other, the air between their anchors comes with it.
+     */
+    public static minimumRoomOf(event: IMeasureEvent): number {
+        if (event.noteStyleId !== undefined) {
+            return minEventWidth;
+        }
+
+        return MeasureLayout.restSymbolWidth(event.duration);
+    }
+
+    /**
+     * Distributes the room of a row over its items. Each item takes its share of the row, and where the row is too
+     * narrow for that, it falls back on the room its symbol takes: from there the row blends over to the
+     * proportional layout as it grows, so nothing jumps when a measure is resized.
+     *
+     * @param items The items of the row, in order.
+     * @param rowWidthPx The room the row takes, in px at 100 % zoom.
+     *
+     * @returns The width of every item, in px at 100 % zoom, in item order.
+     */
+    public static spacedWidths(items: readonly IRowItem[], rowWidthPx: number): number[] {
+        let shareTotal = 0;
+        let minimumTotal = 0;
+        let proportionalWidthPx = 0;
+
+        for (const item of items) {
+            shareTotal += item.fraction;
+            minimumTotal += item.minimumPx;
+            if (item.fraction > 0) {
+                proportionalWidthPx = Math.max(proportionalWidthPx, item.minimumPx / item.fraction);
             }
         }
 
-        const contentWidth = Math.max(
-            hasSimile ? minMeasureRepeatWidth : 0,
-            Number.isFinite(shortestDuration) ? minEventWidth / shortestDuration : 0,
-            Number.isFinite(tightestGap) ? (minEventWidth + minEventGap) / tightestGap : 0,
-        );
+        if (shareTotal <= 0) {
+            return items.map(() => {
+                return 0;
+            });
+        }
 
-        return Math.max(Math.ceil(contentWidth) + staffMeasureInsets, barActionStripWidth);
+        const shareOf = (item: IRowItem): number => {
+            return (item.fraction / shareTotal) * proportionalWidthPx;
+        };
+
+        // A row wide enough for the proportional layout keeps it.
+        if (rowWidthPx >= proportionalWidthPx) {
+            return items.map((item) => {
+                return (item.fraction / shareTotal) * rowWidthPx;
+            });
+        }
+
+        // Narrower than that, the row blends from the room its symbols take to their proportional shares.
+        const blendablePx = proportionalWidthPx - minimumTotal;
+        const blend = blendablePx <= 0
+            ? 0
+            : Math.max(0, Math.min(1, (rowWidthPx - minimumTotal) / blendablePx));
+
+        return items.map((item) => {
+            return item.minimumPx + (blend * (shareOf(item) - item.minimumPx));
+        });
+    }
+
+    /**
+     * Resolves the room a rest's symbol takes, its air included.
+     *
+     * @param duration The rest's duration as a bar fraction.
+     *
+     * @returns The width the rest needs, in px at 100% zoom.
+     */
+    private static restSymbolWidth(duration: IFraction): number {
+        const isDotted = duration.numerator === 3
+            && duration.denominator > 0
+            && (duration.denominator & (duration.denominator - 1)) === 0;
+
+        return minRestWidth + (isDotted ? restDotWidth : 0);
     }
 }

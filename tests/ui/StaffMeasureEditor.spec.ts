@@ -14,9 +14,11 @@ import {
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../src/core/types/general.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import type { IMeasureEditorInput, IMeasurePosition } from "../../src/ui/MeasureEditor.js";
 import { ScoreElementKind } from "../../src/ui/ScoreElementRegistry.js";
 import { StaffMeasureEditor } from "../../src/ui/StaffMeasureEditor.js";
+import { SelectionSerializer } from "../../src/ui/SelectionSerializer.js";
 import {
     createEditorInput, createInstrument, createStaffEditor, hydrateMeasureEvents, noteValue, runEntry,
 } from "../unit-test-helpers.js";
@@ -91,7 +93,7 @@ const durationAt = (measure: ISbDmTrackPiece, start: IFraction): IFraction | und
     return event === undefined ? undefined : { ...event.duration };
 };
 
-describe.sequential("StaffMeasureEditor", () => {
+describe("StaffMeasureEditor", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: StaffMeasureEditor;
     let trackId: number;
@@ -382,6 +384,42 @@ describe.sequential("StaffMeasureEditor", () => {
         expect(measure.subdivisions).toHaveLength(0);
     });
 
+    it("nests a subdivision inside a slot of an existing subdivision", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        model.createSubdivision(trackId, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+        const entries = [runEntry(measure, measure.events[0])];
+
+        expect(editor.createSubdivisionForSelection(entries, 3)).toBe(true);
+
+        // The inner triplet replaces one slot of the outer one, so its normal counts parent slots and
+        // both levels carry a bracket.
+        expect(measure.subdivisions).toEqual([
+            { startIndex: 0, actual: 3, normal: 4, isTuplet: true },
+            { startIndex: 0, actual: 3, normal: 1, isTuplet: true },
+        ]);
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 36 });
+        expect(durationAt(measure, { numerator: 1, denominator: 36 })).toEqual({ numerator: 1, denominator: 36 });
+        expect(durationAt(measure, { numerator: 1, denominator: 12 })).toEqual({ numerator: 1, denominator: 12 });
+    });
+
+    it("rejects a subdivision span that leaves the subdivision it starts in", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        model.createSubdivision(trackId, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+        const entries = [runEntry(measure, measure.events[0]), runEntry(measure, measure.events[3])];
+
+        // The first slot and the rest behind the triplet: the span crosses out of the subdivision.
+        expect(editor.createSubdivisionForSelection(entries, 3)).toBe(false);
+        expect(measure.subdivisions).toEqual([{ startIndex: 0, actual: 3, normal: 4, isTuplet: true }]);
+    });
+
     it("accepts a note value that lands between two grid steps", () => {
         // The staff has no raster: a thirty-second is a plain length, written where it fits.
         const thirtySecond = { numerator: 1, denominator: 32 };
@@ -398,7 +436,7 @@ describe.sequential("StaffMeasureEditor", () => {
     });
 });
 
-describe.sequential("StaffMeasureEditor input", () => {
+describe("StaffMeasureEditor input", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: StaffMeasureEditor;
     let input: IMeasureEditorInput;
@@ -458,6 +496,55 @@ describe.sequential("StaffMeasureEditor input", () => {
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
     });
 
+    it.each([EditEntryMode.Insert, EditEntryMode.Overwrite])(
+        "rejects notes and rests at a simile cursor in entry mode %s", (mode) => {
+            model.ensureBarAvailable(2);
+            const simile = model.arrangement!.tracks[0].measures[1];
+            simile.simile = true;
+            editor.entryMode = mode;
+            const entry = runEntry(simile, simile.events[0]);
+            if (mode === EditEntryMode.Overwrite) {
+                input.selectionManager.replaceSelection([entry]);
+            }
+
+            const run = document.createElement("div");
+            run.className = "staff-note-viewer-run staff-note-viewer-simile";
+            input.scoreElementRegistry.createRef({
+                kind: ScoreElementKind.StaffRun,
+                bar: 2,
+                trackId,
+                start: { numerator: 0, denominator: 1 },
+                measure: simile,
+            }, simile)(run);
+            expect(editor.hitTest(run)).toBe(true);
+            const before = structuredClone(simile.events);
+            const execute = vi.spyOn(requisitions, "execute");
+
+            expect(editor.enterNote("1")).toBe(false);
+            expect(editor.enterRest()).toBe(false);
+            expect(execute).toHaveBeenCalledWith("showWarning", "Delete the simile before entering notes or rests.");
+            expect(execute.mock.calls.filter(([topic]) => {
+                return topic === "showWarning";
+            })).toHaveLength(2);
+            expect(execute.mock.calls.some(([topic]) => {
+                return topic === "arrangementMutated";
+            })).toBe(false);
+            expect(simile.events).toEqual(before);
+            expect(simile.simile).toBe(true);
+        },
+    );
+
+    it("accepts note lengths at an insert cursor without a selection", () => {
+        const runs = [...renderRuns().querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        editor.entryMode = EditEntryMode.Insert;
+        expect(editor.hitTest(runs[0])).toBe(true);
+        expect(input.selectionManager.hasSelection).toBe(false);
+        expect(editor.canApplyNoteLength(noteValue(NoteLength.Half))).toBe(true);
+
+        editor.entryMode = EditEntryMode.Overwrite;
+        expect(editor.canApplyNoteLength(noteValue(NoteLength.Half))).toBe(false);
+    });
+
     it("changes the style of the addressed note in the overwrite mode", () => {
         setEvents(model, [
             {
@@ -475,6 +562,27 @@ describe.sequential("StaffMeasureEditor input", () => {
         // A style change never alters a note's length.
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("2");
+    });
+
+    it("keeps the cleared cell selected, so the cursor stands where the note stood", () => {
+        setEvents(model, [
+            {
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "1",
+            },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        editor.entryMode = EditEntryMode.Overwrite;
+        input.selectionManager.replaceSelection([runEntry(measure, measure.events[0])]);
+
+        expect(editor.deleteForward()).toBe(true);
+
+        // The note is a rest now, and the cell it stood in stays selected: the view derives its cursor from a
+        // selection of one element, so the cursor keeps standing on the cell the delete emptied.
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBeUndefined();
+        const entries = [...input.selectionManager.currentSelection.values()];
+        expect(entries).toHaveLength(1);
+        expect(SelectionSerializer.coordinatesOf(entries[0]).start).toEqual({ numerator: 0, denominator: 1 });
     });
 
     it("removes the element before the cursor and pulls the rest left", () => {

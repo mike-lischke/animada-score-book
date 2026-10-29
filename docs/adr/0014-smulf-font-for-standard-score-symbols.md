@@ -9,21 +9,13 @@
 
 ## Context
 
-Standard symbols are hand-made today: two SVG sprites toggled by CSS variables, CSS shapes for the clef,
-barlines, staff lines and beams, plain text for the time signature and accents, inline SVGs for the
-decorations. A build-time script (`build/fix-svg-attributes.ts`, `npm run fix-svgs`) repairs the sprites
-after drawing-tool exports.
+Standard symbols are hand-made today: two SVG sprites toggled by CSS variables, CSS shapes for the clef, barlines, staff lines and beams, plain text for the time signature and accents, inline SVGs for the decorations. A build-time script (`build/fix-svg-attributes.ts`, `npm run fix-svgs`) repairs the sprites after drawing-tool exports.
 
-Every new symbol means hand-drawing it and wiring another mechanism, and a symbol can exist twice: the
-accent is a `>` character although a SMuFL font carries it as a glyph.
+Every new symbol means hand-drawing it and wiring another mechanism, and a symbol can exist twice: the accent is a `>` character although a SMuFL font carries it as a glyph.
 
 ## Decision
 
-We will draw standard score symbols as glyphs of a self-hosted, user-selectable SMuFL font and keep
-domain pictograms (rim, body, cross-click, scraped, blown, hand techniques) as own paths, both through
-one symbol catalog that maps every notation symbol to exactly one source. Stems, beams, staff lines,
-barlines and tuplet brackets stay drawn geometry, but take their measures from the font's engraving
-defaults and glyph anchors instead of pixel constants.
+We will draw standard score symbols as glyphs of a self-hosted, user-selectable SMuFL font and keep domain pictograms (rim, body, cross-click, scraped, blown, hand techniques) as own paths, both through one symbol catalog that maps every notation symbol to exactly one source. Stems, beams, staff lines, barlines and tuplet brackets stay drawn geometry, but take their measures from the font's engraving defaults and glyph anchors instead of pixel constants.
 
 ## Invariants
 

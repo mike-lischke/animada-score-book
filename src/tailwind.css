@@ -9,7 +9,7 @@
 @import "./generated/themes.css";
 
 /** Some TailwindCSS classes collide with our own classes or do not work as expected. */
-@source not inline("{container, tooltip, label}");
+@source not inline("{container, label}");
 
 @plugin "daisyui" {
     themes: false;

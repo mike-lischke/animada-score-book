@@ -3,13 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ComponentChild, createRef } from "preact";
+import { ComponentChild, createRef, type JSX } from "preact";
 
 import { type ICommonUIProperties, type MouseEventCallback, UIComponent } from "./UIComponent.js";
 import type { Orientation } from "./ui-types.js";
 
-export interface IButtonProperties extends ICommonUIProperties {
-    innerRef?: preact.RefObject<HTMLButtonElement>;
+export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElements["button"]["role"]> {
+    innerRef?: preact.RefObject<HTMLButtonElement | null>;
 
     /** The caption of the button. Alternatively you can add a text child instead. */
     caption?: string;
@@ -20,6 +20,9 @@ export interface IButtonProperties extends ICommonUIProperties {
      */
     round?: boolean;
     orientation?: Orientation;
+
+    /** Uses a compact, stable 40 px control height. Image-only buttons are square. */
+    compact?: boolean;
 
     /** When set it is assumed there's only a single (image) child. Different styling rules apply. */
     imageOnly?: boolean;
@@ -35,6 +38,9 @@ export interface IButtonProperties extends ICommonUIProperties {
 
     value?: string;
 
+    /** Pressed state of a toggle button. Rendered as the `aria-pressed` attribute. */
+    "aria-pressed"?: boolean;
+
     popoverTarget?: string;
 
     /**
@@ -47,24 +53,25 @@ export interface IButtonProperties extends ICommonUIProperties {
 }
 
 export class Button extends UIComponent<IButtonProperties> {
-    private buttonRef: preact.RefObject<HTMLButtonElement>;
+    private buttonRef: preact.RefObject<HTMLButtonElement | null>;
 
     public constructor(props: IButtonProperties) {
         super(props);
 
-        this.buttonRef = props.innerRef ?? createRef<HTMLButtonElement>();
+        this.buttonRef = props.innerRef ?? createRef<HTMLButtonElement | null>();
     }
 
     public render(): ComponentChild {
         const {
-            id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
-            name, type, value, popoverTarget, onClick, plain
+            id, children, caption, style, orientation, round, compact, imageOnly, disabled, isDefault, title, role,
+            name, type, value, popoverTarget, onClick, plain, "aria-pressed": ariaPressed
         } = this.props;
 
         const className = this.generateFinalClassName([
             "btn",
             "du-btn",
             this.classFromProperty(!plain && round, "du-btn-circle"),
+            this.classFromProperty(compact, "compact"),
             this.classFromProperty(imageOnly, "imageOnly"),
             this.classFromProperty(!plain && disabled, "du-btn-disabled"),
             this.classFromProperty(!plain && isDefault, "du-btn-primary"),
@@ -87,6 +94,7 @@ export class Button extends UIComponent<IButtonProperties> {
             role={role}
             name={name}
             value={value}
+            aria-pressed={ariaPressed}
             {...this.dataAttributes}
             popoverTarget={popoverTarget}
             onClick={onClick}

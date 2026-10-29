@@ -12,7 +12,6 @@ import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBo
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
-import type { IRadialMenuItem, IRadialMenuHost } from "../../src/components/ui/framework/RadialMenu.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
 import type { IMeasureEditorInput } from "../../src/ui/MeasureEditor.js";
 import { ScoreElementKind } from "../../src/ui/ScoreElementRegistry.js";
@@ -46,7 +45,7 @@ const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined 
     return event?.noteStyleId;
 };
 
-describe.sequential("GridMeasureEditor clearSelection", () => {
+describe("GridMeasureEditor clearSelection", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let mutatedCalls: number;
@@ -168,7 +167,7 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
+describe("GridMeasureEditor setSelectionNoteStyle", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let mutatedCalls: number;
@@ -271,7 +270,7 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor note length entry", () => {
+describe("GridMeasureEditor note length entry", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
 
@@ -368,7 +367,7 @@ describe.sequential("GridMeasureEditor note length entry", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor subdivision editing", () => {
+describe("GridMeasureEditor subdivision editing", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let mutatedCalls: number;
@@ -577,7 +576,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor input", () => {
+describe("GridMeasureEditor input", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let input: IMeasureEditorInput;
@@ -637,9 +636,11 @@ describe.sequential("GridMeasureEditor input", () => {
 
     it("follows a selection change to place the cursor", () => {
         const measure = model.arrangement!.tracks[0].measures[0];
+        const entry = noteEntry(measure, { numerator: 1, denominator: 16 });
+        input.selectionManager.replaceSelection([entry]);
 
         editor.cursorFromSelection({
-            added: [noteEntry(measure, { numerator: 1, denominator: 16 })],
+            added: [entry],
             removed: [],
         });
         editor.setNoteLength(noteValue(NoteLength.Quarter));
@@ -675,31 +676,21 @@ describe.sequential("GridMeasureEditor input", () => {
         expect(noteAtStep(measure, 3)).toBe("1");
     });
 
-    it("opens the note action menu for the addressed cell and writes the picked style", () => {
+    it("keeps the cleared cell selected, so the cursor stands where the note stood", () => {
         const measure = model.arrangement!.tracks[0].measures[0];
         setCellNote(model, trackId, 1, 2, "1");
-        const opened: IRadialMenuItem[][] = [];
-        const menu: IRadialMenuHost = {
-            open: (anchorRect, placement, items) => {
-                opened.push(items);
-            },
-        };
-        editor = new GridMeasureEditor(model, { ...input, noteActionMenu: menu });
-        editor.editMode = true;
-        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+        input.selectionManager.replaceSelection([noteEntry(measure, { numerator: 2, denominator: 16 })]);
 
-        expect(editor.hasNoteActionMenu).toBe(true);
-        expect(editor.hitTest(cells[2])).toBe(true);
-        editor.openNoteActionMenu();
+        expect(editor.deleteForward()).toBe(true);
 
-        expect(opened).toHaveLength(1);
-        expect(opened[0].map((item) => {
-            return item.id;
-        })).toEqual(["1", "2"]);
+        // The cell holds a rest now and stays selected: the view derives its cursor from a selection of one
+        // element, so the cursor keeps standing on the cell the delete emptied.
+        expect(noteAtStep(measure, 2)).toBeUndefined();
+        const entries = [...input.selectionManager.currentSelection.values()];
+        expect(entries).toHaveLength(1);
 
-        opened[0][1].onClick?.();
-
-        expect(noteAtStep(measure, 2)).toBe("2");
+        // The coordinates come back reduced, so step 2 of 16 cells reads as an eighth.
+        expect(SelectionSerializer.coordinatesOf(entries[0]).start).toEqual({ numerator: 1, denominator: 8 });
     });
 
     it("rejects a hit test outside the edit mode", () => {

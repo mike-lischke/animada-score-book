@@ -141,8 +141,8 @@ export class SmuflFontFile {
             offset += 1;
 
             const tagIndex = flags & 0x3F;
-            let isCmap = false;
-            let isTransformable = false;
+            let isCmap: boolean;
+            let isTransformable: boolean;
             if (tagIndex === SmuflFontFile.woff2ExplicitTagIndex) {
                 const tag = data.toString("latin1", offset, offset + 4);
                 offset += 4;
@@ -298,7 +298,7 @@ export class SmuflFontFile {
             let rangeStart = -1;
 
             for (let code = first; code <= last; code += 1) {
-                let glyph = 0;
+                let glyph: number;
                 if (rangeOffset === 0) {
                     glyph = (code + delta) & 0xFFFF;
                 } else {

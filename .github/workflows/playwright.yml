@@ -23,7 +23,8 @@ jobs:
     timeout-minutes: 30
 
     container:
-      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      # Must match the @playwright/test version in package.json.
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
 
     services:
       mysql:
@@ -45,7 +46,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: 26.x
           cache: npm
 
       - name: Install dependencies

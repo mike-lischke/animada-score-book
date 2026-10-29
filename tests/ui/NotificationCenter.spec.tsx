@@ -11,7 +11,7 @@ import {
 } from "../../src/components/ui/NotificationCenter/NotificationCenter.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe.sequential("NotificationCenter", () => {
+describe("NotificationCenter", { concurrent: false }, () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.restoreAllMocks();
@@ -27,7 +27,7 @@ describe.sequential("NotificationCenter", () => {
     it("renders the notification center DOM", () => {
         const { container } = render(renderNotificationCenter());
 
-        expect(container.querySelector(".notificationCenter")).not.toBeNull();
+        expect(container.querySelector(".notification-center")).not.toBeNull();
     });
 
     it("has no toasts initially", () => {
@@ -85,7 +85,7 @@ describe.sequential("NotificationCenter", () => {
         let toasts = container.querySelectorAll(".toast");
         expect(toasts).toHaveLength(1);
 
-        const closeButton = toasts[0].querySelector(".closeButton")!;
+        const closeButton = toasts[0].querySelector(".close-button")!;
         await act(() => {
             fireEvent.click(closeButton);
         });

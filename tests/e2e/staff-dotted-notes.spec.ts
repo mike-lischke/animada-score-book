@@ -44,10 +44,17 @@ const snapshot = {
 const growOf = (page: Page, index: number): Promise<string> => {
     return page.evaluate((runIndex) => {
         const row = document.querySelector(".staff-measure-track-row");
-        const run = row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run")[runIndex];
+        const runs = [...(row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run") ?? [])];
+        const total = runs.reduce((sum, run) => {
+            return sum + run.getBoundingClientRect().width;
+        }, 0);
+        const width = runs[runIndex]?.getBoundingClientRect().width ?? Number.NaN;
 
-        return run?.style.flex.split(" ")[0] ?? "";
-    }, index);
+        return width / total;
+    }, index).then((share) => {
+        // The runs share their row by duration, so a run's share of it is its duration in the bar.
+        return String(Number(share.toFixed(4)));
+    });
 };
 
 test.beforeEach(async ({ page }) => {
@@ -66,16 +73,16 @@ test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .noteLengthToolbar")).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
 });
 
 test("dots the selected note and takes the dot away again", async ({ page }) => {
-    const dot = page.locator(".noteDotButton");
+    const dot = page.locator(".note-dot-button");
 
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .note-length-toolbar")).toBeVisible();
     await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
-    await expect(page.locator(".noteLengthButton.du-btn-primary")).toHaveCount(1);
+    await expect(page.locator(".note-length-button.du-btn-primary")).toHaveCount(1);
     await expect(dot).not.toHaveClass(/du-btn-primary/);
 
     // The dot turns the quarter note into a dotted quarter, which takes three steps from the notes

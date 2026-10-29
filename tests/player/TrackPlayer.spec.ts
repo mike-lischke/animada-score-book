@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RangeArticulations } from "../../src/core/RangeArticulations.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
+    Damping, SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackPiece, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
@@ -161,7 +161,7 @@ const makeTrack = (opts?: {
         audioBuffer: {} as AudioBuffer,
         instrument: track.instrument,
 
-        sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
 
     } as IAudioData;
 
@@ -275,6 +275,22 @@ describe("TrackPlayer", () => {
         });
 
         expect(idsAfter).toEqual(idsBefore);
+
+        player.dispose();
+    });
+
+    it("leaves a bar it has no measure for to the track that holds it", async () => {
+        const track = makeTrack({ instrumentLoaded: true });
+        const player = new TrackPlayer(track, makeTimeCoordinator());
+
+        // An arrangement that grew a bar states an order covering it before every track holds the measure, so the
+        // player has to skip it instead of reading notes from nothing.
+        await expect(requisitions.execute("playbackOrderChanged", {
+            arrangementId: track.arrangement.id, bars: [1, 2],
+        })).resolves.toBe(true);
+
+        const events = player.getEvents({ start: 0, end: 2 });
+        expect(events.length).toBeGreaterThan(0);
 
         player.dispose();
     });

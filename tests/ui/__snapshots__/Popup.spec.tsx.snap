@@ -1,0 +1,27 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Popup > matches the baseline snapshot with all props set 1`] = `
+<div
+  class="container popup visible noArrow custom-popup bottom-end"
+  id="complete-popup"
+  style="flex-direction: row; --popup-viewport-width: 1024px; --popup-viewport-height: 768px; left: 140px; top: 88px;"
+>
+  <span>
+    Popup header
+  </span>
+  <button
+    type="button"
+  >
+    Popup action
+  </button>
+</div>
+`;
+
+exports[`Popup > matches the baseline snapshot with minimal props 1`] = `
+<div
+  class="container popup visible top-end"
+  style="flex-direction: column; --popup-viewport-width: 1024px; --popup-viewport-height: 768px; left: 0px; top: 0px;"
+>
+  Popup content
+</div>
+`;

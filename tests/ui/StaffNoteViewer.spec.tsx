@@ -22,8 +22,17 @@ const fraction = (numerator: number, denominator: number): IFraction => {
     return { numerator, denominator };
 };
 
-/** Width of a partial beam: its fixed length plus the stem's right edge, which it ends on. */
-const beamStubWidth = "calc(12px + var(--stem-right-edge, 0px))";
+/**
+ * @param value The style value of a tuplet label.
+ *
+ * @returns The percentage the value states, which is the span the label anchors, without the ink and the air the
+ *          label adds beyond it.
+ */
+const percentOf = (value: string): number => {
+    const match = /([\d.]+)%/.exec(value);
+
+    return match === null ? Number.NaN : Number.parseFloat(match[1]);
+};
 
 /**
  * @param barline The barline element to read.
@@ -76,11 +85,12 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
         sampleProfile,
     } as unknown as IAudioData;
 
-    const track = { id: 100 } as ISbDmTrack;
+    const track = { id: 100, measures: [] as ISbDmTrackPiece[] };
+    const trackEntity = track as unknown as ISbDmTrack;
     const measure: ISbDmTrackPiece = {
         type: SbDmEntityType.TrackPiece,
         id: 13,
-        track,
+        track: trackEntity,
         number: 1,
         meter: {
             beats: 4,
@@ -100,13 +110,14 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
             measure,
             start: { ...measureEvent.start },
             duration: { ...measureEvent.duration },
-            track,
+            track: trackEntity,
             timing: { bar: 1, step: 0 },
             audioData: measureEvent.noteStyleId !== undefined ? audioData : undefined,
         };
     });
 
     measure.noteEvents.push(...noteEvents);
+    track.measures.push(measure);
 
     return measure;
 };
@@ -171,7 +182,34 @@ const buildFullBarEndingInThirtySecond = (): ISbDmTrackPiece => {
     return buildMeasure(events, []);
 };
 
-describe.sequential("StaffNoteViewer beams", () => {
+/**
+ * Builds a measure with one beamed group of sixteenths, each note on the staff line the caller
+ * gives, followed by a rest so the group ends there.
+ *
+ * @param noteLines The staff line of each note, in measure order.
+ *
+ * @returns The measure with resolved note events.
+ */
+const buildMultiLineBeamMeasure = (noteLines: number[]): ISbDmTrackPiece => {
+    const events = [
+        ...noteLines.map((_, index) => {
+            return event(fraction(index, 16), fraction(1, 16), "1");
+        }),
+        event(fraction(noteLines.length, 16), fraction(16 - noteLines.length, 16)),
+    ];
+
+    const measure = buildMeasure(events, []);
+
+    measure.noteEvents.forEach((noteEvent, index) => {
+        if (noteEvent.audioData !== undefined) {
+            noteEvent.audioData = { ...noteEvent.audioData, noteLine: noteLines[index] };
+        }
+    });
+
+    return measure;
+};
+
+describe("StaffNoteViewer beams", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     afterEach(() => {
@@ -203,29 +241,11 @@ describe.sequential("StaffNoteViewer beams", () => {
             return run.classList.contains("staff-note-viewer-note-run");
         })).toBe(true);
 
-        const beamWidths = runs.map((run) => {
-            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
-                return beam.style.width;
-            });
+        const beamCounts = runs.map((run) => {
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        // The eight sixteenths are beamed in two pulse groups with two beams each.
-        // The last sixteenth of the second group must not carry a beam into the tuplet.
-        for (let index = 0; index < 8; index++) {
-            expect(beamWidths[index]).toHaveLength(2);
-        }
-
-        expect(beamWidths[3]).toEqual([beamStubWidth, beamStubWidth]);
-        expect(beamWidths[7]).toEqual([beamStubWidth, beamStubWidth]);
-
-        // The 3:8 slots (events 8 and 12) are eighths; the outer 2:1 slot (event 11) is a
-        // sixteenth and the inner 2:1 slots (events 9 and 10) are thirty-seconds. The tuplet
-        // group is beamed as one run whose outer beam spans all five notes.
-        expect(beamWidths[8]).toEqual(["100%"]);
-        expect(beamWidths[9]).toEqual(["100%", "100%", "100%"]);
-        expect(beamWidths[10]).toEqual(["100%", "100%", beamStubWidth]);
-        expect(beamWidths[11]).toEqual(["100%", beamStubWidth]);
-        expect(beamWidths[12]).toEqual([beamStubWidth]);
+        expect(beamCounts).toEqual([2, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0]);
     });
 
     it("positions the tuplet marker over the first and last noteheads", () => {
@@ -249,11 +269,13 @@ describe.sequential("StaffNoteViewer beams", () => {
             return;
         }
 
-        // First note starts at 1/2, last at 5/6; both noteheads sit half a step (1/32) later.
-        const leftPercent = parseFloat(bracket.style.left);
-        const widthPercent = parseFloat(bracket.style.width);
-        expect(leftPercent).toBeCloseTo(53.125, 3);
-        expect(widthPercent).toBeCloseTo(33.333, 3);
+        // First note starts at 1/2, last at 5/6; both noteheads sit half a step (1/32) later. The bracket extends
+        // that span: a notehead reaches left of its anchor, and the bracket keeps its air beyond both heads.
+        expect(percentOf(bracket.style.left)).toBeCloseTo(53.125, 3);
+        expect(percentOf(bracket.style.width)).toBeCloseTo(33.333, 3);
+        expect(bracket.style.left).toContain("var(--glyph-ink-width-");
+        expect(bracket.style.width).toContain("var(--glyph-ink-width-");
+        expect(bracket.style.left).toContain("--staff-space");
     });
 
     it("brackets a tuplet over its rests, not only over its notes", () => {
@@ -290,11 +312,12 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         // The 3:8 group holds a single note between two rests. The bracket has to span the whole
         // group — from the first rest's position to the last rest's — and not only the note. A rest
-        // sits centred in its slot, so the bracket runs from 7/12 to 11/12.
-        const leftPercent = parseFloat(bracket.style.left);
-        const widthPercent = parseFloat(bracket.style.width);
-        expect(leftPercent).toBeCloseTo(58.333, 3);
-        expect(widthPercent).toBeCloseTo(33.333, 3);
+        // sits centred in its slot, so the bracket runs from 7/12 to 11/12 and reaches half a rest beyond that.
+        expect(percentOf(bracket.style.left)).toBeCloseTo(58.333, 3);
+        expect(percentOf(bracket.style.width)).toBeCloseTo(33.333, 3);
+        expect(bracket.style.left).toContain("var(--glyph-ink-width-rest");
+        expect(bracket.style.left).toContain("/ 2");
+        expect(bracket.style.left).not.toContain("--glyph-ink-width-notehead");
     });
 
     it("beams a pair of thirty-seconds outside a subdivision", () => {
@@ -317,15 +340,11 @@ describe.sequential("StaffNoteViewer beams", () => {
         );
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
-        const beams = runs.map((run) => {
-            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
-                return beam.style.width;
-            });
+        const beamCounts = runs.map((run) => {
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        // Both notes carry three beam levels: the first bridges to its neighbour, the second stubs back.
-        expect(beams[0]).toEqual(["100%", "100%", "100%"]);
-        expect(beams[1]).toEqual([beamStubWidth, beamStubWidth, beamStubWidth]);
+        expect(beamCounts.slice(0, 2)).toEqual([3, 0]);
     });
 
     it("beams a pair of dotted thirty-seconds with three beams", () => {
@@ -349,10 +368,10 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
         const beamCounts = runs.map((run) => {
-            return run.querySelectorAll(".staff-note-viewer-beam").length;
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        expect(beamCounts.slice(0, 2)).toEqual([3, 3]);
+        expect(beamCounts.slice(0, 2)).toEqual([3, 0]);
     });
 
     it("beams a 2:1 split of a step as thirty-seconds", () => {
@@ -376,11 +395,10 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
         const beamCounts = runs.map((run) => {
-            return run.querySelectorAll(".staff-note-viewer-beam").length;
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        // The slots hold thirty-seconds, so they need three beams even though the split nests once.
-        expect(beamCounts.slice(0, 2)).toEqual([3, 3]);
+        expect(beamCounts.slice(0, 2)).toEqual([3, 0]);
     });
 
     it("points the trailing beam stub towards the group for mixed durations", () => {
@@ -405,25 +423,59 @@ describe.sequential("StaffNoteViewer beams", () => {
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
         expect(runs).toHaveLength(3);
 
-        const beams = runs.map((run) => {
-            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
-                return { left: beam.style.left, width: beam.style.width };
-            });
-        });
+        const beam = runs[0].querySelector<SVGSVGElement>(".staff-note-viewer-beam")!;
+        const strokes = [...beam.querySelectorAll<SVGRectElement>("g > rect")];
 
-        // The first sixteenth stubs right, the middle eighth bridges the primary beam, and the last
-        // sixteenth stubs both its beams left towards the group.
-        expect(beams[0]).toEqual([
-            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
-            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: beamStubWidth },
-        ]);
-        expect(beams[1]).toEqual([
-            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
-        ]);
-        expect(beams[2]).toEqual([
-            { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
-            { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
-        ]);
+        expect(strokes).toHaveLength(3);
+        expect(strokes[0].style.width).toBe(beam.style.width);
+        expect(strokes[1].getAttribute("x")).toBe("0");
+        expect(Number.parseFloat(strokes[2].getAttribute("x") ?? "")).toBeGreaterThan(0);
+        expect(strokes[1].style.width).toBe("calc(12px + var(--stem-thickness, 2px))");
+        expect(strokes[2].style.width).toBe(strokes[1].style.width);
+        expect(runs[1].querySelector(".staff-note-viewer-beam")).toBeNull();
+        expect(runs[2].querySelector(".staff-note-viewer-beam")).toBeNull();
+    });
+
+    it("applies one shared beam line to the runs of a group across staff lines", () => {
+        // Four sixteenths of one beam group, on four different lines. The group draws one beam line for
+        // all of them, so each stem ends where that line is instead of above its own notehead.
+        const measure = buildMultiLineBeamMeasure([1, 3, 2, 4]);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                maxNoteLine={4}
+                measureWidth={1624}
+            />,
+        );
+
+        const runs = [
+            ...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-note-run"),
+        ];
+        expect(runs).toHaveLength(4);
+
+        // The row is 1600 px wide and the centre line is 2.5. The group's lines are [1, 3, 2, 4], so the
+        // beam line rises by 0.1 per px and its base keeps the shortest stem at 35 px: 45, 55, 35, 45 px.
+        expect(runs.map((run) => {
+            return run.style.getPropertyValue("--stem-tip");
+        })).toEqual(["45px", "55px", "35px", "45px"]);
+
+        const stroke = runs[0].querySelector<HTMLElement>(".staff-note-viewer-beam");
+        expect(stroke?.style.top).toBe("calc(50% - 60px)");
+        expect(stroke?.style.height).toBe("calc(var(--beam-thickness, 4px) + 1 * (var(--beam-thickness, 4px)"
+            + " + var(--beam-spacing, 2px)))");
+        expect(stroke?.tagName.toLowerCase()).toBe("svg");
+        expect(stroke?.style.clipPath).toBe("");
+        expect(stroke?.querySelectorAll("rect")).toHaveLength(2);
+        const slope = Number.parseFloat(stroke?.querySelector("g")?.getAttribute("transform")?.split(" ")[1] ?? "");
+        expect(slope).toBeCloseTo(0.1);
+        expect(stroke?.querySelector("rect")?.style.height).toBe("var(--beam-thickness, 4px)");
     });
 
     it("draws adjacent rests in one pulse as the measure holds them", () => {
@@ -831,7 +883,7 @@ describe.sequential("StaffNoteViewer beams", () => {
     });
 });
 
-describe.sequential("StaffNoteViewer barlines", () => {
+describe("StaffNoteViewer barlines", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     afterEach(() => {
@@ -891,7 +943,8 @@ describe.sequential("StaffNoteViewer barlines", () => {
     });
 
     it("draws a repeat that only opens as the barline of the bar it opens", () => {
-        // The bar before it keeps none: a barline sits between two bars and a repeat is drawn once.
+        // The bar before it keeps none: a bar that carries no mark of its own draws no barline where the bar
+        // after it opens a section.
         expect(renderBarline(1, { 2: { start: true } }).querySelector(".staff-note-viewer-barline")).toBeNull();
 
         const viewer = renderBarline(2, { 2: { start: true } });
@@ -902,48 +955,54 @@ describe.sequential("StaffNoteViewer barlines", () => {
         expect(partsOf(leading)).toEqual(["thick", "thin", "dots"]);
         expect(viewer.style.getPropertyValue("--staff-note-clearance")).toBe("0px");
 
-        // The barline reaches into the bar, so the notes keep the room the last note of the bar (a sixteenth in
-        // this fixture, which leaves 96.875 % of the bar) leaves before the barline at the other end, less the
-        // half grid step the first notehead reaches left of its anchor.
-        const room = viewer.style.getPropertyValue("--staff-opening-barline-room");
-        expect(room).toContain("max(calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap)),");
-        expect(room).toContain("96.875%");
-        expect(room).toContain("- calc(3.125% - var(--glyph-ink-width-noteheadblack))");
+        // The barline stands inside the bar it opens, so the bar keeps its own ink plus the gap its dots keep free
+        // of notes.
+        expect(viewer.style.getPropertyValue("--staff-opening-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
         expect(viewer.style.getPropertyValue("--staff-closing-barline-room")).toBe("0px");
     });
 
-    it("keeps the notes of the next bar clear of the half of a barline that straddles the boundary", () => {
-        const viewer = renderBarline(2, { 1: { end: true }, 2: { start: true } });
+    it("keeps the room a repeat takes the same whatever the bar holds", () => {
+        const withNotes = renderBarline(1, { 1: { start: true, end: true } });
+        const openingRoom = withNotes.style.getPropertyValue("--staff-opening-barline-room");
+        const closingRoom = withNotes.style.getPropertyValue("--staff-closing-barline-room");
 
-        // The barline stands centred on the boundary, so its inner half reaches into this bar.
-        expect(viewer.style.getPropertyValue("--staff-opening-barline-room"))
-            .toContain("var(--barline-repeat-both-width)");
-    });
+        expect(openingRoom).toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
+        expect(closingRoom).toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
 
-    it("leaves the room a repeat barline takes to the rest a bar holds", () => {
-        // A rest stands centred in its slot and keeps that room by itself, so a bar of rests is not shifted.
-        const viewer = renderBarline(1, { 1: { start: true, end: true } }, false,
+        // A bar holding nothing but a whole rest keeps the same room: the barline states the room, so no track's
+        // content moves when a repeat is set.
+        const withRest = renderBarline(1, { 1: { start: true, end: true } }, false,
             [event(fraction(0, 1), fraction(1, 1))]);
 
-        expect(viewer.style.getPropertyValue("--staff-opening-barline-room")).toBe("0px");
-        expect(viewer.style.getPropertyValue("--staff-closing-barline-room")).toBe("0px");
+        expect(withRest.style.getPropertyValue("--staff-opening-barline-room")).toBe(openingRoom);
+        expect(withRest.style.getPropertyValue("--staff-closing-barline-room")).toBe(closingRoom);
     });
 
-    it("draws one barline for a repeat that closes where the next one opens", () => {
-        const viewer = renderBarline(1, { 1: { end: true }, 2: { start: true } });
-        const barline = viewer.querySelector(".staff-note-viewer-barline")!;
+    it("draws the repeat that closes a bar and the one that opens the next as two barlines", () => {
+        const marks = { 1: { end: true }, 2: { start: true } };
 
-        // The ink straddles the boundary, so the dots of both repeats hang on the strokes in the middle.
-        expect(partsOf(barline)).toEqual(["dots", "thin", "thick", "thin", "dots"]);
-        expect(barline.classList.contains("staff-note-viewer-barline-centred")).toBe(true);
+        // The bar the section closes at ends with its own repeat, which reaches into it from the right.
+        const closing = renderBarline(1, marks);
+        const endBarline = closing.querySelector(".staff-note-viewer-barline-end")!;
 
-        // Its inner half reaches into the bar, so the bar keeps the room of that ink free of notes.
-        expect(viewer.style.getPropertyValue("--staff-closing-barline-room"))
-            .toContain("var(--barline-repeat-both-width)");
+        expect(partsOf(endBarline)).toEqual(["dots", "thin", "thick"]);
+        expect(closing.querySelector(".staff-note-viewer-barline-start")).toBeNull();
+        expect(closing.style.getPropertyValue("--staff-closing-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
+
+        // The bar the next section opens at starts with its own repeat, which reaches into it from the left.
+        const opening = renderBarline(2, marks);
+        const startBarline = opening.querySelector(".staff-note-viewer-barline-start")!;
+
+        expect(partsOf(startBarline)).toEqual(["thick", "thin", "dots"]);
+        expect(opening.querySelector(".staff-note-viewer-barline-centred")).toBeNull();
+        expect(opening.style.getPropertyValue("--staff-opening-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
     });
 });
 
-describe.sequential("StaffNoteViewer printed markings", () => {
+describe("StaffNoteViewer printed markings", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     afterEach(() => {
@@ -1002,5 +1061,163 @@ describe.sequential("StaffNoteViewer printed markings", () => {
         renderResult = renderWithMarkings();
 
         expect(renderResult.container.querySelectorAll(".staff-note-viewer-articulations")).toHaveLength(0);
+    });
+});
+
+/** Where a bar's first and last event are drawn, and the room the row keeps before its closing barline. */
+interface IBarRooms {
+    /** Room the row keeps at the opening barline, in px. */
+    readonly leftPx: number;
+
+    /** Room the row keeps before its closing barline, in px. */
+    readonly rightPx: number;
+
+    /** Room between the opening barline and the first event's anchor, in px. */
+    readonly leadingPx: number;
+
+    /** Room between the last event's anchor and the closing barline, in px. */
+    readonly trailingPx: number;
+
+    /** Room between the opening barline and the first event's anchor at the nominal width, in px. */
+    readonly nominalLeadingPx: number;
+}
+
+describe("StaffNoteViewer measure width", { concurrent: false }, () => {
+    let renderResult: RenderResult | null;
+
+    /** Half a grid step: the offset a notehead is drawn at behind its onset, as a fraction of the bar. */
+    const halfStep = 1 / 32;
+
+    afterEach(() => {
+        renderResult?.unmount();
+        cleanup();
+        renderResult = null;
+    });
+
+    /**
+     * @returns A measure of four quarter notes, whose last note keeps most of the bar to the closing barline.
+     */
+    const quarterBar = (): ISbDmTrackPiece => {
+        return buildMeasure(Array.from({ length: 4 }, (_, index) => {
+            return event(fraction(index, 4), fraction(1, 4), "1");
+        }), []);
+    };
+
+    /**
+     * @returns A measure of sixteen sixteenth notes, whose outer notes sit close to both barlines.
+     */
+    const sixteenthBar = (): ISbDmTrackPiece => {
+        return buildMeasure(Array.from({ length: 16 }, (_, index) => {
+            return event(fraction(index, 16), fraction(1, 16), "1");
+        }), []);
+    };
+
+    /**
+     * Renders a bar in a column of the given width.
+     *
+     * @param measureWidth The width the column is drawn at.
+     * @param nominalWidth The width the bar's notation is opened up from.
+     * @param measure The bar to render, a bar of sixteenth notes by default.
+     *
+     * @returns The room the row keeps before its closing barline, and the room either side of its notation at the
+     *          drawn and the nominal width, in px.
+     */
+    const roomsOf = (measureWidth: number, nominalWidth: number, measure = sixteenthBar()): IBarRooms => {
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                measureWidth={measureWidth}
+                nominalWidth={nominalWidth}
+            />,
+        );
+
+        const row = renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")!;
+        const leftPx = Number.parseFloat(row.style.getPropertyValue("--staff-grid-inset-left"));
+        const rightPx = Number.parseFloat(row.style.getPropertyValue("--staff-grid-inset-right"));
+        const gridWidthPx = measureWidth - leftPx - rightPx;
+
+        // The first event starts at the opening barline, the bar to sixteenths ends at the closing one.
+        return {
+            leftPx,
+            rightPx,
+            leadingPx: leftPx + (halfStep * gridWidthPx),
+            trailingPx: measureWidth - (leftPx + ((1 - halfStep) * gridWidthPx)),
+            nominalLeadingPx: halfStep * nominalWidth,
+        };
+    };
+
+    it("fills a column at its nominal width without an inset", () => {
+        const rooms = roomsOf(1280, 1280);
+
+        expect(rooms.leadingPx).toBe(rooms.nominalLeadingPx);
+        expect(rooms.rightPx).toBe(0);
+    });
+
+    it("holds the first note in place when the column grows", () => {
+        const rooms = roomsOf(1680, 1280);
+
+        // The note is drawn half a step into the bar; its room is 40 px at the nominal width and stays there.
+        expect(rooms.nominalLeadingPx).toBeCloseTo(40, 2);
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("holds the first note in place when the column shrinks", () => {
+        const rooms = roomsOf(1080, 1280);
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("closes the room before the closing barline no further than the room of the first note", () => {
+        // Sixteenths keep only an eighth of the bar themselves, so a column of 700 px would squeeze the last one
+        // to 12 px: the grid keeps the first note's 40 px on that side as well.
+        const rooms = roomsOf(700, 1280);
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+        expect(rooms.rightPx).toBeGreaterThan(0);
+        expect(rooms.trailingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("holds the first note in place where its own duration keeps most of the bar to the closing barline", () => {
+        // The last quarter note keeps 280 px to the barline at the nominal width, which the closed-up gap gives up
+        // first: the grid then narrows only by what the first note's room gains.
+        const rooms = roomsOf(1680, 1280, quarterBar());
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+        expect(rooms.rightPx).toBe(0);
+    });
+
+    it("holds the first note in place in a column at its content minimum", () => {
+        // Four quarter notes make a column of 286 px, whose notation is compressed behind the first note.
+        const rooms = roomsOf(286, 1280, quarterBar());
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("lets a whole note follow its column, which holds nothing but that note", () => {
+        // The note is the bar's only slot, so it keeps its share of the column instead of its room at the nominal
+        // width: widening the column moves the note with it.
+        const rooms = roomsOf(1680, 1280, buildMeasure([event(fraction(0, 1), fraction(1, 1), "1")], []));
+
+        expect(rooms.leadingPx).toBeCloseTo(halfStep * 1680, 1);
+        expect(rooms.rightPx).toBe(0);
+    });
+
+    it("centres a whole-bar rest in its column at every width", () => {
+        // A rest covering the bar is the bar's only slot, so it stays centred whatever width the column is drawn at,
+        // instead of hanging on the position it holds at the nominal width.
+        const measure = buildMeasure([event(fraction(0, 1), fraction(1, 1))], []);
+        const narrow = roomsOf(300, 1280, measure);
+        const shrunk = roomsOf(780, 1280, measure);
+
+        expect(narrow.leftPx).toBe(0);
+        expect(narrow.rightPx).toBe(0);
+        expect(shrunk.leftPx).toBe(0);
+        expect(shrunk.rightPx).toBe(0);
     });
 });

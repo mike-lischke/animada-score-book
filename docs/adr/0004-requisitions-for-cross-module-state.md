@@ -7,22 +7,13 @@
 
 ## Context
 
-Modules across layers need to react to each other's state: edit mode, playback state, selection.
-Direct calls — a public setter or a mutable field on a foreign object — bind the caller to the
-receiver's API and reintroduce the dependency the event bus exists to prevent; cycles become possible
-again.
+Modules across layers need to react to each other's state: edit mode, playback state, selection. Direct calls — a public setter or a mutable field on a foreign object — bind the caller to the receiver's API and reintroduce the dependency the event bus exists to prevent; cycles become possible again.
 
-A concrete failure shows the second half of the problem: `SelectionView` learns the edit mode only
-from `editModeChanged`, but it is created when the arrangement viewer mounts, which can happen after
-the app published the current state. The view therefore started with `editMode === false` and the
-selection overlay lost its delete button. Setting the state with a setter would have fixed the
-symptom while recreating the coupling that caused the confusion in the first place.
+A concrete failure shows the second half of the problem: `SelectionView` learns the edit mode only from `editModeChanged`, but it is created when the arrangement viewer mounts, which can happen after the app published the current state. The view therefore started with `editMode === false` and the selection overlay lost its delete button. Setting the state with a setter would have fixed the symptom while recreating the coupling that caused the confusion in the first place.
 
 ## Decision
 
-We will send a requisition for every state change other modules need, and treat direct calls as the
-exception. A class that depends on a published state keeps its own copy, updated by its handler.
-Objects it creates later (views, helpers) are constructed from that remembered value.
+We will send a requisition for every state change other modules need, and treat direct calls as the exception. A class that depends on a published state keeps its own copy, updated by its handler. Objects it creates later (views, helpers) are constructed from that remembered value.
 
 ## Invariants
 

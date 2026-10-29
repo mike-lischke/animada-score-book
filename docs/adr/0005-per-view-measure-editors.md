@@ -7,19 +7,11 @@
 
 ## Context
 
-One `GridMeasureEditor` serves both views, addressed through `IGridEditorPosition` and guarded in the
-input controller by `instanceof` plus a view-mode branch. That mixes two address spaces: the grid has a
-fixed raster of steps, the staff has none — notes are aligned to grid points for the eye only. The grid
-also needs a projection the staff must never see: a long note is split into virtual sub-notes so single
-cells can be selected and edited.
+One `GridMeasureEditor` serves both views, addressed through `IGridEditorPosition` and guarded in the input controller by `instanceof` plus a view-mode branch. That mixes two address spaces: the grid has a fixed raster of steps, the staff has none — notes are aligned to grid points for the eye only. The grid also needs a projection the staff must never see: a long note is split into virtual sub-notes so single cells can be selected and edited.
 
 ## Decision
 
-We will give each view its own measure editor, split by address space rather than by operation.
-`StaffMeasureEditor` addresses positions exclusively by exact fractions (`{ bar, trackId, start }`) and
-owns the edits of the free staff layout. `GridMeasureEditor` owns the raster: cells including a
-subdivision slot's exact start fraction, space making on the grid, and the virtual sub-note projection.
-The input controller holds both and dispatches per view mode.
+We will give each view its own measure editor, split by address space rather than by operation. `StaffMeasureEditor` addresses positions exclusively by exact fractions (`{ bar, trackId, start }`) and owns the edits of the free staff layout. `GridMeasureEditor` owns the raster: cells including a subdivision slot's exact start fraction, space making on the grid, and the virtual sub-note projection. The input controller holds both and dispatches per view mode.
 
 ## Invariants
 

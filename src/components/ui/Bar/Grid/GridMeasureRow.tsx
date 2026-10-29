@@ -6,17 +6,19 @@
 import type { ComponentChild, CSSProperties } from "preact";
 
 import { staffSpacePx } from "../../../../core/MeasureLayout.js";
-import type { ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import {
-    MeasureProjection, ProjectedItemKind, modelEventAt,
-    type IProjectedEvent, type IProjectedItem, type IProjectedSubdivision,
+    MeasureProjection, modelEventAt, ProjectedItemKind, type IProjectedEvent, type IProjectedItem,
+    type IProjectedSubdivision,
 } from "../../../../core/MeasureProjection.js";
+import type { ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import { ScoreSymbol } from "../../../../core/ScoreSymbols.js";
 import { reduceFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../../../core/types/general.js";
+import { PlayerPlayState, type ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import { NoteStyleSymbolViewer } from "../../Note/NoteStyleSymbolViewer.js";
+import { BarlineView } from "../../framework/BarlineView.js";
 import { Container } from "../../framework/Container.js";
 import { ScoreSymbolView } from "../../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -26,6 +28,7 @@ export interface IGridMeasureRowProperties extends ICommonUIProperties {
     measure: ISbDmTrackPiece;
     track: ISbDmTrack;
     dataModel: ScoreBookDataModel;
+    arrangementPlayer?: ArrangementPlayer;
     scoreElementRegistry?: ScoreElementRegistry;
 }
 
@@ -60,10 +63,12 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
 
     public override componentDidMount(): void {
         requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("playerStateChanged", this.handlePlayerStateChanged);
     }
 
     public override render(): ComponentChild {
@@ -73,9 +78,14 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
             return null;
         }
 
-        const className = this.generateFinalClassName(["grid-measure-row"]);
-        const usesSimile = measure.simile === true;
-        const items = usesSimile ? [] : MeasureProjection.project(measure);
+        const displayedMeasure = this.displayedMeasure;
+        const isPlaybackPreview = displayedMeasure !== measure;
+        const className = this.generateFinalClassName([
+            "grid-measure-row",
+            isPlaybackPreview ? "simile-playback-preview" : undefined,
+        ]);
+        const usesSimile = displayedMeasure.simile === true;
+        const items = usesSimile ? [] : MeasureProjection.project(displayedMeasure);
         const baseSteps = measure.meter.stepResolution;
 
         // Beat tick markers: absolutely positioned at fractional positions derived
@@ -108,13 +118,23 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
         if (usesSimile) {
             cells = [];
             simileOverlay = (
-                <div className="grid-simile-overlay">
+                <div className="grid-simile-overlay"
+                    ref={barNumber === undefined ? undefined : scoreElementRegistry?.createRef({
+                        kind: ScoreElementKind.GridCell,
+                        bar: barNumber,
+                        trackId: track.id,
+                        step: 0,
+                        start: { numerator: 0, denominator: 1 },
+                        measure,
+                    }, measure)}>
                     <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} />
                 </div>
             );
         } else {
             cells = this.renderGridCells(items);
         }
+
+        const repeatBarLines = this.renderRepeatBarLines();
 
         return (
             <Container className={className} style={rowStyle}
@@ -129,9 +149,25 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
                 </div>
                 {cells}
                 {simileOverlay}
+                {repeatBarLines}
             </Container>
         );
     }
+
+    private get displayedMeasure(): ISbDmTrackPiece {
+        const { measure, track, arrangementPlayer } = this.props;
+        if (measure.simile && arrangementPlayer?.state === PlayerPlayState.Playing) {
+            return arrangementPlayer.trackPlayers.get(track)?.sourceOfBar(measure.number) ?? measure;
+        }
+
+        return measure;
+    }
+
+    private handlePlayerStateChanged = (): Promise<boolean> => {
+        const { track } = this.props;
+
+        return this.handleTrackChanged(track.id);
+    };
 
     private handleTrackChanged = (trackId: number): Promise<boolean> => {
         const { track } = this.props;
@@ -157,7 +193,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
      * @returns The row's cells, in step order.
      */
     private renderGridCells(items: IProjectedItem[]): ComponentChild[] {
-        const { measure } = this.props;
+        const measure = this.displayedMeasure;
         const stepsPerBar = measure.meter.stepResolution;
         const itemsByStep = new Map<number, IProjectedEvent[]>();
         const subdivisionsByStep = new Map<number, IProjectedSubdivision>();
@@ -199,6 +235,29 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
         }
 
         return cells;
+    }
+
+    private renderRepeatBarLines(): ComponentChild[] {
+        const { dataModel, measure } = this.props;
+        const repeat = dataModel.arrangement?.repeatBars?.get(measure.number);
+        const barLines: ComponentChild[] = [];
+        if (repeat?.start) {
+            barLines.push(
+                <span key="start" className="grid-repeat-barline grid-repeat-barline-start" aria-hidden="true">
+                    <BarlineView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} />
+                </span>,
+            );
+        }
+
+        if (repeat?.end) {
+            barLines.push(
+                <span key="end" className="grid-repeat-barline grid-repeat-barline-end" aria-hidden="true">
+                    <BarlineView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} />
+                </span>,
+            );
+        }
+
+        return barLines;
     }
 
     /**
@@ -313,7 +372,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
         const cellProps: Record<string, unknown> = {
             key: `${step}-${start.numerator}/${start.denominator}`,
             className: "note-viewer",
-            ref: barNumber === undefined ? undefined : scoreElementRegistry?.createRef({
+            ref: barNumber === undefined || measure.simile ? undefined : scoreElementRegistry?.createRef({
                 kind: ScoreElementKind.GridCell,
                 bar: barNumber,
                 trackId: track.id,
@@ -345,7 +404,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
      * @returns The content of the step's cell.
      */
     private cellContentOf(step: number, item: IProjectedEvent | undefined): IGridCellContent {
-        const { measure, track } = this.props;
+        const { track } = this.props;
+        const measure = this.displayedMeasure;
         const stepStart = reduceFraction(step, measure.meter.stepResolution);
 
         if (item === undefined) {
@@ -368,6 +428,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
      * @returns The zero-based grid step.
      */
     private stepOf(start: IFraction): number {
-        return Math.floor(start.numerator * this.props.measure.meter.stepResolution / start.denominator);
+        const { measure } = this.props;
+
+        return Math.floor(start.numerator * measure.meter.stepResolution / start.denominator);
     }
 }

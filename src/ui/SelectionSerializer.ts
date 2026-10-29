@@ -30,20 +30,18 @@ export enum SelectionMode {
     /** Clear existing selections and start fresh. */
     New,
 
-    /** Add to existing selections without clearing. */
+    /** Extend the existing selection to include the new range. */
     Add,
-
-    /** Toggle selection state for elements that intersect the selection rect. */
-    Invert,
 }
 
 /** Identifies a position in the score for anchoring selections. */
 export interface ISelectionPoint {
+    granularity: SelectionGranularity;
     bar: number;
     trackId: number;
 
-    /** Undefined when the point is at measure/track level rather than a specific step. */
-    step?: number;
+    /** Exact position within the measure for note and note-group selections. */
+    position?: IFraction;
 }
 
 /** The model object a whole-track selection addresses. */
@@ -192,6 +190,16 @@ export interface ISerialisedSelectionEntry {
 
     /** Exact end of the addressed span within the measure (exclusive). */
     end?: IFraction;
+}
+
+/** Persisted selection state, including the anchor that fixes selection granularity. */
+export interface ISerialisedSelectionState {
+    version: number;
+    anchor?: ISelectionPoint;
+    entries: ISerialisedSelectionEntry[];
+
+    /** The one note the staff view draws its cursor at, which the selection does not include. */
+    cursor?: ISerialisedSelectionEntry;
 }
 
 /**
@@ -508,10 +516,22 @@ export class SelectionSerializer {
                 }
 
                 const subdivision = SelectionSerializer.subdivisionOf(measure, events[0]);
+                let isWholeSubdivision = subdivision?.actual === events.length;
+                if (isWholeSubdivision && subdivision !== undefined) {
+                    for (let index = 0; index < events.length; index++) {
+                        if (events[index] !== measure.events[subdivision.startIndex + index]) {
+                            isWholeSubdivision = false;
 
-                return subdivision === undefined
-                    ? { granularity: SelectionGranularity.NoteGroup, measure, events }
-                    : { granularity: SelectionGranularity.NoteGroup, measure, events, subdivision };
+                            break;
+                        }
+                    }
+                }
+
+                if (isWholeSubdivision && subdivision !== undefined) {
+                    return { granularity: SelectionGranularity.NoteGroup, measure, events, subdivision };
+                }
+
+                return { granularity: SelectionGranularity.NoteGroup, measure, events };
             }
         }
     }

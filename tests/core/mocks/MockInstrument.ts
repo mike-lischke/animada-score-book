@@ -3,9 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IInstrumentMeta } from "../../../src/core/ScoreBookDataModel.js";
 import {
-    SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage,
+    Damping, SbDmEntityType, type IInstrumentMeta, type ISbDmInstrument, type ISbDmInstrumentImage,
 } from "../../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../../src/core/types/general.js";
 import { getNewId } from "../../../src/core/utils.js";
@@ -44,7 +43,7 @@ export class MockInstrument implements ISbDmInstrument {
         variants.forEach(({ id, symbol, characteristics }) => {
             this.noteStyles[id] = {
                 id, symbol, audioBuffer: null, instrument: this, characteristics,
-                sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false },
+                sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
             };
         });
 

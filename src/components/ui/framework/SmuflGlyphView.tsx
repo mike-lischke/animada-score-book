@@ -46,12 +46,6 @@ export interface ISmuflGlyphViewProperties extends ICommonUIProperties {
  * which font is active, and the family list keeps the catalogue's fallback for uncovered glyphs.
  */
 export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
-    public static override defaultProps = {
-        width: 2,
-        height: 2,
-        anchor: GlyphAnchor.Centre,
-    };
-
     public override render(): ComponentChild {
         const { id, title, alt, style, glyph, staffSpace, width = 2, height = 2 } = this.props;
         const { fontFamily, anchor = GlyphAnchor.Centre } = this.props;

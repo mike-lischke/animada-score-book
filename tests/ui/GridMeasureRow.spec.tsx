@@ -3,13 +3,15 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, render } from "@testing-library/preact";
+import { act, cleanup, render } from "@testing-library/preact";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { GridMeasureRow } from "../../src/components/ui/Bar/Grid/GridMeasureRow.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
-import type { IMeasureEvent } from "../../src/core/types/general.js";
+import type { IMeasureEvent, IRepeatBar } from "../../src/core/types/general.js";
+import { PlayerPlayState, type ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import { ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
@@ -24,10 +26,11 @@ interface IRenderedRow {
  *
  * @param events The events the measure should hold.
  * @param simile Whether the measure carries a one-bar repeat mark.
+ * @param repeat The repeat barlines the measure carries.
  *
  * @returns The rendered row, its measure and the element registry behind it.
  */
-const renderRow = (events: IMeasureEvent[], simile = false): IRenderedRow => {
+const renderRow = (events: IMeasureEvent[], simile = false, repeat?: IRepeatBar): IRenderedRow => {
     const model = new ScoreBookDataModel();
     model.startNewArrangement([createInstrument("0", 0, 0)]);
 
@@ -35,6 +38,10 @@ const renderRow = (events: IMeasureEvent[], simile = false): IRenderedRow => {
     const measure = track.measures[0];
     measure.events.splice(0, measure.events.length, ...events);
     measure.simile = simile ? true : undefined;
+    if (repeat !== undefined) {
+        (model.arrangement! as Arrangement).repeatBars.set(1, repeat);
+    }
+
     hydrateMeasureEvents(model.arrangement! as Arrangement);
 
     const registry = new ScoreElementRegistry();
@@ -71,7 +78,7 @@ const startsOf = (registry: ScoreElementRegistry, cells: HTMLElement[]): string[
     });
 };
 
-describe.sequential("GridMeasureRow", () => {
+describe("GridMeasureRow", { concurrent: false }, () => {
     afterEach(() => {
         cleanup();
     });
@@ -124,11 +131,85 @@ describe.sequential("GridMeasureRow", () => {
     });
 
     it("shows the one-bar repeat mark instead of cells for a simile", () => {
-        const { row } = renderRow([
+        const { row, measure, registry } = renderRow([
             { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } },
         ], true);
 
         expect(row.querySelector(".grid-simile-overlay")).not.toBeNull();
         expect(cellsOf(row)).toHaveLength(0);
+        expect(registry.getTarget(row.querySelector<HTMLElement>(".grid-simile-overlay")!)).toBe(measure);
+    });
+
+    it("draws separate opening and closing repeat barlines without replacing cells", () => {
+        const { row } = renderRow([
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } },
+        ], false, { start: true, end: true });
+
+        const opening = row.querySelector(".grid-repeat-barline-start")!;
+        const closing = row.querySelector(".grid-repeat-barline-end")!;
+        expect(opening.querySelectorAll(".barline-view-dots")).toHaveLength(1);
+        expect(closing.querySelectorAll(".barline-view-dots")).toHaveLength(1);
+        expect(opening.querySelector(".barline-view-part")?.classList.contains("barline-view-thick")).toBe(true);
+        expect(closing.querySelector(".barline-view-part")?.classList.contains("barline-view-dots")).toBe(true);
+        expect(cellsOf(row)).toHaveLength(16);
+    });
+
+    it("draws repeat barlines alongside a simile", () => {
+        const { row } = renderRow([
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } },
+        ], true, { end: true });
+
+        expect(row.querySelectorAll(".grid-repeat-barline-end")).toHaveLength(1);
+        expect(row.querySelectorAll(".grid-repeat-barline-start")).toHaveLength(0);
+        expect(row.querySelector(".grid-simile-overlay")).not.toBeNull();
+        expect(cellsOf(row)).toHaveLength(0);
+    });
+
+    it("renders playback content without registering source events and restores the simile on stop", async () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        model.ensureBarAvailable(3);
+        const track = model.arrangement!.tracks[0];
+        const source = track.measures[0];
+        source.events.splice(0, source.events.length,
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } });
+        const measure = track.measures[2];
+        measure.simile = true;
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+        const registry = new ScoreElementRegistry();
+        let playState = PlayerPlayState.Stopped;
+        const player = {
+            get state() {
+                return playState;
+            },
+            trackPlayers: new Map([[track, {
+                sourceOfBar: () => {
+                    return source;
+                },
+            }]]),
+        } as unknown as ArrangementPlayer;
+        const { container } = render(<GridMeasureRow measure={measure} track={track} dataModel={model}
+            arrangementPlayer={player} barNumber={3} scoreElementRegistry={registry} />);
+        expect(container.querySelectorAll(".grid-simile-overlay")).toHaveLength(1);
+
+        await act(async () => {
+            playState = PlayerPlayState.Playing;
+            await requisitions.execute("playerStateChanged", playState);
+        });
+
+        expect(container.querySelectorAll(".simile-playback-preview .note-viewer")).toHaveLength(16);
+        expect(container.querySelectorAll(".grid-simile-overlay")).toHaveLength(0);
+        expect(registry.findTargetElement(source.events[0])).toBeUndefined();
+        expect(measure.simile).toBe(true);
+        expect(measure.events).toHaveLength(1);
+
+        await act(async () => {
+            playState = PlayerPlayState.Stopped;
+            await requisitions.execute("playerStateChanged", playState);
+        });
+
+        expect(container.querySelectorAll(".simile-playback-preview")).toHaveLength(0);
+        expect(container.querySelectorAll(".grid-simile-overlay")).toHaveLength(1);
     });
 });

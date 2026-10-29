@@ -82,7 +82,7 @@ describe("selectionToClearRanges", () => {
         ]));
 
         expect(cleared).toBe(false);
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
     });
@@ -115,13 +115,15 @@ describe("selectionToClearRanges", () => {
         model.clearRanges(selectionToClearRanges([noteEntry(measure, { numerator: 7, denominator: 32 })]));
 
         expect(measure.subdivisions).toEqual([{ startIndex: 3, actual: 2, normal: 1, isTuplet: false }]);
-        expect(measure.events).toHaveLength(13);
+        expect(measure.events).toHaveLength(17);
         expect(measure.events[3].noteStyleId).toBe("1");
         expect(measure.events[3].duration).toEqual({ numerator: 1, denominator: 32 });
         expect(measure.events[4].noteStyleId).toBeUndefined();
         expect(measure.events[4].duration).toEqual({ numerator: 1, denominator: 32 });
         expect(measure.events[5].noteStyleId).toBeUndefined();
-        expect(measure.events[6].noteStyleId).toBe("1");
+        expect(measure.events.find((event) => {
+            return event.start.numerator === 7 && event.start.denominator === 16;
+        })?.noteStyleId).toBe("1");
     });
 });
 

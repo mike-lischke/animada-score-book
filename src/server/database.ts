@@ -10,6 +10,12 @@ export enum DatabaseEngine {
     Postgres = "postgres",
 }
 
+const databaseEngineValues = Object.values(DatabaseEngine) as string[];
+
+export const isValidDatabaseEngine = (value: string): value is DatabaseEngine => {
+    return databaseEngineValues.includes(value);
+};
+
 export interface IDatabaseConfig {
     engine: DatabaseEngine;
     host: string;
@@ -47,7 +53,7 @@ export interface IDatabaseAdapter {
     testConnection(config: IDatabaseConfig): Promise<ITestConnectionResult>;
 
     /**
-     * Initialises the connection pool and creates all required tables.
+     * Initialises the connection pool for the given configuration. The schema is not touched.
      *
      * @param config The database connection configuration.
      */

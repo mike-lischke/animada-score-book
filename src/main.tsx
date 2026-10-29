@@ -3,8 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import logo from "/logo.svg";
-
 import { render } from "preact";
 
 import { App } from "./App.js";
@@ -100,7 +98,7 @@ try {
                 crossAlignment={ChildAlignment.Center}
             >
                 <Icon
-                    src={logo}
+                    src="/logo.svg"
                     alt="App Icon"
                     style={{ width: "300px", height: "300px", marginBottom: "20px" }}
                 />

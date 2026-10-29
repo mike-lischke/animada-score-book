@@ -8,7 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
-import { routeApi } from "./e2e-test-helpers.js";
+import { routeApi, showTrackView } from "./e2e-test-helpers.js";
 
 /**
  * Builds one measure per track: a quarter, two eighths and a half note, all in the first style.
@@ -30,14 +30,22 @@ const buildPackedArrangement = (instrumentIds: string[]): string => {
                     number: 1,
                     meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
                     events: [
-                        { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
-                            noteStyleId: "1" },
-                        { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 8 },
-                            noteStyleId: "1" },
-                        { start: { numerator: 3, denominator: 8 }, duration: { numerator: 1, denominator: 8 },
-                            noteStyleId: "1" },
-                        { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 },
-                            noteStyleId: "1" },
+                        {
+                            start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                            noteStyleId: "1"
+                        },
+                        {
+                            start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 8 },
+                            noteStyleId: "1"
+                        },
+                        {
+                            start: { numerator: 3, denominator: 8 }, duration: { numerator: 1, denominator: 8 },
+                            noteStyleId: "1"
+                        },
+                        {
+                            start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 },
+                            noteStyleId: "1"
+                        },
                     ],
                     subdivisions: [],
                 }],
@@ -65,13 +73,7 @@ const openStaffArrangement = async (page: Page, packed: string): Promise<void> =
     }, packed);
 
     await page.goto("/");
-
-    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
-    await expect(trackViewToggle).toBeVisible();
-    if (!await trackViewToggle.isChecked()) {
-        await trackViewToggle.check({ force: true });
-    }
-
+    await showTrackView(page, "staff");
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 };
 

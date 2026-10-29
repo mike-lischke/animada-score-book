@@ -61,8 +61,33 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
     // Deletion is an edit, so the editor only reacts in edit mode.
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .articulationToolbar")).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
+});
+
+test("keeps the cursor on the slot the delete key emptied", async ({ page }) => {
+    const row = page.locator(".staff-measure-track-row").first();
+    const runs = row.locator(".staff-note-viewer-run");
+    await expect(runs).toHaveCount(13);
+
+    // The second sixteenth of the first group: the overwrite mode replaces it with a rest.
+    const note = runs.nth(1);
+    await note.click();
+
+    const cursor = page.locator(".selection-cursor").first();
+    await expect(cursor).toBeVisible();
+
+    await page.keyboard.press("Delete");
+
+    // The bar holds one rest more and the slot stays selected, so the cursor is still drawn on it.
+    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(4);
+    await expect(cursor).toBeVisible();
+
+    const cursorBox = await cursor.boundingBox();
+    const runBox = await runs.nth(1).boundingBox();
+    expect(cursorBox).not.toBeNull();
+    expect(runBox).not.toBeNull();
+    expect(cursorBox!.x).toBeGreaterThanOrEqual(runBox!.x - 2);
+    expect(cursorBox!.x).toBeLessThan(runBox!.x + runBox!.width);
 });
 
 test("backspace removes the event before the cursor and pulls the rest left", async ({ page }) => {
@@ -84,7 +109,7 @@ test("backspace removes the event before the cursor and pulls the rest left", as
     expect(before).not.toBeNull();
     expect(after).not.toBeNull();
     expect(after!.x).toBeLessThan(before!.x - 40);
-    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(1);
+    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(3);
 });
 
 test("backspace does nothing when several elements are selected", async ({ page }) => {

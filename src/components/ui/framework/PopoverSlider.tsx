@@ -4,6 +4,8 @@
  */
 
 import { createRef, type ComponentChild } from "preact";
+
+import { escapeStack } from "../../../supplement/EscapeStack.js";
 import { ICommonUIProperties, UIComponent } from "./UIComponent.js";
 
 export interface IPopoverSliderProperties extends ICommonUIProperties {
@@ -25,15 +27,9 @@ interface IPopoverSliderState {
 }
 
 export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopoverSliderState> {
-    public static override defaultProps = {
-        min: 10,
-        max: 300,
-        step: 5,
-    };
-
-    private triggerRef = createRef<HTMLButtonElement>();
-    private sliderRef = createRef<HTMLInputElement>();
-    private popoverRef = createRef<HTMLDivElement>();
+    private triggerRef = createRef<HTMLButtonElement | null>();
+    private sliderRef = createRef<HTMLInputElement | null>();
+    private popoverRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: IPopoverSliderProperties) {
         super(props);
@@ -59,10 +55,11 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
 
     public override componentWillUnmount() {
         document.removeEventListener("mousedown", this.handleDocumentMouseDown);
+        escapeStack.remove(this.handleEscape);
     }
 
     public override render(): ComponentChild {
-        const { min = 0, max = 1, step = 0.1, style } = this.props;
+        const { min = 10, max = 300, step = 5, style } = this.props;
         const { open, internalValue } = this.state;
 
         if (!open) {
@@ -106,11 +103,15 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
         this.setState({ open: true }, () => {
             this.sliderRef.current?.focus();
         });
+
+        escapeStack.register(this.handleEscape);
     };
 
     public close = (commit: boolean) => {
         const { internalValue } = this.state;
         const { onChange } = this.props;
+
+        escapeStack.remove(this.handleEscape);
 
         this.setState({ open: false }, () => {
             this.triggerRef.current?.focus();
@@ -157,14 +158,13 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
     };
 
     private handleSliderKeyDown = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") {
-            ev.preventDefault();
-            this.close(false);
-        }
-
         if (ev.key === "Enter") {
             ev.preventDefault();
             this.close(true);
         }
+    };
+
+    private handleEscape = (): void => {
+        this.close(false);
     };
 }

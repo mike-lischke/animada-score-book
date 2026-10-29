@@ -8,18 +8,11 @@
 
 ## Context
 
-Thirty-second notes must be enterable in the staff view, but a grid view cell displays exactly one grid step.
-The data model addressed notes through integer step indices (`measureTimeline`, `stepsFromFraction`), so a value
-finer than a step was inexpressible and the grid's column raster implicitly owned the model's edit API. The staff
-view has no raster at all: it places notes at free fractions and only aligns them to grid points for the eye.
+Thirty-second notes must be enterable in the staff view, but a grid view cell displays exactly one grid step. The data model addressed notes through integer step indices (`measureTimeline`, `stepsFromFraction`), so a value finer than a step was inexpressible and the grid's column raster implicitly owned the model's edit API. The staff view has no raster at all: it places notes at free fractions and only aligns them to grid points for the eye.
 
 ## Decision
 
-We will let the raster be a grid concern and address notes by fractions everywhere else. The model's edit APIs
-work on `IFraction` positions and durations and ripple content over an internal absolute timeline of the track
-(`IAbsoluteNoteEvent`, with `absolutePositionOf`/`measureIndexAt` mapping between a measure position and a track
-position). The grid renders a step whose events start inside it as a subdivision of that step
-(`subdivision grid-sub-step`), purely presentational, so values below the raster still get a column each.
+We will let the raster be a grid concern and address notes by fractions everywhere else. The model's edit APIs work on `IFraction` positions and durations and ripple content over an internal absolute timeline of the track (`IAbsoluteNoteEvent`, with `absolutePositionOf`/`measureIndexAt` mapping between a measure position and a track position). The grid renders a step whose events start inside it as a subdivision of that step (`subdivision grid-sub-step`), purely presentational, so values below the raster still get a column each.
 
 ## Invariants
 

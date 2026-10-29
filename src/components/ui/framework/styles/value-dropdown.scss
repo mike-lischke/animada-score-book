@@ -1,0 +1,66 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.value-dropdown {
+    display: flex;
+    align-items: center;
+}
+
+/* At rest the double chevron is a circle of its own; on hover the value and the button share one pill. */
+.value-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    height: 26px;
+    padding: 0 3px 0 8px;
+    border: none;
+    border-radius: 9999px;
+    background: transparent;
+    color: inherit;
+    font-weight: 400;
+    line-height: 1;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+        background: color-mix(in srgb, var(--color-base-content) 6%, transparent);
+    }
+
+    .value-dropdown-chevron {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--color-base-content) 8%, var(--color-base-100));
+
+        .icon {
+            width: 9px;
+            min-width: 9px;
+            height: 9px;
+            min-height: 9px;
+        }
+
+        /* The two chevrons meet in the middle of the circle. */
+        .icon + .icon {
+            margin-top: -4px;
+        }
+    }
+}
+
+.value-dropdown-menu {
+    width: max-content;
+    min-width: 5rem;
+    max-height: 15rem;
+    overflow: auto;
+
+    li.selected > a {
+        color: var(--color-primary);
+    }
+}

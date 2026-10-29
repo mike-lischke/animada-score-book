@@ -68,9 +68,9 @@ export interface ISettingsDialogProperties extends ICommonUIProperties {
 }
 
 export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISettingsDialogState> {
-    private dialogRef = createRef<Dialog>();
-    private fontInfoPopupRef = createRef<Popup>();
-    private fontInfoTargetRef = createRef<HTMLDivElement>();
+    private dialogRef = createRef<Dialog | null>();
+    private fontInfoPopupRef = createRef<Popup | null>();
+    private fontInfoTargetRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: ISettingsDialogProperties) {
         super(props);
@@ -274,41 +274,23 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
                             }}
                         />
                     </Container>
-
-                    <Container
-                        className="form-row"
-                        orientation={Orientation.LeftToRight}
-                        mainAlignment={ChildAlignment.SpaceBetween}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <span className="form-row-label">Show tutorial on startup</span>
-                        <Checkbox
-                            id="tutorialEnabled"
-                            checked={currentSettings.tutorialEnabled ?? true}
-                            onChange={(checked) => {
-                                currentSettings.tutorialEnabled = checked;
-                                this.setState({ currentSettings }, () => {
-                                    this.temporarySettingsChange();
-                                });
-                            }}
-                        />
-                    </Container>
                 </Container>
             </Dialog >
         );
     }
 
     public open(): void {
+        const { fontLoader } = this.props;
         const currentSettings = AppStorage.loadUISettings() ?? {};
         const previousSettings = JSON.parse(JSON.stringify(currentSettings)) as IUISettings;
         currentSettings.theme ??= "Light+";
-        this.setState({ currentSettings, previousSettings, fontChoices: this.props.fontLoader.choices }, () => {
+        this.setState({ currentSettings, previousSettings, fontChoices: fontLoader.choices }, () => {
             this.dialogRef.current?.open();
         });
 
         // A sample draws in its own font, so the list is refreshed once every font has arrived.
-        void this.props.fontLoader.preload().then(() => {
-            this.setState({ fontChoices: this.props.fontLoader.choices });
+        void fontLoader.preload().then(() => {
+            this.setState({ fontChoices: fontLoader.choices });
         });
     }
 
@@ -342,12 +324,13 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
     }
 
     private renderMusicFontRow(): ComponentChild {
+        const { fontChoices } = this.state;
         const currentFont = this.currentFont();
         if (currentFont === undefined) {
             return undefined;
         }
 
-        const fontItems: IDropdownItem[] = this.state.fontChoices.map((choice) => {
+        const fontItems: IDropdownItem[] = fontChoices.map((choice) => {
             return {
                 label: choice.name,
                 detail: this.renderFontSample(choice),
@@ -392,6 +375,7 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
                     id="musicFontInfo"
                     header={<Label caption={currentFont.name} />}
                     showArrow
+                    restoreFocusOnClose={false}
                     placement={ComponentPlacement.BottomLeft}
                 >
                     {this.renderFontInfo(currentFont)}
@@ -478,8 +462,9 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
      * @returns The font the score is drawn with, which is the one the row shows and explains.
      */
     private currentFont(): ISmuflFontChoice | undefined {
+        const { fontLoader } = this.props;
         const { currentSettings, fontChoices } = this.state;
-        const id = currentSettings.musicFont ?? this.props.fontLoader.activeId;
+        const id = currentSettings.musicFont ?? fontLoader.activeId;
 
         const picked = fontChoices.find((choice) => {
             return choice.id === id;
@@ -525,8 +510,9 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
             return;
         }
 
+        const { fontLoader } = this.props;
         const { currentSettings } = this.state;
-        currentSettings.musicFont = this.props.fontLoader.activeId;
+        currentSettings.musicFont = fontLoader.activeId;
         this.setState({ currentSettings }, () => {
             this.temporarySettingsChange();
         });
@@ -536,7 +522,7 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
         const target = this.fontInfoTargetRef.current;
         if (target !== null) {
             // The tip only informs, so it may not block what the user does next.
-            this.fontInfoPopupRef.current?.open(target.getBoundingClientRect(), { blockMouseEvents: false });
+            this.fontInfoPopupRef.current?.open(target);
         }
     };
 

@@ -56,7 +56,7 @@ const readJson = (path: string): unknown => {
     return JSON.parse(readFileSync(path, "utf8")) as unknown;
 };
 
-describe.sequential("SmuflFontMetrics", () => {
+describe("SmuflFontMetrics", { concurrent: false }, () => {
     it("reduces a font's metadata to the metrics the score draws with", () => {
         const built = SmuflFontMetrics.build(metadata);
 

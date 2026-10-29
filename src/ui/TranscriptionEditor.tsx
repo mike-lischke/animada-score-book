@@ -39,11 +39,11 @@ export class TranscriptionEditor extends UIComponent<ITranscriptionEditorPropert
                 orientation={Orientation.TopDown}
             >
                 <Container orientation={Orientation.LeftToRight} style={{ marginBottom: "16px" }}>
-                    <Icon src={UIIcon.VmRunning} style={{ fontSize: "50px", color: "cornflowerblue" }} />
+                    <Icon src={UIIcon.VmRunning} style={{ fontSize: "50px", color: "var(--color-primary)" }} />
                     <Icon src={UIIcon.ArrowRight} style={{ fontSize: "16px", marginTop: "auto" }} />
                     <Icon
                         src={UIIcon.Music}
-                        style={{ fontSize: "30px", marginTop: "auto", color: "cornflowerblue" }}
+                        style={{ fontSize: "30px", marginTop: "auto", color: "var(--color-primary)" }}
                     />
                     <Label heading={true} style={{ marginLeft: "16px" }}>Transcribe a Song</Label>
                 </Container>

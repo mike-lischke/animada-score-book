@@ -3,13 +3,14 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-.notificationCenter {
+.notification-center {
     width: 500px;
+    max-width: calc(100vw - 16px);
     position: absolute;
     right: 8px;
 
-    /* Have to take the status bar into account here. */
-    bottom: 32px;
+    /* Keep clear of the footer below. */
+    bottom: 40px;
 
     overflow: hidden;
 
@@ -82,7 +83,7 @@
         }
 
         &.info > .container > .icon {
-            color: #3b82f6;
+            color: var(--color-info-foreground);
         }
 
         &.warning > .container > .icon {
@@ -93,7 +94,7 @@
             color: var(--color-error);
         }
 
-        > .container > .closeButton {
+        > .container > .close-button {
             flex: 0;
             border: none;
             background: none;

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-.menuItem {
+.menu-item {
     display: flex;
     align-items: center;
 
@@ -19,21 +19,21 @@
     white-space: nowrap;
 }
 
-.menuItem .icon {
+.menu .menu-item .icon {
     width: 16px;
     height: 16px;
 }
 
-.menuItem:not(.disabled):hover {
+.menu-item:not(.disabled):hover {
     background-color: var(--color-base-200);
 }
 
-.menuItem.disabled {
+.menu-item.disabled {
     opacity: 0.4;
     cursor: default;
 }
 
-.menuItem.separator {
+.menu-item.separator {
     height: 1px;
     width: 100%;
     margin: 4px 0;

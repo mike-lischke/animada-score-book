@@ -3,9 +3,11 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { AppStorage } from "../../../core/AppStorage.js";
+import type { ComponentChild } from "preact";
+
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
-import type { Mutable } from "../../../core/types/general.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
+import { TrackViewMode, type Mutable } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
@@ -13,24 +15,30 @@ import {
     type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
-import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { SplitSlider } from "../framework/SplitSlider.js";
-import { CheckState, Toggle } from "../framework/Toggle.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
     selectionManager: SelectionManager;
-    innerRef?: preact.RefObject<HTMLDivElement>;
+    mixerExpanded: boolean;
+    labelsOnly?: boolean;
+    trackViewMode: TrackViewMode;
+    innerRef?: preact.RefObject<HTMLDivElement | null>;
+    onToggleMixer?: () => void;
+
+    /**
+     * The shared row geometry of every track, so the controls line up with the staff rows they belong to.
+     * Omitted in grid mode, where the controls keep the grid cell height.
+     */
+    rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
 }
 
 interface ITrackControlsState {
-    mixerExpanded: boolean;
-    trackViewMode: "grid" | "staff";
-
     /** Track IDs that are currently selected via Track granularity. */
     selectedTrackIds: ReadonlySet<number>;
 }
@@ -41,12 +49,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     public constructor(props: ITrackControlsProperties) {
         super(props);
 
-        const settings = AppStorage.loadUISettings() ?? {};
-        const trackViewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
-
         this.state = {
-            mixerExpanded: false,
-            trackViewMode,
             selectedTrackIds: new Set(),
         };
     }
@@ -64,8 +67,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
     }
 
-    public override componentDidUpdate(prevProps: ITrackControlsProperties, prevState: ITrackControlsState): void {
-
+    public override componentDidUpdate(prevProps: ITrackControlsProperties): void {
         const { tracks } = this.props;
         if (prevProps.tracks !== tracks) {
             this.recomputeEffectiveVolumes();
@@ -73,13 +75,13 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     }
 
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
-        const { tracks } = this.props;
-        const element = this.base as HTMLElement | null;
+        const { tracks, innerRef } = this.props;
+        const element = innerRef?.current;
         if (!element) {
             return [];
         }
 
-        const rows = element.querySelectorAll<HTMLElement>(".trackControls");
+        const rows = element.querySelectorAll<HTMLElement>(".track-controls");
         const entries: ISelectionHitEntry[] = [];
 
         for (let i = 0; i < rows.length; i++) {
@@ -99,35 +101,73 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     }
 
     public render() {
-        const { tracks, innerRef } = this.props;
-        const { mixerExpanded, trackViewMode, selectedTrackIds } = this.state;
+        const { tracks, rowGeometries, innerRef, mixerExpanded, labelsOnly } = this.props;
+        const { selectedTrackIds } = this.state;
 
         const listClassName = this.generateFinalClassName([
-            "trackControlsList",
-            this.classFromProperty(mixerExpanded, "expanded"),
-            "rounded-xl shadow-md border border-base-200",
+            "track-controls-list",
+            this.classFromProperty(mixerExpanded && !labelsOnly, "expanded"),
+            this.classFromProperty(labelsOnly, "track-labels-list"),
         ]);
+
+        let mixerToggle: ComponentChild;
+        if (!labelsOnly) {
+            const mixerClassName = this.generateFinalClassName([
+                "actionControlSwitch", this.classFromProperty(mixerExpanded, "is-active"),
+            ]);
+            const mixerTooltip = mixerExpanded ? "Collapse mixer" : "Expand mixer";
+
+            mixerToggle = (
+                <Button
+                    id="trackControlsToggle"
+                    className={mixerClassName}
+                    aria-pressed={mixerExpanded}
+                    title={mixerTooltip}
+                    onClick={this.handleMixerToggle}
+                >
+                    <span className="actionControlSwitchDot" />
+                    <Icon src={UIIcon.Mixer} />
+                </Button>
+            );
+        }
 
         const controls = tracks.map((track) => {
             const instrumentName = track.instrument.displayName;
             const iconPath = track.instrument.image.filePath;
             const isSelected = selectedTrackIds.has(track.id);
+            const geometry = rowGeometries?.get(track.id);
+            const rowStyle = geometry === undefined
+                ? undefined
+                : {
+                    "--track-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
+                    "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
+                };
+
+            if (labelsOnly) {
+                return (
+                    <Container key={track.id} className="track-label-row" orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center} style={rowStyle}>
+                        <span className="track-instrument-label" title={instrumentName}>{instrumentName}</span>
+                    </Container>
+                );
+            }
 
             return (
                 <Container
                     key={track.id}
-                    className="trackControls"
+                    className="track-controls"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
+                    style={rowStyle}
                 >
                     <Container
                         className="trackSliderArea"
                         orientation={Orientation.TopDown}
                         crossAlignment={ChildAlignment.Start}
                     >
-                        <span className="trackInstrumentName">{instrumentName}</span>
+                        <span className="track-instrument-name">{instrumentName}</span>
                         <SplitSlider
-                            className="trackVolumeSlider"
+                            className="track-volume-slider"
                             value={track.volume}
                             fillValue={track.effectiveVolume}
                             min={0}
@@ -154,8 +194,8 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                             className="trackInstrumentIcon"
                             src={iconPath}
                             alt={instrumentName}
-                            width={40}
-                            height={40}
+                            width={34}
+                            height={34}
                         />
                     </Container>
                 </Container>
@@ -170,38 +210,13 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 orientation={Orientation.TopDown}
                 data-tutorial="mixer"
             >
-                <Container className="trackControlsHeader" crossAlignment={ChildAlignment.Center}>
-                    <Button
-                        className="trackControlsToggle"
-                        imageOnly
-                        onClick={this.toggleMixer}
-                    >
-                        <Icon src={UIIcon.Settings} width={16} height={16} alt="Collapse mixer" />
-                    </Button>
-                    <Container
-                        className="trackViewModeToggleGroup"
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <Toggle
-                            className="trackViewModeToggle du-toggle-xs"
-                            vertical
-                            checkState={trackViewMode === "staff" ? CheckState.Checked : CheckState.Unchecked}
-                            onChange={this.handleTrackViewModeToggle}
-                        />
-                        <Container
-                            className="trackViewModeIcons"
-                            orientation={Orientation.TopDown}
-                            crossAlignment={ChildAlignment.Center}
-                            mainAlignment={ChildAlignment.SpaceBetween}
-                        >
-                            <div className="trackViewModeGridIcon" aria-label="Show grid view" />
-                            <div className="trackViewModeStaffIcon" aria-label="Show staff view">
-                                <span className="trackViewModeStaffIconHead" />
-                                <span className="trackViewModeStaffIconStem" />
-                            </div>
-                        </Container>
-                    </Container>
+                <Container
+                    className="trackControlsHeader"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Center}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {mixerToggle}
                 </Container>
                 <Container
                     className="trackControlsPanel"
@@ -214,24 +229,10 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         );
     }
 
-    private toggleMixer = (e: MouseEvent | KeyboardEvent) => {
-        this.setState((previousState) => {
-            return { mixerExpanded: !previousState.mixerExpanded };
-        });
-        e.stopPropagation();
-    };
-
-    private handleTrackViewModeToggle = (_e: InputEvent, checkState: CheckState) => {
-        const mode = checkState === CheckState.Checked ? "staff" : "grid";
-
-        const settings = AppStorage.loadUISettings() ?? {};
-        settings.viewSettings ??= {};
-        settings.viewSettings.arrangementViewSettings ??= {};
-        settings.viewSettings.arrangementViewSettings.displayMode = mode;
-        AppStorage.saveUISettings(settings);
-
-        this.setState({ trackViewMode: mode });
-        void requisitions.execute("trackViewModeToggled", mode);
+    private handleMixerToggle = (event: MouseEvent | KeyboardEvent): void => {
+        const { onToggleMixer } = this.props;
+        event.stopPropagation();
+        onToggleMixer?.();
     };
 
     private handleTrackVolumeChange = (track: ISbDmTrack, value: number) => {

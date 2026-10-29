@@ -7,15 +7,11 @@
 
 ## Context
 
-Entering a note, or changing an existing note's duration, can require space that is already occupied.
-Grid editor, staff editor and data model answered that on their own: the model overwrote following
-notes, the grid rejected the edit while still advancing the cursor, the staff view shortened the new
-note instead of applying the selected length.
+Entering a note, or changing an existing note's duration, can require space that is already occupied. Grid editor, staff editor and data model answered that on their own: the model overwrote following notes, the grid rejected the edit while still advancing the cursor, the staff view shortened the new note instead of applying the selected length.
 
 ## Decision
 
-We will make room for a note per view: the grid view shortens it to the free space before the next
-note, the staff view keeps the requested length and shifts later notes to the right.
+We will make room for a note per view: the grid view shortens it to the free space before the next note, the staff view keeps the requested length and shifts later notes to the right.
 
 ## Invariants
 

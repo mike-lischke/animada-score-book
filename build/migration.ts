@@ -130,7 +130,11 @@ export const sanitizeBranchName = (branch: string): string => {
  */
 const getCurrentBranch = (): string => {
     try {
-        return execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
+        // The deployment package is not a Git repository, so Git's own complaint is dropped.
+        return execSync("git rev-parse --abbrev-ref HEAD", {
+            encoding: "utf-8",
+            stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
     } catch {
         return "main";
     }
@@ -155,6 +159,30 @@ export const deriveDbName = (baseName: string, branch: string): string => {
 };
 
 /**
+ * Resolves the database name the backend has to work with, without touching the schema.
+ *
+ * @param baseName The database name from backend-config.json.
+ *
+ * @returns The effective database name, with the branch suffix on feature branches.
+ */
+export const resolveDatabaseName = (baseName: string): string => {
+    return branchDatabaseName(baseName, getCurrentBranch());
+};
+
+/**
+ * Applies the branch suffix rule to a base name.
+ *
+ * @param baseName The database name from backend-config.json.
+ * @param branch The current Git branch.
+ *
+ * @returns The effective database name.
+ */
+const branchDatabaseName = (baseName: string, branch: string): string => {
+    // When running under Vitest (unit or e2e), use the base database name directly.
+    return process.env.VITEST ? baseName : deriveDbName(baseName, branch);
+};
+
+/**
  * Runs all pending migrations and returns the effective database name.
  *
  * @param config The database config from backend-config.json.
@@ -163,12 +191,7 @@ export const deriveDbName = (baseName: string, branch: string): string => {
  */
 export const runMigrations = async (config: IDatabaseConfig): Promise<string> => {
     const branch = getCurrentBranch();
-
-    // When running under Vitest (unit or e2e), use the base database name directly —
-    // no branch-specific suffix.
-    const effectiveDb = process.env.VITEST
-        ? config.database
-        : deriveDbName(config.database, branch);
+    const effectiveDb = branchDatabaseName(config.database, branch);
 
     console.log(`Branch: ${branch}, database: ${effectiveDb}`);
 

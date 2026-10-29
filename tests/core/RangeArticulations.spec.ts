@@ -22,7 +22,7 @@ const trackNotes = [[0, 2, 4, 6, 8, 10, 12, 14], [0, 4, 8, 12]];
 const hairpinId = 9001;
 const forteId = 9002;
 
-describe.sequential("RangeArticulations", () => {
+describe("RangeArticulations", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
 
     /**

@@ -105,21 +105,14 @@ interface IDragTarget {
 export class RangeArticulationView {
     private tool = RangeArticulationTool.None;
     private staffMode: boolean;
+    private zenMode: boolean;
+    private editMode = false;
     private decorationLayer?: HTMLElement;
     private dragImage?: HTMLElement;
     private refreshFrame?: number;
 
     /** Ratio of viewport pixels to the content's own pixels, which the CSS zoom of the viewer decides. */
     private zoomFactor = 1;
-
-    /**
-     * Distance from the bottom line of a system to the middle of the marking band, in px. Every marking of a row
-     * stands at that line, whatever note line the notes of the row use, so they never follow a note up.
-     */
-    private bandOffset = staffSpacePx * 2;
-
-    /** Height of the band a marking is placed in, which hangs below the row its notes belong to. */
-    private bandHeight = staffSpacePx * 2;
 
     private strokeWidth = staffSpacePx * 0.16;
     private lastPointerX = 0;
@@ -144,13 +137,17 @@ export class RangeArticulationView {
 
     public constructor(private readonly contentHost: HTMLElement, private readonly dataModel: ScoreBookDataModel,
         private readonly selectionManager: SelectionManager, private readonly registry: ScoreElementRegistry,
-        staffMode: boolean) {
+        staffMode: boolean, zenMode = false) {
         this.staffMode = staffMode;
+        this.zenMode = zenMode;
 
         requisitions.register("rangeArticulationToolChanged", this.handleToolChanged);
+        requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("trackChanged", this.handleRefreshRequest);
-        requisitions.register("arrangementChanged", this.handleRefreshRequest);
+        requisitions.register("arrangementMutated", this.handleRefreshRequest);
+        requisitions.register("arrangementReverted", this.handleRefreshRequest);
+        requisitions.register("measureLayoutChanged", this.handleRefreshRequest);
         requisitions.register("staffWindowChanged", this.handleRefreshRequest);
 
         contentHost.addEventListener("pointerdown", this.handlePointerDown, true);
@@ -166,9 +163,12 @@ export class RangeArticulationView {
         this.eventHandlersOff();
 
         requisitions.unregister("rangeArticulationToolChanged", this.handleToolChanged);
+        requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("trackChanged", this.handleRefreshRequest);
-        requisitions.unregister("arrangementChanged", this.handleRefreshRequest);
+        requisitions.unregister("arrangementMutated", this.handleRefreshRequest);
+        requisitions.unregister("arrangementReverted", this.handleRefreshRequest);
+        requisitions.unregister("measureLayoutChanged", this.handleRefreshRequest);
         requisitions.unregister("staffWindowChanged", this.handleRefreshRequest);
 
         if (this.refreshFrame !== undefined) {
@@ -195,6 +195,26 @@ export class RangeArticulationView {
         this.scheduleRefresh();
     }
 
+    /**
+     * Applies the edit mode of the arrangement viewer. Only while it is on may a marking be selected and moved.
+     *
+     * @param editMode True while edit mode is on.
+     */
+    public setEditMode(editMode: boolean): void {
+        if (this.editMode === editMode) {
+            return;
+        }
+
+        this.editMode = editMode;
+        if (!editMode) {
+            this.endDrag(true);
+            this.selectedId = undefined;
+            this.leaveTool();
+        }
+
+        this.scheduleRefresh();
+    }
+
     private eventHandlersOff(): void {
         this.contentHost.removeEventListener("pointerdown", this.handlePointerDown, true);
         this.contentHost.removeEventListener("pointermove", this.handlePointerMove);
@@ -205,13 +225,26 @@ export class RangeArticulationView {
     }
 
     private handleToolChanged = (tool: RangeArticulationTool): Promise<boolean> => {
-        const effective = this.staffMode ? tool : RangeArticulationTool.None;
+        const effective = this.staffMode && !this.zenMode && this.editMode ? tool : RangeArticulationTool.None;
         if (this.tool !== effective) {
             this.tool = effective;
             this.removeDragImage();
             this.holdPointer(effective !== RangeArticulationTool.None);
             this.scheduleRefresh();
         }
+
+        return Promise.resolve(true);
+    };
+
+    private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.zenMode = enabled;
+        if (enabled) {
+            this.endDrag(true);
+            this.selectedId = undefined;
+            this.leaveTool();
+        }
+
+        this.scheduleRefresh();
 
         return Promise.resolve(true);
     };
@@ -318,7 +351,8 @@ export class RangeArticulationView {
      * @param event The pointer event of the press.
      */
     private handleMarkingPointerDown = (event: PointerEvent): void => {
-        if (this.tool !== RangeArticulationTool.None || !this.staffMode || event.button !== 0) {
+        if (this.zenMode || !this.editMode || this.tool !== RangeArticulationTool.None || !this.staffMode
+            || event.button !== 0) {
             return;
         }
 
@@ -500,10 +534,9 @@ export class RangeArticulationView {
                 continue;
             }
 
-            const bandBottom = rect.bottom + this.bandHeight;
             const distance = clientY < rect.top
                 ? rect.top - clientY
-                : clientY > bandBottom ? clientY - bandBottom : 0;
+                : clientY > rect.bottom ? clientY - rect.bottom : 0;
 
             if (distance >= bestDistance) {
                 continue;
@@ -713,6 +746,10 @@ export class RangeArticulationView {
     };
 
     private handleKeyDown = (event: KeyboardEvent): void => {
+        if (this.zenMode) {
+            return;
+        }
+
         if (event.key === "Escape") {
             if (this.tool !== RangeArticulationTool.None) {
                 event.stopPropagation();
@@ -731,7 +768,7 @@ export class RangeArticulationView {
             return;
         }
 
-        if (this.tool !== RangeArticulationTool.None || this.dragId !== undefined) {
+        if (this.tool !== RangeArticulationTool.None || this.dragId !== undefined || !this.editMode) {
             return;
         }
 
@@ -777,10 +814,9 @@ export class RangeArticulationView {
      */
     private placeMarking(clientX: number, clientY: number): void {
         const row = this.locateRow(clientX, clientY);
-        const notesOnly = this.tool === RangeArticulationTool.Hairpin;
         const anchor = row === undefined
             ? undefined
-            : this.nearestAnchor(row.bar, row.trackId, clientX, notesOnly);
+            : this.nearestAnchor(row.bar, row.trackId, clientX, this.placesHairpin());
         if (row === undefined || anchor === undefined) {
             return;
         }
@@ -788,7 +824,10 @@ export class RangeArticulationView {
         if (this.tool === RangeArticulationTool.Forte) {
             this.dataModel.insertForteMark(row.trackId, anchor);
         } else {
-            const hairpin = this.initialHairpin(row.trackId, anchor);
+            const kind = this.tool === RangeArticulationTool.Crescendo
+                ? RangeArticulationKind.Crescendo
+                : RangeArticulationKind.Decrescendo;
+            const hairpin = this.initialHairpin(row.trackId, anchor, kind);
             if (hairpin !== undefined) {
                 this.dataModel.insertHairpin(hairpin.kind, row.trackId, hairpin.from, hairpin.to);
             }
@@ -798,14 +837,25 @@ export class RangeArticulationView {
     }
 
     /**
+     * @returns True while the active tool places a hairpin, which starts and ends on notes and therefore ignores
+     * rests.
+     */
+    private placesHairpin(): boolean {
+        return this.tool === RangeArticulationTool.Crescendo || this.tool === RangeArticulationTool.Decrescendo;
+    }
+
+    /**
      * @param trackId The track the clicked anchor belongs to.
      * @param from The anchor the click named.
+     * @param kind The hairpin the tool places, which decides whether the second anchor is looked for after the
+     * clicked note or before it.
      *
-     * @returns The hairpin a click places: it opens towards the nearest note after the clicked one, and towards the
-     * nearest note before it when nothing after it works. The next note may lie in a following measure, so a
-     * hairpin may reach over the barline. Undefined when the track holds no such note.
+     * @returns The hairpin a click places: a crescendo reaches from the clicked note to the nearest note after it,
+     * a decrescendo reaches from the nearest note before it to the clicked note. That note may lie in a following
+     * or preceding measure, so a hairpin may reach over the barline. Undefined when the track holds no such note.
      */
-    private initialHairpin(trackId: number, from: IRangeArticulationAnchor): IHairpin | undefined {
+    private initialHairpin(trackId: number, from: IRangeArticulationAnchor,
+        kind: RangeArticulationKind): IHairpin | undefined {
         const anchors = this.noteAnchorsOf(trackId);
         const index = anchors.findIndex((candidate) => {
             return RangeArticulations.compareAnchors(candidate, from) === 0;
@@ -814,8 +864,9 @@ export class RangeArticulationView {
             return undefined;
         }
 
-        // The nearest note after the clicked one first, then the nearest one before it.
-        const candidates = [...anchors.slice(index + 1), ...anchors.slice(0, index).reverse()];
+        const candidates = kind === RangeArticulationKind.Crescendo
+            ? anchors.slice(index + 1)
+            : anchors.slice(0, index).reverse();
 
         for (const candidate of candidates) {
             const draft = this.hairpinDraft(from, candidate, trackId);
@@ -924,6 +975,31 @@ export class RangeArticulationView {
     /**
      * @param row The track row to measure.
      *
+     * @returns The middle of the row's marking band, in the content's own pixel space. The row geometry states it as
+     *          the band's offset from the row's middle, which sits below the notation's ink so a hairpin clears the
+     *          accents. Falls back to the band below the staff for a row that states none.
+     */
+    private bandMiddleOf(row: HTMLElement): number | undefined {
+        const bandCentre = Number.parseFloat(
+            getComputedStyle(row).getPropertyValue("--staff-band-centre"),
+        );
+        const hostRect = this.contentHost.getBoundingClientRect();
+
+        if (Number.isFinite(bandCentre)) {
+            const rect = row.getBoundingClientRect();
+
+            return ((rect.top - hostRect.top) / this.zoomFactor)
+                + ((rect.height / this.zoomFactor) / 2) + bandCentre;
+        }
+
+        const bottom = this.staffBottomOf(row);
+
+        return bottom === undefined ? undefined : bottom + (staffSpacePx * 2);
+    }
+
+    /**
+     * @param row The track row to measure.
+     *
      * @returns The bottom edge of the row's staff, in the content's own pixel space: the lowest line the row
      * draws, which is what every marking of the row stands below.
      */
@@ -945,7 +1021,7 @@ export class RangeArticulationView {
      * @param trackId The track to search in.
      * @param anchor The anchor to resolve.
      *
-     * @returns The point an anchor's event is drawn at, in the content's own pixel space.
+     * @returns The point in the row's marking band above the anchor's event, in the content's own pixel space.
      */
     private anchorPoint(bar: number, trackId: number, anchor: IRangeArticulationAnchor): IPoint | undefined {
         const runs = this.registry.findElements(ScoreElementKind.StaffRun, bar, trackId);
@@ -960,11 +1036,11 @@ export class RangeArticulationView {
             const symbol = run.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol") ?? run;
             const rect = symbol.getBoundingClientRect();
             const row = run.closest<HTMLElement>(".staff-measure-track-row");
+            const bandY = row === null ? undefined : this.bandMiddleOf(row);
 
             return {
                 x: (rect.left + (rect.width / 2) - hostRect.left) / this.zoomFactor,
-                y: (row === null ? undefined : this.staffBottomOf(row))
-                    ?? (rect.bottom - hostRect.top) / this.zoomFactor,
+                y: bandY ?? (rect.bottom - hostRect.top) / this.zoomFactor,
             };
         }
 
@@ -975,8 +1051,8 @@ export class RangeArticulationView {
      * @param clientX The pointer's viewport x.
      * @param clientY The pointer's viewport y.
      *
-     * @returns The track row whose band holds the position, or undefined outside a band. A marking stands below the
-     * row its notes belong to, in the band the accent marks use, which is why hit testing the point finds nothing.
+     * @returns The track row whose band holds the position, or undefined outside a band. A marking stands in the
+     * band the row geometry places below the row's notation, so the row's own box holds it.
      */
     private locateRow(clientX: number, clientY: number): ILocatedRow | undefined {
         for (const row of this.contentHost.querySelectorAll<HTMLElement>(".staff-measure-track-row")) {
@@ -985,7 +1061,7 @@ export class RangeArticulationView {
                 continue;
             }
 
-            if (clientY < rect.bottom || clientY > rect.bottom + this.bandHeight) {
+            if (clientY < rect.top || clientY > rect.bottom) {
                 continue;
             }
 
@@ -1094,7 +1170,7 @@ export class RangeArticulationView {
         handle.dataset.articulationId = `${id}`;
         handle.dataset.end = end;
         handle.style.left = `${point.x}px`;
-        handle.style.top = `${point.y + this.bandOffset}px`;
+        handle.style.top = `${point.y}px`;
 
         return handle;
     }
@@ -1103,7 +1179,7 @@ export class RangeArticulationView {
         const element = document.createElement("div");
         element.className = className;
         element.style.left = `${point.x}px`;
-        element.style.top = `${point.y + this.bandOffset}px`;
+        element.style.top = `${point.y}px`;
         render(createElement(ScoreSymbolView, {
             symbol: ScoreSymbol.Forte,
             staffSpace: staffSpacePx,
@@ -1133,7 +1209,7 @@ export class RangeArticulationView {
         const element = this.buildHairpinGeometry(kind, width, opening, this.strokeWidth);
         element.className = className;
         element.style.left = `${Math.min(tip.x, open.x)}px`;
-        element.style.top = `${tip.y + this.bandOffset - (opening / 2)}px`;
+        element.style.top = `${tip.y - (opening / 2)}px`;
 
         return element;
     }
@@ -1184,10 +1260,9 @@ export class RangeArticulationView {
         }
 
         const row = this.locateRow(this.lastPointerX, this.lastPointerY);
-        const notesOnly = this.tool === RangeArticulationTool.Hairpin;
         const anchor = row === undefined
             ? undefined
-            : this.nearestAnchor(row.bar, row.trackId, this.lastPointerX, notesOnly);
+            : this.nearestAnchor(row.bar, row.trackId, this.lastPointerX, this.placesHairpin());
         if (row === undefined || anchor === undefined) {
             return;
         }
@@ -1202,7 +1277,10 @@ export class RangeArticulationView {
             return;
         }
 
-        const hairpin = this.initialHairpin(row.trackId, anchor);
+        const kind = this.tool === RangeArticulationTool.Crescendo
+            ? RangeArticulationKind.Crescendo
+            : RangeArticulationKind.Decrescendo;
+        const hairpin = this.initialHairpin(row.trackId, anchor, kind);
         if (hairpin === undefined) {
             return;
         }

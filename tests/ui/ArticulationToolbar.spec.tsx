@@ -102,7 +102,7 @@ const makeDataModel = (tracks: ISbDmTrack[]): ScoreBookDataModel => {
     return modelStub;
 };
 
-describe.sequential("ArticulationToolbar", () => {
+describe("ArticulationToolbar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
 
@@ -185,7 +185,7 @@ describe.sequential("ArticulationToolbar", () => {
 
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
         const accent = buttons.find((button) => {
-            return button.getAttribute("data-tooltip") === "Accent";
+            return button.getAttribute("title") === "Accent";
         });
 
         expect(accent?.classList.contains("du-btn-primary")).toBe(true);
@@ -212,7 +212,7 @@ describe.sequential("ArticulationToolbar", () => {
 
         const marked = () => {
             return renderResult!.container.querySelector(".articulationButton.du-btn-primary")
-                ?.getAttribute("data-tooltip");
+                ?.getAttribute("title");
         };
 
         // The selection carries an accent, which the overwrite mode marks.
@@ -308,7 +308,7 @@ describe.sequential("ArticulationToolbar", () => {
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
         const byTooltip = (tooltip: string) => {
             return buttons.find((button) => {
-                return button.getAttribute("data-tooltip") === tooltip;
+                return button.getAttribute("title") === tooltip;
             });
         };
 
@@ -332,7 +332,7 @@ describe.sequential("ArticulationToolbar", () => {
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
         const byTooltip = (tooltip: string) => {
             return buttons.find((button) => {
-                return button.getAttribute("data-tooltip") === tooltip;
+                return button.getAttribute("title") === tooltip;
             });
         };
 
@@ -401,7 +401,7 @@ describe.sequential("ArticulationToolbar", () => {
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
         const byTooltip = (tooltip: string) => {
             return buttons.find((button) => {
-                return button.getAttribute("data-tooltip") === tooltip;
+                return button.getAttribute("title") === tooltip;
             });
         };
 
@@ -426,7 +426,7 @@ describe.sequential("ArticulationToolbar", () => {
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
         const byTooltip = (tooltip: string) => {
             return buttons.find((button) => {
-                return button.getAttribute("data-tooltip") === tooltip;
+                return button.getAttribute("title") === tooltip;
             });
         };
 

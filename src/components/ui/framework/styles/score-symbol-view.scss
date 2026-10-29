@@ -84,7 +84,8 @@
     }
 
     .barline-icon-stroke-thick {
-        stroke-width: var(--barline-thick-thickness, 5px);
+        /* The engraving's thick stroke reads a touch heavy as an icon, so the icon states it a pixel thinner. */
+        stroke-width: calc(var(--barline-thick-thickness, 5px) - 1px);
     }
 
     /* The dots are the font's glyph, at the size the font gives it, moved so the centre of the dots' ink sits
@@ -115,7 +116,8 @@
         }
 
         .barline-icon-stroke-thick {
-            transform: translateX(17px);
+            /* The closing mark's thick stroke sits a pixel further right, where the engraving places it. */
+            transform: translateX(18px);
         }
 
         .barline-icon-dots {

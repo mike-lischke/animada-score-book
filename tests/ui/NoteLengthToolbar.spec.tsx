@@ -157,7 +157,7 @@ const selectSingleNote = (selectionManager: SelectionManager): void => {
     selectionManager.replaceSelection([noteEntry(measure, { numerator: 0, denominator: 1 })]);
 };
 
-describe.sequential("NoteLengthToolbar", () => {
+describe("NoteLengthToolbar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
 
@@ -182,8 +182,8 @@ describe.sequential("NoteLengthToolbar", () => {
             />,
         );
 
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("restores the stored value in insert mode", () => {
@@ -199,9 +199,9 @@ describe.sequential("NoteLengthToolbar", () => {
             />,
         );
 
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
-        expect(marked?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
-        expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).not.toBeNull();
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
+        expect(marked?.getAttribute("title")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(renderResult.container.querySelector(".note-dot-button.du-btn-primary")).not.toBeNull();
     });
 
     it("stores the chosen length and dot", () => {
@@ -218,12 +218,12 @@ describe.sequential("NoteLengthToolbar", () => {
             />,
         );
 
-        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        const buttons = renderResult.container.querySelectorAll(".note-length-button");
         fireEvent.click(buttons[3]);
 
         expect(saveSpy).toHaveBeenCalledWith("entryNoteValue", noteValue(NoteLength.Eighth));
 
-        fireEvent.click(renderResult.container.querySelector(".noteDotButton")!);
+        fireEvent.click(renderResult.container.querySelector(".note-dot-button")!);
 
         expect(saveSpy).toHaveBeenCalledWith("entryNoteValue", { length: NoteLength.Eighth, dotted: true });
     });
@@ -233,7 +233,7 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={makeDataModel(32, 32)} selectionManager={selectionManager} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteLengthButton")).toHaveLength(6);
+        expect(renderResult.container.querySelectorAll(".note-length-button")).toHaveLength(6);
     });
 
     it("marks the duration of the selected note", () => {
@@ -244,9 +244,9 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const selected = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(selected?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("marks the length of a selected rest", () => {
@@ -257,9 +257,9 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const selected = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(selected?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("renders the dot behind the lengths", () => {
@@ -270,10 +270,10 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll(".noteLengthToolbar button")];
+        const buttons = [...renderResult.container.querySelectorAll("button")];
 
         expect(buttons).toHaveLength(7);
-        expect(buttons[6].classList.contains("noteDotButton")).toBe(true);
+        expect(buttons[6].classList.contains("note-dot-button")).toBe(true);
     });
 
     it("marks a dotted value with its base length and the dot", () => {
@@ -284,10 +284,10 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
-        expect(marked?.getAttribute("data-tooltip")).toBe("Half note (Alt/Cmd+2)");
-        expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).not.toBeNull();
+        expect(marked?.getAttribute("title")).toBe("Half note (Alt/Cmd+2)");
+        expect(renderResult.container.querySelector(".note-dot-button.du-btn-primary")).not.toBeNull();
     });
 
     it("publishes the toggled value when the dot is clicked", () => {
@@ -306,7 +306,7 @@ describe.sequential("NoteLengthToolbar", () => {
         };
 
         requisitions.register("noteLengthChanged", handler);
-        fireEvent.click(renderResult.container.querySelector(".noteDotButton")!);
+        fireEvent.click(renderResult.container.querySelector(".note-dot-button")!);
 
         expect(received).toEqual([noteValue(NoteLength.Quarter, true)]);
 
@@ -329,7 +329,7 @@ describe.sequential("NoteLengthToolbar", () => {
         };
 
         requisitions.register("noteLengthChanged", handler);
-        fireEvent.click(renderResult.container.querySelectorAll(".noteLengthButton")[3]);
+        fireEvent.click(renderResult.container.querySelectorAll(".note-length-button")[3]);
 
         expect(received).toEqual([noteValue(NoteLength.Eighth, true)]);
 
@@ -344,7 +344,7 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".note-length-button")];
 
         // The dotted whole note needs more than one bar, so the whole note cannot be chosen.
         expect(buttons[0].disabled).toBe(true);
@@ -362,7 +362,7 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteLengthButton.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".note-length-button.du-btn-primary")).toHaveLength(0);
     });
 
     it("marks the length of the current measure when the entry's measure was replaced", () => {
@@ -389,9 +389,9 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const selected = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Half note (Alt/Cmd+2)");
+        expect(selected?.getAttribute("title")).toBe("Half note (Alt/Cmd+2)");
     });
 
     it("does not announce a length when the arrangement is reverted", async () => {
@@ -422,7 +422,7 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={makeDataModel(32, 32)} selectionManager={selectionManager} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteLengthButton.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".note-length-button.du-btn-primary")).toHaveLength(0);
     });
 
     it("disables all buttons when nothing is selected", () => {
@@ -430,14 +430,14 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={makeDataModel(32, 32)} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".note-length-button")];
 
         expect(buttons).toHaveLength(6);
         expect(buttons.every((button) => {
             return button.disabled;
         })).toBe(true);
 
-        const dot = renderResult.container.querySelector<HTMLButtonElement>(".noteDotButton");
+        const dot = renderResult.container.querySelector<HTMLButtonElement>(".note-dot-button");
 
         expect(dot?.disabled).toBe(true);
     });
@@ -452,7 +452,7 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         // The length only configures the next entry, which needs no cursor to be placed first.
-        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".note-length-button")];
 
         expect(buttons.every((button) => {
             return !button.disabled;
@@ -473,7 +473,7 @@ describe.sequential("NoteLengthToolbar", () => {
             />,
         );
 
-        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        const buttons = renderResult.container.querySelectorAll(".note-length-button");
         fireEvent.click(buttons[3]);
 
         // The cursor only marks where the entry goes, so moving it leaves the chosen value alone.
@@ -481,7 +481,7 @@ describe.sequential("NoteLengthToolbar", () => {
             selectionManager.replaceSelection([noteEntry(measure, { numerator: 4, denominator: 16 })]);
         });
 
-        expect(renderResult.container.querySelector(".noteLengthButton.du-btn-primary")).toBe(buttons[3]);
+        expect(renderResult.container.querySelector(".note-length-button.du-btn-primary")).toBe(buttons[3]);
     });
 
     it("marks the value of the selection when the view switches to overwrite", async () => {
@@ -499,9 +499,9 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const marked = () => {
-            const button = renderResult!.container.querySelector(".noteLengthButton.du-btn-primary");
+            const button = renderResult!.container.querySelector(".note-length-button.du-btn-primary");
 
-            return button?.getAttribute("data-tooltip");
+            return button?.getAttribute("title");
         };
 
         // Insert mode marks the value the next entry uses.
@@ -540,9 +540,9 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const marked = () => {
-            const button = renderResult!.container.querySelector(".noteLengthButton.du-btn-primary");
+            const button = renderResult!.container.querySelector(".note-length-button.du-btn-primary");
 
-            return button?.getAttribute("data-tooltip");
+            return button?.getAttribute("title");
         };
 
         expect(marked()).toBe("Half note (Alt/Cmd+2)");
@@ -572,10 +572,10 @@ describe.sequential("NoteLengthToolbar", () => {
             />,
         );
 
-        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        const buttons = renderResult.container.querySelectorAll(".note-length-button");
         fireEvent.click(buttons[3]);
 
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
         expect(marked).toBe(buttons[3]);
     });
 
@@ -591,12 +591,12 @@ describe.sequential("NoteLengthToolbar", () => {
             />,
         );
 
-        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        const buttons = renderResult.container.querySelectorAll(".note-length-button");
         fireEvent.click(buttons[3]);
 
         // The stub model cannot resize the addressed event, so the mark stays on what the events carry
         // instead of following the click.
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
         expect(marked).not.toBeNull();
         expect(marked).not.toBe(buttons[3]);
     });
@@ -617,7 +617,7 @@ describe.sequential("NoteLengthToolbar", () => {
 
         requisitions.register("noteLengthChanged", handler);
 
-        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        const buttons = renderResult.container.querySelectorAll(".note-length-button");
         fireEvent.click(buttons[3]);
 
         expect(received).toEqual([noteValue(NoteLength.Eighth)]);
@@ -635,7 +635,7 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={makeDataModel(16, 12)} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".note-length-button")];
 
         expect(buttons.map((button) => {
             return button.disabled;
@@ -649,7 +649,7 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={{} as ScoreBookDataModel} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".note-length-button")];
 
         expect(buttons).toHaveLength(6);
         expect(buttons.every((button) => {
@@ -666,11 +666,11 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const selected = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
         // The slot has no value of its own, so the toolbar marks the one its subdivision stands for —
         // the value the staff view draws it with.
-        expect(selected?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(selected?.getAttribute("title")).toBe("Eighth note (Alt/Cmd+4)");
     });
 
     it("marks the value a rest inside a subdivision is drawn with", () => {
@@ -682,9 +682,9 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const selected = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(selected?.getAttribute("title")).toBe("Eighth note (Alt/Cmd+4)");
     });
 
     it("disables the note lengths for a selection inside a subdivision", () => {
@@ -697,7 +697,7 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(
-            ".noteLengthButton, .noteDotButton",
+            ".note-length-button, .note-dot-button",
         )];
 
         // A slot keeps the length its ratio dictates, so no length is offered for it.
@@ -717,7 +717,7 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(
-            ".noteLengthButton, .noteDotButton",
+            ".note-length-button, .note-dot-button",
         )];
 
         expect(buttons.every((button) => {
@@ -734,17 +734,17 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".note-length-button")];
         fireEvent.click(buttons[3]);
 
         const marked = [...renderResult.container.querySelectorAll<HTMLButtonElement>(
-            ".noteLengthButton.du-btn-primary",
+            ".note-length-button.du-btn-primary",
         )];
 
         // The click announces a length, but only the model decides: the fixture keeps its durations,
         // so the mark does not jump to the clicked value.
         expect(marked.map((button) => {
-            return button.getAttribute("data-tooltip");
+            return button.getAttribute("title");
         })).not.toContain("Eighth note (Alt/Cmd+4)");
     });
 
@@ -761,16 +761,16 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(
-            ".noteLengthButton, .noteDotButton",
+            ".note-length-button, .note-dot-button",
         )];
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
         // A group behaves like any other selection: every member counts for the mark and for whether
         // a length may be picked at all.
         expect(buttons.every((button) => {
             return !button.disabled;
         })).toBe(true);
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("disables the note lengths for a group that is a subdivision", () => {
@@ -783,7 +783,7 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(
-            ".noteLengthButton, .noteDotButton",
+            ".note-length-button, .note-dot-button",
         )];
 
         // A subdivision is the one group whose members keep the length their ratio dictates.
@@ -806,15 +806,15 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(
-            ".noteLengthButton, .noteDotButton",
+            ".note-length-button, .note-dot-button",
         )];
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
         // A whole track takes a length like any other selection: every event of it counts.
         expect(buttons.every((button) => {
             return !button.disabled;
         })).toBe(true);
-        expect(marked?.getAttribute("data-tooltip")).toBe("Sixteenth note (Alt/Cmd+5)");
+        expect(marked?.getAttribute("title")).toBe("Sixteenth note (Alt/Cmd+5)");
     });
 
     it("marks the shared length of several selected rests", () => {
@@ -835,10 +835,10 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
         // The three quarter rests share their length, so the toolbar marks it.
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("marks no length when the selection mixes lengths", () => {
@@ -855,8 +855,8 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         // Different lengths leave the toolbar without a selection at all.
-        expect(renderResult.container.querySelectorAll(".noteLengthButton.du-btn-primary")).toHaveLength(0);
-        expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).toBeNull();
+        expect(renderResult.container.querySelectorAll(".note-length-button.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelector(".note-dot-button.du-btn-primary")).toBeNull();
     });
 
     it("marks the shared length without a dot when only the dots differ", () => {
@@ -872,11 +872,11 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        const marked = renderResult.container.querySelector(".note-length-button.du-btn-primary");
 
         // A quarter and a dotted quarter share their base length, so that length is marked while the
         // dot stays unmarked.
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
-        expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).toBeNull();
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(renderResult.container.querySelector(".note-dot-button.du-btn-primary")).toBeNull();
     });
 });

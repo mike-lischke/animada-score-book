@@ -1,0 +1,233 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`TrackControls > renders with all props set 1`] = `
+<div>
+  <div
+    class="container track-controls-list track-labels-list zen-track-labels"
+    data-tutorial="mixer"
+    style="flex-direction: column;"
+  >
+    <div
+      class="container trackControlsHeader"
+      style="flex-direction: row; justify-content: center; align-items: center;"
+    />
+    <div
+      class="container trackControlsPanel"
+      style="flex-direction: column; align-items: stretch;"
+    >
+      <div
+        class="container track-label-row"
+        style="flex-direction: row; align-items: center;"
+      >
+        <span
+          class="track-instrument-label"
+          title="Instrument short"
+        >
+          Instrument short
+        </span>
+      </div>
+      <div
+        class="container track-label-row"
+        style="flex-direction: row; align-items: center;"
+      >
+        <span
+          class="track-instrument-label"
+          title="Instrument long instrument name"
+        >
+          Instrument long instrument name
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`TrackControls > renders with the minimum props 1`] = `
+<div>
+  <div
+    class="container track-controls-list"
+    data-tutorial="mixer"
+    style="flex-direction: column;"
+  >
+    <div
+      class="container trackControlsHeader"
+      style="flex-direction: row; justify-content: center; align-items: center;"
+    >
+      <button
+        aria-pressed="false"
+        class="btn du-btn actionControlSwitch"
+        id="trackControlsToggle"
+        title="Expand mixer"
+      >
+        <span
+          class="actionControlSwitchDot"
+        />
+        <svg
+          class="icon"
+          data-icon="Mixer"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M7 3H5V9H7V3M19 3H17V13H19V3M3 13H5V21H7V13H9V11H3V13M15 7H13V3H11V7H9V9H15V7M11 21H13V11H11V21M15 15V17H17V21H19V17H21V15H15Z"
+          />
+        </svg>
+      </button>
+    </div>
+    <div
+      class="container trackControlsPanel"
+      style="flex-direction: column; align-items: stretch;"
+    >
+      <div
+        class="container track-controls"
+        style="flex-direction: row; align-items: center;"
+      >
+        <div
+          class="container trackSliderArea"
+          style="flex-direction: column; align-items: flex-start;"
+        >
+          <span
+            class="track-instrument-name"
+          >
+            Instrument short
+          </span>
+          <div
+            aria-valuemax="2"
+            aria-valuemin="0"
+            aria-valuenow="1"
+            class="slider-split track-volume-slider"
+            role="slider"
+            tabindex="0"
+          >
+            <div
+              class="slider-split-track"
+            >
+              <div
+                class="slider-split-zone-left"
+                style="width: 50%;"
+              />
+              <div
+                class="slider-split-zone-right"
+                style="width: 50%;"
+              />
+              <div
+                class="slider-split-fill"
+                style="width: 50%;"
+              />
+              <div
+                class="slider-split-thumb"
+                style="left: 50%;"
+              />
+              <div
+                class="slider-split-marker"
+                style="left: 50%;"
+              />
+            </div>
+          </div>
+          <div
+            aria-hidden="true"
+            class="trackVolumeLegend"
+          >
+            <span
+              class="trackVolumeLegendLeft"
+            >
+              ◀︎ Mute
+            </span>
+            <span
+              class="trackVolumeLegendRight"
+            >
+              Focus ▶︎
+            </span>
+          </div>
+        </div>
+        <div
+          class="container trackInstrumentShell"
+          style="flex-direction: row; justify-content: center; align-items: center;"
+        >
+          <div
+            aria-label="Instrument short"
+            class="icon trackInstrumentIcon"
+            style="mask-image: url(""); -webkit-mask-image: url(""); --icon-src: url(""); width: 34px; height: 34px;"
+          />
+        </div>
+      </div>
+      <div
+        class="container track-controls"
+        style="flex-direction: row; align-items: center;"
+      >
+        <div
+          class="container trackSliderArea"
+          style="flex-direction: column; align-items: flex-start;"
+        >
+          <span
+            class="track-instrument-name"
+          >
+            Instrument long instrument name
+          </span>
+          <div
+            aria-valuemax="2"
+            aria-valuemin="0"
+            aria-valuenow="1"
+            class="slider-split track-volume-slider"
+            role="slider"
+            tabindex="0"
+          >
+            <div
+              class="slider-split-track"
+            >
+              <div
+                class="slider-split-zone-left"
+                style="width: 50%;"
+              />
+              <div
+                class="slider-split-zone-right"
+                style="width: 50%;"
+              />
+              <div
+                class="slider-split-fill"
+                style="width: 50%;"
+              />
+              <div
+                class="slider-split-thumb"
+                style="left: 50%;"
+              />
+              <div
+                class="slider-split-marker"
+                style="left: 50%;"
+              />
+            </div>
+          </div>
+          <div
+            aria-hidden="true"
+            class="trackVolumeLegend"
+          >
+            <span
+              class="trackVolumeLegendLeft"
+            >
+              ◀︎ Mute
+            </span>
+            <span
+              class="trackVolumeLegendRight"
+            >
+              Focus ▶︎
+            </span>
+          </div>
+        </div>
+        <div
+          class="container trackInstrumentShell"
+          style="flex-direction: row; justify-content: center; align-items: center;"
+        >
+          <div
+            aria-label="Instrument long instrument name"
+            class="icon trackInstrumentIcon"
+            style="mask-image: url(""); -webkit-mask-image: url(""); --icon-src: url(""); width: 34px; height: 34px;"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;

@@ -35,13 +35,9 @@ export interface IIconProperties extends ICommonUIProperties {
 
 /** Icons are images which can be themed, so their colors are ignored. */
 export class Icon extends UIComponent<IIconProperties> {
-    public static override defaultProps = {
-        disabled: false,
-    };
-
     public render(): ComponentChild {
         const {
-            id, src, overlays, disabled, style, height, width, color, alt
+            id, src, overlays, disabled = false, style, height, width, color, alt
         } = this.props;
         let className = this.generateFinalClassName([
             "icon",

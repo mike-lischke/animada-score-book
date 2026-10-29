@@ -4,10 +4,11 @@
  */
 
 import { LoadAudioError, type LoadAudioStage } from "./LoadAudioError.js";
-import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { getSharedAudioContext } from "./audio-context.js";
-import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
+import {
+    SbDmEntityType, type IInstrumentMeta, type ISbDmInstrument, type ISbDmInstrumentImage,
+} from "./ScoreBookDataModel.js";
 import type { IAudioData } from "./types/general.js";
 import { getNewId } from "./utils.js";
 

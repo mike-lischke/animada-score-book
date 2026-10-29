@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import {
     beijaFlorImportPath, ensureGridMode, expectGridModePolyrhythmNotes, expectImportedPolyrhythmSong,
-    expectPlaybackToMove, findStaffMeasure, routeApi,
+    expectPlaybackToMove, findStaffMeasure, routeApi, showTrackView,
 } from "./e2e-test-helpers.js";
 
 const bolero3ImportPath = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
@@ -127,11 +127,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         expect(gridSubdivisionCounts["8"]).toBe(1);
 
         // Staff mode: binary subdivisions produce no tuplet bracket/number labels.
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
-        await expect(trackViewToggle).toBeVisible();
-        if (!(await trackViewToggle.isChecked())) {
-            await trackViewToggle.check({ force: true });
-        }
+        await showTrackView(page, "staff");
 
         await expect(page.locator(".staff-measure-viewer").first()).toBeVisible();
 

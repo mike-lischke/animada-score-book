@@ -8,18 +8,11 @@
 
 ## Context
 
-A one-bar repeat (simile) says that a track plays what the measure before it plays. The staff view draws a mark
-instead of notes, and playback must follow the chain however many similes stand in a row. The events of a measure
-are its single source of truth for what sounds: they tile the measure, they are what the projection turns into
-notation, and every editor addresses them. A simile sounds something but holds nothing of its own, so it cannot
-be one of those events, and it must not hide content either.
+A one-bar repeat (simile) says that a track plays what the measure before it plays. The staff view draws a mark instead of notes, and playback must follow the chain however many similes stand in a row. The events of a measure are its single source of truth for what sounds: they tile the measure, they are what the projection turns into notation, and every editor addresses them. A simile sounds something but holds nothing of its own, so it cannot be one of those events, and it must not hide content either.
 
 ## Decision
 
-We will keep the mark on the track piece — `ITrackPieceSnapshot.simile` in the core snapshot (schema 6) and its
-runtime counterpart — and resolve it in playback instead of in the measure content. Setting the mark empties the
-piece's content; clearing it leaves an empty piece. Playback resolves the chain in one forward pass, and the views
-draw the mark instead of the piece's notation.
+We will keep the mark on the track piece — `ITrackPieceSnapshot.simile` in the core snapshot (schema 6) and its runtime counterpart — and resolve it in playback instead of in the measure content. Setting the mark empties the piece's content; clearing it leaves an empty piece. Playback resolves the chain in one forward pass, and the views draw the mark instead of the piece's notation.
 
 ## Invariants
 

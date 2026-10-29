@@ -5,11 +5,11 @@
 
 import type { IUISettings } from "../core/AppStorage.js";
 import type { INoteValue } from "../core/rest-notation.js";
-import type { IFraction, EditEntryMode } from "../core/types/general.js";
+import type { IFraction, EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
-import type { ISelectionDelta, ISelectionRectChange } from "../ui/SelectionSerializer.js";
+import type { ISelectionDelta, ISelectionEntry, ISelectionRectChange } from "../ui/SelectionSerializer.js";
 
 export type SimpleCallback = () => Promise<boolean>;
 
@@ -22,10 +22,11 @@ export interface ISubdivisionCreationRequest {
     normal: number;
 }
 
-/** The placing tool the staff view is in: none, placing a hairpin, or placing an `f`. */
+/** The placing tool the staff view is in: none, placing a crescendo or a decrescendo hairpin, or placing an `f`. */
 export enum RangeArticulationTool {
     None,
-    Hairpin,
+    Crescendo,
+    Decrescendo,
     Forte,
 }
 
@@ -38,24 +39,63 @@ export interface IMeasureVisibilityRequest {
     position?: IFraction;
 }
 
+/** The visible viewport of the score, normalized to its scrollable content. */
+export interface IScoreViewport {
+    /** Left edge of the visible range, 0..1 over the scrollable range. */
+    position: number;
+
+    /** Width of the visible range, 0..1 of the total content width. */
+    width: number;
+
+    /** 1-based first visible measure. */
+    startBar: number;
+
+    /** 1-based last visible measure. */
+    endBar: number;
+}
+
+/** The notification center's current summary, used to render its entry point. */
+export interface INotificationState {
+    /** Number of notifications the user has not seen yet. */
+    newCount: number;
+
+    /** Total number of notifications in the history. */
+    totalCount: number;
+
+    /** When true, only errors and the history list are shown. */
+    silent: boolean;
+
+    /** Whether the history list is open. */
+    showHistory: boolean;
+}
+
+export interface IPlaybackOrderChange {
+    arrangementId: number;
+    bars: readonly number[];
+}
+
 /** A generic type to extract the (single) callback parameter type from the callback map. */
 export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parameters<IRequestTypeMap[K]>[0];
 
 /** A map of request types to their corresponding callback signatures. A callback must only have a single parameter. */
 export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
-    "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
+    "trackViewModeToggled": (mode: TrackViewMode) => Promise<boolean>;
 
-    /** The set of measures the staff view renders changed, so decoration of rendered measures has to be redone. */
+    /** Refresh staff decorations after a new measure window arrives or rendered rows move. */
     "staffWindowChanged": SimpleCallback;
 
-    "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
+    /** The bars the user focused for playback; without a focus the whole score is played. */
+    "playFocusChanged": (bars?: readonly number[]) => Promise<boolean>;
+    "playbackOrderChanged": (order: IPlaybackOrderChange) => Promise<boolean>;
     "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
     "playerStateChanged": (state: PlayerPlayState) => Promise<boolean>;
 
     "instrumentLoaded": (instrumentId: number) => Promise<boolean>;
     "trackChanged": (trackId: number) => Promise<boolean>;
-    "arrangementChanged": (arrangementId: number) => Promise<boolean>;
+
+    /** Refresh view-only decorations after a measure width changed; the edit itself is not finished yet. */
+    "measureLayoutChanged": SimpleCallback;
     "timeParamsChanged": SimpleCallback;
     "scoreBookLoaded": (reason: ScoreBookChangeReason) => Promise<boolean>;
     "scoreEntryUpdated": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
@@ -64,21 +104,30 @@ export interface IRequestTypeMap {
     "undoStackChanged": SimpleCallback;
 
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
+    "selectionCursorChanged": (entry: ISelectionEntry) => Promise<boolean>;
+
+    /** Whether a rectangle-selection drag is currently active. */
+    "selectionGestureChanged": (active: boolean) => Promise<boolean>;
+
     "selectionDeleteRequested": SimpleCallback;
+    "selectionEditPopupCloseRequested": SimpleCallback;
 
     /** Brings the given measure into the viewport, even when it is not rendered at the moment. */
     "measureVisibilityRequested": (request: IMeasureVisibilityRequest) => Promise<boolean>;
+
+    /** Reports the score viewport that is visible now, so a navigator can follow it. */
+    "scoreViewportChanged": (viewport: IScoreViewport) => Promise<boolean>;
+
+    /** Requests scrolling the score viewport to the given position, 0..1 over the scrollable range. */
+    "scoreViewportMoveRequested": (position: number) => Promise<boolean>;
+
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
-
-    "statusBarItemClicked": (data: { command: string; event: MouseEvent | KeyboardEvent; }) => Promise<boolean>;
 
     "showInfo": (text: string) => Promise<boolean>;
     "showWarning": (text: string) => Promise<boolean>;
     "showError": (text: string) => Promise<boolean>;
-    "notificationStateChanged": (state: {
-        newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
-    }) => Promise<boolean>;
+    "notificationStateChanged": (state: INotificationState) => Promise<boolean>;
 
     "backendDisconnected": SimpleCallback;
 
@@ -88,11 +137,9 @@ export interface IRequestTypeMap {
 
     "editModeChanged": (enabled: boolean) => Promise<boolean>;
 
-    /**
-     * The entry mode that is in effect. Posted by the entry mode button and applied by the app; it is
-     * also the channel through which listeners learn the mode. The grid view offers no insert mode, so
-     * the mode only ever changes while the staff view is active.
-     */
+    "zenModeChanged": (enabled: boolean) => Promise<boolean>;
+
+    /** The effective entry mode, published by its button and applied by the app; insert is staff-only. */
     "editEntryModeChanged": (mode: EditEntryMode) => Promise<boolean>;
 
     "insertTrackRequested": (track: ISbDmTrack) => Promise<boolean>;
@@ -106,10 +153,7 @@ export interface IRequestTypeMap {
     /** Fired by the subdivision toolbar to create a subdivision at the cursor or selection. */
     "subdivisionCreationRequested": (request: ISubdivisionCreationRequest) => Promise<boolean>;
 
-    /**
-     * The range articulation placing tool that is in effect. Posted by the toolbar and applied by the staff
-     * view, which also posts it to exit the mode after a completed or cancelled gesture.
-     */
+    /** Active range-articulation tool; toolbar selects it, staff view clears it after placement or cancellation. */
     "rangeArticulationToolChanged": (tool: RangeArticulationTool) => Promise<boolean>;
 
     /** Fired by the note length toolbar to change the length, including its dot, of subsequently entered notes. */
@@ -118,16 +162,10 @@ export interface IRequestTypeMap {
     /** Fired by the articulation toolbar to change the articulation of subsequently entered notes. */
     "articulationChanged": (articulation: Articulation) => Promise<boolean>;
 
-    /**
-     * Fired by ScoreBookDataModel after any mutation to the arrangement.
-     * The UndoManager listens to this to record undo/redo snapshots.
-     */
+    /** Posted once per finished arrangement edit: undo recording, autosave, toolbars, and viewers refresh on it. */
     "arrangementMutated": SimpleCallback;
 
-    /**
-     * Fired by UndoManager after an undo/redo navigation, so the selection can be re-validated and the
-     * cursor restored. The selection state is the one the restored arrangement was last edited in.
-     */
+    /** Posted after undo/redo to revalidate the selection and restore its state from the restored arrangement. */
     "arrangementReverted": (selectionState?: string) => Promise<boolean>;
 }
 

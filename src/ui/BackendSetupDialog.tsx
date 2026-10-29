@@ -15,89 +15,105 @@ import { Label } from "../components/ui/framework/Label.js";
 import { ProgressIndicator } from "../components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
-import { DatabaseEngine } from "../server/database.js";
+import { DatabaseEngine, isValidDatabaseEngine } from "../server/database.js";
 
-const engineLabels: Record<string, string> = {
+const engineLabels: Record<DatabaseEngine, string> = {
     [DatabaseEngine.MySQL]: "MySQL",
     [DatabaseEngine.MariaDB]: "MariaDB",
     [DatabaseEngine.Postgres]: "PostgreSQL",
 };
 
 enum BackendSetupState {
-    /** Config missing or unreadable — nothing can be done. */
-    Fatal,
-    NeedsSetup,
+    /** Waiting for the state of the backend. */
+    Loading,
+
+    /** Waiting for the user. */
+    Ready,
+
+    /** Creating the schema. */
     Initialising,
+
+    /** The schema exists. */
     Done,
+
+    /** The last request failed. */
     Error,
 }
 
 /** Why the backend setup dialog was opened, which decides what it offers. */
 export enum BackendSetupMode {
-    /** The backend cannot run at all, so the dialog only states why. */
+    /** The backend has no usable configuration, so the dialog only states why. */
     Fatal,
 
-    /** The backend needs its database tables, so the dialog offers to create them. */
-    Initial,
+    /** The configuration is usable but the schema is missing. */
+    Initialize,
 
-    /** The user administers the database from within the app. */
-    Admin,
+    /** The schema is broken, so the dialog offers to rebuild it. */
+    Reset,
 }
 
-interface IBackendConfig {
+interface IBackendSetupDialogState {
+    mode: BackendSetupMode;
+    phase: BackendSetupState;
+    engine: DatabaseEngine;
+    host: string;
+    port: string;
+    database: string;
+    errorMessage: string;
+}
+
+/** The part of the health response the dialog reads. */
+interface IHealthResponse {
+    status: string;
+    configLoaded: boolean;
+    configError?: string;
+    initialized: boolean;
+    dbError?: string;
     engine: string;
     host: string;
     port: number;
     database: string;
 }
 
-interface IBackendSetupDialogState {
-    phase: BackendSetupState;
-    mode: BackendSetupMode;
-    config: IBackendConfig | undefined;
-    hasData: boolean;
-    errorMessage: string;
-    configError: string;
-}
-
 interface IBackendSetupDialogProperties extends ICommonUIProperties {
 }
 
 export class BackendSetupDialog extends UIComponent<IBackendSetupDialogProperties, IBackendSetupDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<"done" | "reset">;
 
     public constructor(props: IBackendSetupDialogProperties) {
         super(props);
 
         this.state = {
-            phase: BackendSetupState.NeedsSetup,
-            mode: BackendSetupMode.Initial,
-            config: undefined,
-            hasData: false,
+            mode: BackendSetupMode.Initialize,
+            phase: BackendSetupState.Loading,
+            engine: DatabaseEngine.MySQL,
+            host: "",
+            port: "",
+            database: "",
             errorMessage: "",
-            configError: "",
         };
     }
 
     /**
      * Opens the dialog and returns a promise that resolves when the user takes action.
      *
-     * @param options              The dialog configuration.
-     * @param options.mode         The setup mode (fatal, initial, admin).
-     * @param options.configError  An optional config error message.
-     * @param options.dbError      An optional database error message.
+     * @param options The dialog configuration.
+     * @param options.mode The job the dialog has to do.
+     * @param options.configError Why the configuration is unusable.
+     * @param options.dbError The database problem to show.
      *
-     * @returns "reset" when the user clicks Reset Database, "done" when setup completes.
+     * @returns "reset" when the user asks for a database reset, "done" otherwise.
      */
     public async show(options: {
         mode: BackendSetupMode; configError?: string; dbError?: string;
-    } = { mode: BackendSetupMode.Initial }): Promise<"done" | "reset"> {
+    }): Promise<"done" | "reset"> {
         this.signal = new Semaphore<"done" | "reset">();
         this.setState({
             mode: options.mode,
-            errorMessage: options.dbError ?? "",
-            configError: options.configError ?? "",
+            phase: BackendSetupState.Loading,
+            errorMessage: options.configError ?? options.dbError ?? "",
         }, () => {
             this.dialogRef.current?.open();
             void this.checkBackendStatus();
@@ -107,103 +123,8 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
     }
 
     public render(): ComponentChild {
-        const { phase, config, errorMessage, mode, configError } = this.state;
-
-        const isBusy = phase === BackendSetupState.Initialising;
-
-        let content: ComponentChild;
-
-        switch (phase) {
-            case BackendSetupState.Fatal: {
-                content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
-                        <Icon
-                            src={UIIcon.Error}
-                            style={{ fontSize: "48px", color: "var(--color-error)", marginBottom: "12px" }}
-                        />
-                        <Label caption="Backend configuration is missing or invalid." heading wrap />
-                        <Label
-                            caption={configError || "Create a backend-config.json file and restart the server."}
-                            style={{ marginTop: "8px" }} wrap
-                        />
-                    </Container>
-                );
-
-                break;
-            }
-
-            case BackendSetupState.NeedsSetup:
-            case BackendSetupState.Error: {
-                content = this.renderConfigView(config, errorMessage);
-
-                break;
-            }
-
-            case BackendSetupState.Initialising: {
-                content = (
-                    <>
-                        <Label caption="Setting up database tables …" />
-                        <ProgressIndicator linear />
-                    </>
-                );
-
-                break;
-            }
-
-            case BackendSetupState.Done: {
-                content = (
-                    <>
-                        <Label caption="Database setup complete." />
-                        <Icon
-                            src={UIIcon.Check}
-                            style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-success)" }}
-                        />
-                    </>
-                );
-
-                break;
-            }
-
-            default:
-        }
-
-        let actions: ComponentChild[];
-
-        if (phase === BackendSetupState.Fatal) {
-            actions = [];
-        } else if (phase === BackendSetupState.Done) {
-            actions = [
-                <Button id="backend-setup-close" value="close" caption="Close" />,
-            ];
-        } else if (isBusy) {
-            actions = [];
-        } else if (mode === BackendSetupMode.Initial) {
-            actions = [
-                <Button
-                    id="backend-setup-init"
-                    caption="Initialize Database"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                        e.preventDefault();
-                        void this.initializeDatabase();
-                    }}
-                />,
-            ];
-        } else {
-            actions = [
-                <Button
-                    id="backend-setup-reset"
-                    caption="Reset Database"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                        e.preventDefault();
-                        this.signal?.notify("reset");
-                        this.dialogRef.current?.close(true);
-                    }}
-                />,
-                <Button id="backend-setup-cancel" value="cancel" caption="Close" />,
-            ];
-        }
+        const content = this.renderContent();
+        const actions = this.renderActions();
 
         return (
             <Dialog
@@ -233,57 +154,174 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         );
     }
 
-    private renderConfigView(config: IBackendConfig | undefined, errorMessage: string): ComponentChild {
-        if (!config) {
-            return (
-                <Container orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}>
-                    <Icon
-                        src={UIIcon.Warning}
-                        style={{
-                            fontSize: "24px", fontWeight: 800,
-                            color: "var(--color-warning)", marginRight: "8px",
+    private renderContent(): ComponentChild {
+        const { mode, phase, errorMessage } = this.state;
+
+        switch (phase) {
+            case BackendSetupState.Loading: {
+                return <Label caption="Checking the backend connection …" />;
+            }
+
+            case BackendSetupState.Initialising: {
+                return (
+                    <>
+                        <Label caption="Setting up database tables …" />
+                        <ProgressIndicator linear />
+                    </>
+                );
+            }
+
+            case BackendSetupState.Done: {
+                return (
+                    <>
+                        <Label caption="Database setup complete." />
+                        <Icon
+                            src={UIIcon.Check}
+                            style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-success)" }}
+                        />
+                    </>
+                );
+            }
+
+            case BackendSetupState.Error: {
+                return this.renderErrorBox(errorMessage);
+            }
+
+            case BackendSetupState.Ready:
+            default: {
+                if (mode === BackendSetupMode.Fatal) {
+                    return this.renderConfigMissing();
+                }
+
+                return this.renderConfigSummary();
+            }
+        }
+    }
+
+    private renderActions(): ComponentChild[] {
+        const { mode, phase } = this.state;
+
+        switch (phase) {
+            case BackendSetupState.Loading:
+            case BackendSetupState.Initialising: {
+                return [];
+            }
+
+            case BackendSetupState.Done: {
+                return [
+                    <Button id="backend-setup-close" value="close" caption="Close" />,
+                ];
+            }
+
+            case BackendSetupState.Error: {
+                return [
+                    <Button id="backend-setup-retry" caption="Try again" isDefault onClick={this.handleRetry} />,
+                ];
+            }
+
+            case BackendSetupState.Ready:
+            default: {
+                if (mode === BackendSetupMode.Fatal) {
+                    return [];
+                }
+
+                if (mode === BackendSetupMode.Reset) {
+                    return [
+                        <Button
+                            id="backend-setup-reset"
+                            caption="Reset Database"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                this.signal?.notify("reset");
+                                this.dialogRef.current?.close(true);
+                            }}
+                        />,
+                        <Button id="backend-setup-cancel" value="cancel" caption="Close" />,
+                    ];
+                }
+
+                return [
+                    <Button
+                        id="backend-setup-init"
+                        caption="Initialize Database"
+                        isDefault
+                        onClick={(e) => {
+                            e.preventDefault();
+                            void this.submitSetup();
                         }}
-                    />
-                    <Label caption="Could not read backend configuration." />
+                    />,
+                ];
+            }
+        }
+    }
+
+    private renderConfigSummary(): ComponentChild {
+        const { engine, host, port, database, errorMessage } = this.state;
+
+        const rows = [
+            { label: "Engine", value: engineLabels[engine] },
+            { label: "Host", value: host },
+            { label: "Port", value: port },
+            { label: "Database", value: database },
+        ];
+
+        const rowItems = rows.map((row) => {
+            return (
+                <Container
+                    key={row.label}
+                    className="form-row"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.SpaceBetween}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    <Label className="backend-setup-row-label" caption={row.label} />
+                    <Label className="backend-setup-row-value" caption={row.value} />
                 </Container>
             );
-        }
+        });
 
-        const rows: Array<{ label: string; value: string; }> = [
-            { label: "Engine", value: engineLabels[config.engine] ?? config.engine },
-            { label: "Host", value: config.host },
-            { label: "Port", value: String(config.port) },
-            { label: "Database", value: config.database },
-        ];
+        const errorBox = errorMessage.length > 0 ? this.renderErrorBox(errorMessage) : undefined;
 
         return (
             <Container className="form-card" orientation={Orientation.TopDown}>
-                {errorMessage && (
-                    <Container
-                        className="text-error bg-error/10 rounded p-2"
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
-                        style={{ marginBottom: "12px" }}
-                    >
-                        <Icon src={UIIcon.Error} style={{ fontSize: "16px", marginRight: "8px" }} />
-                        <Label caption={errorMessage} wrap />
-                    </Container>
-                )}
+                {errorBox}
+                {rowItems}
+            </Container>
+        );
+    }
 
-                {rows.map((row) => {
-                    return (
-                        <Container
-                            key={row.label}
-                            className="form-row"
-                            orientation={Orientation.LeftToRight}
-                            mainAlignment={ChildAlignment.SpaceBetween}
-                            crossAlignment={ChildAlignment.Center}
-                        >
-                            <Label caption={row.label} style={{ opacity: 0.7, fontSize: "13px" }} />
-                            <Label caption={row.value} style={{ fontFamily: "monospace", fontSize: "13px" }} />
-                        </Container>
-                    );
-                })}
+    private renderConfigMissing(): ComponentChild {
+        const { errorMessage } = this.state;
+
+        const detail = errorMessage.length > 0 ? this.renderErrorBox(errorMessage) : undefined;
+
+        return (
+            <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
+                <Icon
+                    src={UIIcon.Error}
+                    style={{ fontSize: "48px", color: "var(--color-error)", marginBottom: "12px" }}
+                />
+                <Label caption="Backend configuration is missing or invalid." heading wrap />
+                {detail}
+                <Label
+                    caption="Create backend-config.json in the server directory and restart the process."
+                    style={{ marginTop: "8px" }}
+                    wrap
+                />
+            </Container>
+        );
+    }
+
+    private renderErrorBox(message: string): ComponentChild {
+        return (
+            <Container
+                className="text-error bg-error/10 rounded p-2"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+                style={{ marginBottom: "12px" }}
+            >
+                <Icon src={UIIcon.Error} style={{ fontSize: "16px", marginRight: "8px" }} />
+                <Label caption={message} wrap />
             </Container>
         );
     }
@@ -297,44 +335,28 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
             const res = await fetch("/api?action=health");
 
             if (!res.ok) {
-                this.setState({ errorMessage: "Backend not reachable." });
+                this.setState({ phase: BackendSetupState.Error, errorMessage: "Backend not reachable." });
 
                 return;
             }
 
-            const data = await res.json() as {
-                status: string; configLoaded: boolean; configError?: string;
-                initialized: boolean; engine: string;
-                host: string; port: number; database: string;
-                hasData: boolean;
-            };
-
-            if (!data.configLoaded) {
-                this.setState({
-                    phase: BackendSetupState.Fatal,
-                    configError: data.configError ?? "Could not read backend-config.json.",
-                });
-
-                return;
-            }
-
-            const config: IBackendConfig = {
-                engine: data.engine,
-                host: data.host,
-                port: data.port,
-                database: data.database,
-            };
+            const data = await res.json() as IHealthResponse;
+            const engine = isValidDatabaseEngine(data.engine) ? data.engine : DatabaseEngine.MySQL;
 
             this.setState({
-                phase: BackendSetupState.NeedsSetup, config,
-                hasData: data.hasData,
+                phase: BackendSetupState.Ready,
+                engine,
+                host: data.host,
+                port: data.port > 0 ? String(data.port) : "",
+                database: data.database,
+                errorMessage: data.configError ?? data.dbError ?? "",
             });
         } catch {
-            this.setState({ errorMessage: "Backend not reachable." });
+            this.setState({ phase: BackendSetupState.Error, errorMessage: "Backend not reachable." });
         }
     }
 
-    private async initializeDatabase(): Promise<void> {
+    private async submitSetup(): Promise<void> {
         this.setState({ phase: BackendSetupState.Initialising, errorMessage: "" });
 
         try {
@@ -348,7 +370,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 const data = await res.json() as { error?: string; };
 
                 this.setState({
-                    phase: BackendSetupState.Error,
+                    phase: BackendSetupState.Ready,
                     errorMessage: data.error ?? "Failed to initialize database.",
                 });
 
@@ -357,11 +379,14 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
 
             this.setState({ phase: BackendSetupState.Done });
         } catch {
-            this.setState({
-                phase: BackendSetupState.Error,
-                errorMessage: "Backend not reachable.",
-            });
+            this.setState({ phase: BackendSetupState.Ready, errorMessage: "Backend not reachable." });
         }
     }
+
+    private handleRetry = (): void => {
+        this.setState({ phase: BackendSetupState.Loading }, () => {
+            void this.checkBackendStatus();
+        });
+    };
 
 }

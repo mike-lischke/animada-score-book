@@ -33,7 +33,7 @@ interface IConfirmDialogState {
 }
 
 export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<DialogResponseClosure>;
 
     public constructor(props: {}) {
@@ -61,7 +61,6 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
         const { title, message, buttons, description, closeOnBackdropClick } = this.state;
 
         const className = this.generateFinalClassName(["confirmDialog"]);
-        let dialogContent = null;
         const descriptionLabels: ComponentChild[] = [];
         description?.forEach((value, index) => {
             descriptionLabels.push(
@@ -69,7 +68,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
             );
         });
 
-        dialogContent =
+        const dialogContent =
             <Container orientation={Orientation.TopDown}>
                 {message && <Label id="dialogMessage" caption={message} />}
                 <Container

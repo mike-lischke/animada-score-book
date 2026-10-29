@@ -60,24 +60,24 @@ export const pastelColors: string[] = [
 const summerColors = [
     "hsl(193 82% 41%)",
     "hsl(12 95% 64%)",
-    "hsl(257 30% 50%)",
-    "hsl(42 95% 82%)",
-    "hsl(333 62% 46%)",
-    "hsl(40 96% 57%)",
-    "hsl(207 48% 20%)",
+    "hsl(250 40% 60%)",
+    "hsl(174 77% 43%)",
+    "hsl(333 90% 56%)",
+    "hsl(50 96% 67%)",
+    "hsl(207 48% 40%)",
     "hsl(24 90% 48%)",
-    "hsl(179 88% 24%)",
+    "hsl(179 88% 44%)",
     "hsl(350 82% 54%)",
-    "hsl(229 34% 27%)",
+    "hsl(229 34% 47%)",
     "hsl(45 96% 68%)",
     "hsl(5 90% 56%)",
-    "hsl(152 52% 39%)",
+    "hsl(152 52% 49%)",
     "hsl(320 44% 34%)",
     "hsl(35 96% 51%)",
-    "hsl(182 84% 23%)",
+    "hsl(182 84% 43%)",
     "hsl(27 96% 72%)",
     "hsl(354 70% 52%)",
-    "hsl(205 52% 28%)",
+    "hsl(205 52% 48%)",
 ] as const;
 
 const colorOffset = 0;
@@ -88,7 +88,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "0",
     icon: agogo2Icon,
     displayOrder: 0,
-    displayName: "Agogô",
+    displayName: "Agogô 2-Bell",
     variants: [
         {
             id: "1",
@@ -96,7 +96,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowDownIcon,
                 shortDescription: "Low",
-                description: "Low Agogo Bell"
+                description: "Low bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -112,7 +112,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowUpIcon,
                 shortDescription: "High",
-                description: "High Agogo Bell"
+                description: "High bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -129,7 +129,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "a",
     icon: agogo4Icon,
     displayOrder: 1,
-    displayName: "4-Bell Agogo",
+    displayName: "Agogô 4-Bell",
     variants: [
         {
             id: "1",
@@ -137,7 +137,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowDownWithLineIcon,
                 shortDescription: "Lowest",
-                description: "Lowest 4-Bell Agogo"
+                description: "Lowest bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -153,7 +153,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowHalfDownIcon,
                 shortDescription: "Lower",
-                description: "Lower 4-Bell Agogo"
+                description: "Lower bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -169,7 +169,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowHalfUpIcon,
                 shortDescription: "Higher",
-                description: "Higher 4-Bell Agogo"
+                description: "Higher bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -185,7 +185,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowUpWithLineIcon,
                 shortDescription: "Highest",
-                description: "Highest 4-Bell Agogo"
+                description: "Highest bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -538,7 +538,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "7",
     icon: highSurdoIcon,
     displayOrder: 8,
-    displayName: "Terceira Surdo",
+    displayName: "Surdo Terceira",
     variants: [
         {
             id: "1",
@@ -575,7 +575,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "8",
     icon: midSurdoIcon,
     displayOrder: 9,
-    displayName: "Mid Surdo",
+    displayName: "Surdo Segunda",
     variants: [
         {
             id: "1",
@@ -612,7 +612,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "9",
     icon: lowSurdoIcon,
     displayOrder: 10,
-    displayName: "Low Surdo",
+    displayName: "Surdo Primeira",
     variants: [
         {
             id: "1",

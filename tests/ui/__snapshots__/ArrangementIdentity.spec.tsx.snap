@@ -1,0 +1,79 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ArrangementIdentity > renders with all props set 1`] = `
+<div>
+  <div
+    class="container arrangementIdentity zen-identity zen-identity"
+    style="flex-direction: column; justify-content: center; align-items: flex-start;"
+  >
+    <div
+      class="container arrangementIdentityRow"
+      style="flex-direction: row; align-items: center;"
+    >
+      <span
+        class="label arrangementIdentitySection"
+      >
+        Score Library
+      </span>
+      <span
+        class="label arrangementIdentityChevron"
+      >
+        ›
+      </span>
+      <span
+        class="label"
+        id="arrangementIdentityTitle"
+      >
+        Samba Test
+        <span
+          class="arrangementIdentityStats"
+        >
+           • 6/8 • 4 bars • 12 s
+        </span>
+      </span>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`ArrangementIdentity > renders with the minimum props 1`] = `
+<div>
+  <div
+    class="container arrangementIdentity"
+    style="flex-direction: column; justify-content: center; align-items: flex-start;"
+  >
+    <div
+      class="container arrangementIdentityRow"
+      style="flex-direction: row; align-items: center;"
+    >
+      <span
+        class="label arrangementIdentitySection"
+      >
+        Score Library
+      </span>
+      <span
+        class="label arrangementIdentityChevron"
+      >
+        ›
+      </span>
+      <span
+        class="label"
+        id="arrangementIdentityTitle"
+      >
+        Samba Test
+      </span>
+      <span
+        class="uiBadge uiBadge-neutral arrangement-save-chip arrangement-save-chip"
+      >
+        Unchanged
+      </span>
+    </div>
+    <span
+      class="label arrangementIdentityStats"
+      id="scoreStats"
+    >
+      4/4 • 1 bar • 2 s
+    </span>
+  </div>
+</div>
+`;

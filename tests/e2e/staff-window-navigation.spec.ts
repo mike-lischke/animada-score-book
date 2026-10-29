@@ -42,9 +42,6 @@ interface IStaffGeometry {
 
     /** Height of the mixer panel beside the viewer, which stretches to the height of the viewer. */
     controlsHeight: number;
-
-    /** Distance between the minimap's top edge and the viewport's top edge. */
-    minimapTop: number;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -162,14 +159,36 @@ const selectionState = (page: Page): Promise<ISelectionState> => {
  */
 const staffGeometry = (page: Page): Promise<IStaffGeometry> => {
     return page.evaluate(() => {
-        const minimap = document.querySelector<HTMLElement>(".minimap");
-
         return {
             contentHeight: document.getElementById("trackViewerContentHost")?.offsetHeight ?? -1,
-            controlsHeight: document.querySelector<HTMLElement>(".trackControlsList")?.offsetHeight ?? -1,
-            minimapTop: Math.round(minimap?.getBoundingClientRect().top ?? -1),
+            controlsHeight: document.querySelector<HTMLElement>(".track-controls-list")?.offsetHeight ?? -1,
         };
     });
+};
+
+/**
+ * Reads the staff geometry once it stopped changing: the panels follow the centred score content, which a first
+ * layout pass still adjusts.
+ *
+ * @param page The page to read the geometry from.
+ *
+ * @returns The settled vertical geometry of the staff view.
+ */
+const settledStaffGeometry = async (page: Page): Promise<IStaffGeometry> => {
+    let previous = await staffGeometry(page);
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await page.waitForTimeout(50);
+
+        const current = await staffGeometry(page);
+        if (current.contentHeight === previous.contentHeight && current.controlsHeight === previous.controlsHeight) {
+            return current;
+        }
+
+        previous = current;
+    }
+
+    return previous;
 };
 
 // The score has eight measures with four events each, and the viewer renders only a window of them, so the measure
@@ -215,18 +234,19 @@ test("navigation steps over a measure boundary and anchors that measure in the v
 
 // The staff prefix column is taller than a measure column, because its rows start below the head room a measure
 // reserves for its number and label. A window that leaves measure 1 behind therefore has to keep the prefix
-// mounted: dropping it would shrink the staff content while scrolling, and the minimap below the viewer would
-// move up with it.
+// mounted: dropping it would shrink the staff content while scrolling and shift every row below it upwards.
 test("the staff content keeps its height while the window leaves the prefix behind", async ({ page }) => {
     await openScore(page);
 
     await expect(page.locator(".staff-prefix-viewer")).toHaveCount(1);
-    const before = await staffGeometry(page);
+
+    // The panels follow the centred score content, so a first layout pass still moves them by a pixel.
+    const before = await settledStaffGeometry(page);
 
     await scrollAway(page);
 
     // The window has moved past measure 1, which is no longer rendered as a column of its own.
     await expect(page.locator(".staff-measure-number", { hasText: /^1$/ })).toHaveCount(0);
 
-    expect(await staffGeometry(page)).toEqual(before);
+    expect(await settledStaffGeometry(page)).toEqual(before);
 });

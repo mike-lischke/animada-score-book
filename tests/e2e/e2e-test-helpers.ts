@@ -5,6 +5,9 @@
 
 import { expect, type Locator, type Page } from "@playwright/test";
 
+import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+
 const normalizeWhitespace = (value: string): string => {
     return value.trim().replace(/\s+/g, " ");
 };
@@ -84,7 +87,7 @@ export const selectTrackPiece = async (page: Page, barNumber: number): Promise<v
  * @returns The button.
  */
 export const toolbarButton = (page: Page, tooltip: string): Locator => {
-    return page.locator(`.subdivisionToolbar button[data-tooltip="${tooltip}"]`);
+    return page.locator(`.subdivision-toolbar button[title="${tooltip}"]`);
 };
 
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";
@@ -101,6 +104,50 @@ export const beijaFlorQuery = "t=Beija%20Flor%202004%20%20-%20%20Bossa%201%20(H-
 /* cspell:enable */
 
 export const beijaFlorImportPath = `/?${beijaFlorQuery}`;
+
+/**
+ * Scrolls the score until the given element is clear of the floating tools bar. The bar overlaps the right end of
+ * the action bar to save space, so a per-measure button underneath it has to be scrolled out from under it the way
+ * a user would.
+ *
+ * @param page The page under test.
+ * @param element The element that has to become clickable.
+ */
+export const scrollClearOfToolsBar = async (page: Page, element: Locator): Promise<void> => {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const bar = await page.locator("#toolsBarHost").boundingBox();
+        const box = await element.boundingBox();
+        if (!bar || !box || box.x + box.width <= bar.x) {
+            return;
+        }
+
+        const overlap = Math.ceil((box.x + box.width) - bar.x);
+        const scrolled = await page.evaluate(async (distance) => {
+            const host = document.querySelector<HTMLElement>("#trackViewerHost");
+            if (!host) {
+                return false;
+            }
+
+            const before = host.scrollLeft;
+            host.scrollLeft = before + distance;
+
+            // The strip follows the scroll event, so the next two frames carry the buttons to their new place.
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        resolve();
+                    });
+                });
+            });
+
+            return host.scrollLeft > before;
+        }, overlap + 16);
+
+        if (!scrolled) {
+            return;
+        }
+    }
+};
 
 /**
  * Sets up API mocks so that the session appears already authenticated
@@ -217,7 +264,7 @@ export const routeApi = async (page: Page): Promise<void> => {
 export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> => {
     await expect(page.locator("#appRoot")).toBeVisible();
     await expect.poll(async () => {
-        const title = await page.locator("#header-breadcrumb-title").first().textContent();
+        const title = await page.locator("#arrangementIdentityTitle").first().textContent();
 
         return normalizeWhitespace(title ?? "");
     }).toBe(beijaFlorDisplayedTitle);
@@ -225,15 +272,68 @@ export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> =>
     await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
 };
 
-export const ensureGridMode = async (page: Page): Promise<void> => {
-    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
-    await expect(trackViewToggle).toBeVisible();
+/**
+ * @param page The page under test.
+ * @param mode The view the segment selects.
+ *
+ * @returns The mode bar's segment for that view.
+ */
+export const trackViewSegment = (page: Page, mode: "grid" | "staff"): Locator => {
+    const title = mode === "grid" ? "Show the score as a note grid (G)" : "Show the score as staff notation (S)";
 
-    if (await trackViewToggle.isChecked()) {
-        await trackViewToggle.uncheck({ force: true });
+    return page.locator(`#arrangementModeBar button[title="${title}"]`);
+};
+
+/**
+ * Switches the score to the given view through the mode bar.
+ *
+ * @param page The page under test.
+ * @param mode The view to show.
+ */
+export const showTrackView = async (page: Page, mode: "grid" | "staff"): Promise<void> => {
+    const segment = trackViewSegment(page, mode);
+    await expect(segment).toBeVisible();
+
+    if (await segment.getAttribute("aria-pressed") !== "true") {
+        await segment.click({ force: true });
     }
 
-    await expect(trackViewToggle).not.toBeChecked();
+    await expect(segment).toHaveAttribute("aria-pressed", "true");
+};
+
+/**
+ * @param page The page under test.
+ * @param mode The entry mode the segment selects.
+ *
+ * @returns The mode bar's segment for that entry mode.
+ */
+export const entryModeSegment = (page: Page, mode: "insert" | "overwrite"): Locator => {
+    const title = mode === "insert"
+        ? "Enter notes by pushing the content behind the cursor (I)"
+        : "Enter notes by replacing the content at the cursor (O)";
+
+    return page.locator(`#arrangementModeBar button[title="${title}"]`);
+};
+
+/**
+ * Switches the staff view's entry mode through the mode bar.
+ *
+ * @param page The page under test.
+ * @param mode The entry mode to switch to.
+ */
+export const showEntryMode = async (page: Page, mode: "insert" | "overwrite"): Promise<void> => {
+    const segment = entryModeSegment(page, mode);
+    await expect(segment).toBeVisible();
+
+    if (await segment.getAttribute("aria-pressed") !== "true") {
+        await segment.click({ force: true });
+    }
+
+    await expect(segment).toHaveAttribute("aria-pressed", "true");
+};
+
+export const ensureGridMode = async (page: Page): Promise<void> => {
+    await showTrackView(page, "grid");
     await expect(page.locator(".grid-measure-row").first()).toBeVisible();
 };
 
@@ -321,7 +421,7 @@ export const expectGridBarDomSnapshot = async (
 
 export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     const playbackToggle = page.locator("#playbackButton");
-    const playButton = page.locator("#arrangementPlayControls .playStopButton");
+    const playButton = page.locator("#arrangementPlayControls .play-stop-button");
     const playBeam = page.locator("#playBeam");
 
     await expect(playButton).toBeVisible();
@@ -336,7 +436,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     };
 
     await playButton.click();
-    await expect(playbackToggle).toBeChecked();
+    await expect(playbackToggle).toHaveAttribute("aria-pressed", "true");
     await expect(playBeam).toBeVisible();
 
     const initialX = await readBeamX();
@@ -349,8 +449,79 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     }).toBeGreaterThan(1);
 
     await playButton.click();
-    await expect(playbackToggle).not.toBeChecked();
+    await expect(playbackToggle).toHaveAttribute("aria-pressed", "false");
     await expect(playBeam).toBeHidden();
+};
+
+/**
+ * A measure of a seeded staff score, filled with quarter notes.
+ *
+ * @param number The 1-based measure number.
+ *
+ * @returns The measure.
+ */
+const seededMeasure = (number: number) => {
+    return {
+        number,
+        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+        events: [0, 1, 2, 3].map((beat) => {
+            return {
+                start: { numerator: beat, denominator: 4 },
+                duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "1",
+            };
+        }),
+        subdivisions: [],
+    };
+};
+
+/**
+ * @param trackCount The number of tracks to seed.
+ * @param measureCount The number of measures each track gets.
+ *
+ * @returns The snapshot of a score with that many tracks and measures.
+ */
+const seededScoreSnapshot = (trackCount: number, measureCount: number) => {
+    const tracks = Array.from({ length: trackCount }, (_, track) => {
+        return {
+            id: 300 + track,
+            instrumentId: "0",
+            measures: Array.from({ length: measureCount }, (_, measure) => {
+                return seededMeasure(measure + 1);
+            }),
+        };
+    });
+
+    return {
+        version: arrangementSnapshotVersion,
+        title: "E2E Seeded Score",
+        timeParams: { timeSignature: "4/4", tempo: 120, length: measureCount, pulse: "1/4", stepResolution: 16 },
+        tracks,
+    };
+};
+
+/**
+ * Opens the app on a seeded score in staff mode. The score is built instead of loaded from the backend, so a test can
+ * state how much content the viewer has to show.
+ *
+ * @param page The page under test.
+ * @param trackCount The number of tracks to seed. They drive the vertical extent of the score.
+ * @param measureCount The number of measures to seed.
+ */
+export const openSeededStaffScore = async (page: Page, trackCount: number, measureCount: number): Promise<void> => {
+    await page.addInitScript((data: { packed: string; }) => {
+        const sessionId = "e2e-seeded-score";
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+            currentScore: data.packed,
+            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+        }));
+    }, { packed: stringifyPackedArrangement(seededScoreSnapshot(trackCount, measureCount)) });
+
+    await page.goto("/");
+    await expect(page.locator("#trackViewerHost")).toBeVisible();
+    await expect(page.locator(".staff-measure-viewer")).toHaveCount(measureCount);
 };
 
 export const readStoredCurrentScore = async (page: Page): Promise<string> => {
@@ -385,4 +556,67 @@ export const readStoredCurrentScore = async (page: Page): Promise<string> => {
 
         return currentScore ?? "";
     });
+};
+
+/**
+ * Samples the play head while playback runs and collects the bars it passes, in order.
+ *
+ * @param page The page under test.
+ * @param visits The number of entries to collect before resolving. Zero runs until playback stops.
+ *
+ * @returns The bars the play head visited, in the order it reached them.
+ */
+export const playbackBars = async (page: Page, visits = 0): Promise<number[]> => {
+    return page.evaluate((requiredVisits) => {
+        return new Promise<number[]>((resolve, reject) => {
+            const seen: number[] = [];
+            let previousProgress = 0;
+            const started = performance.now();
+            const sample = (): void => {
+                const playing = document.querySelector("#playbackButton")?.getAttribute("aria-pressed") === "true";
+                if (!playing && seen.length > 0) {
+                    resolve(seen);
+
+                    return;
+                }
+
+                const beam = document.querySelector("#playBeam")?.getBoundingClientRect();
+                if (beam && playing) {
+                    for (const measure of document.querySelectorAll(".grid-measure-viewer, .staff-measure-viewer")) {
+                        const rect = measure.getBoundingClientRect();
+                        if (beam.left < rect.left || beam.left >= rect.right) {
+                            continue;
+                        }
+
+                        const bar = Number(measure.querySelector(".measure-focus-button")?.getAttribute("data-bar")
+                            ?? measure.querySelector(".grid-measure-number, .staff-measure-number")?.textContent);
+                        const progress = (beam.left - rect.left) / rect.width;
+                        if (seen.at(-1) !== bar || progress < previousProgress - 0.25) {
+                            seen.push(bar);
+                        }
+
+                        previousProgress = progress;
+
+                        break;
+                    }
+                }
+
+                if (requiredVisits > 0 && seen.length >= requiredVisits) {
+                    resolve(seen);
+
+                    return;
+                }
+
+                if (performance.now() - started > 10_000) {
+                    reject(new Error(`Playback did not finish: ${seen.join(", ")}`));
+
+                    return;
+                }
+
+                requestAnimationFrame(sample);
+            };
+
+            sample();
+        });
+    }, visits);
 };

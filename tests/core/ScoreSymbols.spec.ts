@@ -11,6 +11,7 @@ import {
     BarlineEdge, BarlinePart, GlyphAnchor, OwnPathInk, ScoreSymbols, ScoreSymbol, ScoreSymbolSource,
 } from "../../src/core/ScoreSymbols.js";
 import { SmuflGlyph, SmuflGlyphs } from "../../src/core/smufl/SmuflGlyphs.js";
+import type { IRepeatBar } from "../../src/core/types/general.js";
 
 describe("ScoreSymbols", () => {
     it("states a source for every symbol", () => {
@@ -201,5 +202,47 @@ describe("ScoreSymbols", () => {
             width: "var(--barline-repeat-width)",
             height: "var(--barline-height)",
         });
+    });
+
+    it("draws the two ends of a bracket, not the complete bracket glyph", () => {
+        // U+E002 is the complete bracket of a fixed height; a bracket that spans a system is built from the two
+        // ends below it, which hang on the left edge of the box they are placed in.
+        expect(SmuflGlyphs.definition(SmuflGlyph.BracketTop).codepoint).toBe(0xE003);
+        expect(SmuflGlyphs.definition(SmuflGlyph.BracketBottom).codepoint).toBe(0xE004);
+
+        expect(ScoreSymbols.definition(ScoreSymbol.BracketTop)).toMatchObject({
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketTop,
+            anchor: GlyphAnchor.LeftEdge,
+        });
+        expect(ScoreSymbols.definition(ScoreSymbol.BracketBottom)).toMatchObject({
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketBottom,
+            anchor: GlyphAnchor.LeftEdge,
+        });
+    });
+
+    it("names the barline one side of a bar draws from the marks it carries", () => {
+        expect(ScoreSymbols.barlineAt({ closesRepeat: false, endsScore: false })).toBe(ScoreSymbol.BarlineSingle);
+        expect(ScoreSymbols.barlineAt({ closesRepeat: false, endsScore: true })).toBe(ScoreSymbol.BarlineFinal);
+        expect(ScoreSymbols.barlineAt({ closesRepeat: true, endsScore: false })).toBe(ScoreSymbol.RepeatEnd);
+
+        // A repeat mark wins over the end of the score: the repeat's line closes it.
+        expect(ScoreSymbols.barlineAt({ closesRepeat: true, endsScore: true })).toBe(ScoreSymbol.RepeatEnd);
+    });
+
+    it("closes a bar with the line its own repeat mark states, and with none where the next bar opens one", () => {
+        const closedByTheBar = new Map<number, IRepeatBar>([[1, { end: true }], [2, { start: true }]]);
+
+        // Bar 1 closes a repeat of its own, so it keeps its line although bar 2 opens one.
+        expect(ScoreSymbols.closingBarlineAt(closedByTheBar, 1, false)).toBe(ScoreSymbol.RepeatEnd);
+
+        // The bar before a repeat that opens one draws no closing line: the repeat's own line closes it.
+        const openedByTheNext = new Map<number, IRepeatBar>([[2, { start: true }]]);
+        expect(ScoreSymbols.closingBarlineAt(openedByTheNext, 1, false)).toBeUndefined();
+
+        // A bar that carries no mark ends with a plain line, and the last bar of the score with the final one.
+        expect(ScoreSymbols.closingBarlineAt(closedByTheBar, 5, false)).toBe(ScoreSymbol.BarlineSingle);
+        expect(ScoreSymbols.closingBarlineAt(undefined, 5, true)).toBe(ScoreSymbol.BarlineFinal);
     });
 });
