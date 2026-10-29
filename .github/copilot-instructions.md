@@ -93,23 +93,27 @@ All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns
 - Use present tense, imperative mood: "Fix bug" not "Fixed bug" or "Fixes bug".
 - Always use english in commit messages, even if the codebase is otherwise multilingual.
 
-### Documentation Check Before Commits
+### Documentation Updates
 
-**No commit without a documentation check.** Right before every commit, decide whether the change is visible outside the code. When it is, update the handbook in the same commit — not in a later one.
+**The documentation is updated before a release, not with every commit.** Between releases a commit carries a
+documentation change only when the user asks for one; ordinary commits leave the handbook, the README, and the release
+notes alone.
 
-The check is required when the change touches any of these:
+When a release is prepared — or when the user asks for documentation work — the check covers every change since the
+last release that touches any of these:
 - UI: new, changed, renamed, or removed controls, dialogs, sections, labels, tooltips, messages, shortcuts, icons, layout behaviour at different viewport sizes.
 - Backend behaviour: endpoints and their actions, status codes, error texts, permission rules, locks, setup and reset flow, startup logging that the docs quote.
 - Configuration: keys in `backend-config.json`, environment variables, their defaults and effects.
 - Installation and operation: requirements, package contents, first start, upgrade and backup steps.
-- Screenshots and diagrams: an image that shows the changed element is re-captured or adapted in the same commit.
+- Screenshots and diagrams: an image that shows the changed element is re-captured or adapted.
 
-Where the check goes:
+Where the update goes:
 - The matching chapter under `docs/en/` (`using/`, `administration/`, `getting-started/`, `reference/`, `development/`, `troubleshooting.md`, `instruments.md`). Grep for the labels and messages you changed instead of guessing the chapter.
 - `docs/planning/handbook-2.0/screenshot-storyboard.md` when an image is missing or outdated but cannot be re-captured yet.
-- `release-notes.md` when the change belongs in the notes of the upcoming version.
+- `release-notes.md` for the notes of the released version.
 
-When only internal things change — refactorings, tests, build scripts, type-only changes, code comments — state in the commit preparation that no user-visible behaviour changed, and skip the handbook edit. When in doubt, treat the change as user-visible and check.
+Internal changes — refactorings, tests, build scripts, type-only changes, code comments — need no documentation at
+all. When in doubt during release preparation, treat the change as user-visible and check.
 
 ### Switch Statements
 

@@ -17,7 +17,7 @@ The handbook is edited in this repository and nowhere else. This chapter describ
 | `docs/en/instruments.md`, `docs/en/troubleshooting.md` | Single pages with a fixed heading structure           |
 | `docs/images/`                                         | Screenshots and notation crops                        |
 | `docs/adr/`, `docs/design/`                            | Architecture decisions and design contracts           |
-| `readme.md`                                            | Product overview, entry points, and showcase images    |
+| `readme.md`                                            | Product overview, entry points, and showcase images   |
 
 Sibling directories such as `docs/de/` or `docs/pt/` are reserved for translations and are created only when a translation exists.
 

@@ -166,75 +166,77 @@ All P3 motives are captured.
 
 ## Storyboard
 
-| ID    | Pri | Subject                          | Capture context                                                         | Destination                         | File                                      |
-| ----- | --- | -------------------------------- | ----------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------- |
-| S-01  | P1  | Full window, staff view, playing | Ijexá, staff view, Light+, Bravura, playhead mid-score                  | overview, presentation, README hero | `en/presentation/staff-view.png`          |
-| S-02  | P1  | Full window, grid view           | Ijexá, grid view, Light+, same scroll position as S-01                  | overview, presentation, README hero | `en/presentation/grid-view.png`           |
-| S-03  | P1  | Zen mode, staff view             | Ijexá, staff view, Zen mode active, labels only in the track column     | presentation, README showcase       | `en/presentation/zen-mode.png`            |
-| S-04  | P1  | Score Library open               | Library drawer, a folder with several scores and a shared score visible | library, README showcase            | `en/library/library-tree.png`             |
-| S-05  | P1  | Theme comparison                 | Same two bars of Ijexá in four themes, 2 × 2 montage                    | presentation, README showcase       | `en/presentation/themes.png`              |
-| S-06  | P1  | Music font comparison            | Same two bars of Ijexá in Bravura, Leipzig, Petaluma, Sebastian         | presentation, README showcase       | `en/presentation/music-fonts.png`         |
-| S-07  | P2  | Settings with font dropdown open | Settings dialog, `Music font` list open with per-font samples           | presentation                        | `en/settings/music-font-picker.png`       |
-| S-08  | P3  | Font information popup           | Settings, font info popup with version, copyright, licence, source      | presentation                        | `en/settings/music-font-info.png`         |
-| S-09  | P2  | Settings, remaining rows         | Settings dialog scrolled to zoom, auto-extend, permission               | presentation                        | `en/settings/settings-rows.png`           |
-| S-10  | —   | Onboarding tutorial (removed)    | Not captured: the tutorial is disabled for 2.0.0 (issue #63)            | —                                   | —                                         |
-| S-11  | P2  | Login dialog, user tab           | Login dialog, user tab, empty fields                                    | first steps                         | `en/getting-started/login.png`            |
-| S-12  | P3  | Login dialog, group tab          | Login dialog, group tab with group dropdown                             | administration                      | `en/administration/group-login.png`       |
-| S-13  | P3  | Finish Installation wizard       | Admin user and initial group blocks                                     | administration                      | `en/administration/first-run.png`         |
-| S-14  | P2  | New Song dialog                  | Default values, instrument list with a few selected                     | library                             | `en/library/new-score.png`                |
-| S-15  | P3  | Import Score dialog              | Import dialog with BananaDrum URL example                               | library                             | `en/library/import-score.png`             |
-| S-16  | P2  | Library row menu                 | Score row kebab open with load, copy URL, remove, group access          | library                             | `en/library/score-menu.png`               |
-| S-17  | P2  | Group Access editor              | Owner header, read and write columns with group chips                   | library, administration             | `en/library/group-access.png`             |
-| S-18  | P3  | Users & Groups, users tab        | Two users, admin chip visible, filter field                             | administration                      | `en/administration/users.png`             |
-| S-19  | P3  | Users & Groups, groups tab       | Group list with member counts and admin column                          | administration                      | `en/administration/groups.png`            |
-| S-20  | P1  | Staff edit mode                  | Ijexá, staff view, edit mode, one note selected, toolbars visible       | staff editing, README showcase      | `en/staff-editing/edit-mode.png`          |
-| S-21  | P2  | Note style and technique bar     | Repinique track selected, full style bar with icons                     | staff editing, instruments          | `en/staff-editing/note-styles.png`        |
-| S-22  | P3  | Note length toolbar              | Whole to thirty-second buttons, dotted toggle active                    | staff editing                       | `en/staff-editing/note-length.png`        |
-| S-23  | P3  | Articulation toolbar             | Caixa track, three articulation buttons                                 | staff editing                       | `en/staff-editing/articulations.png`      |
-| S-24  | P2  | Accent, ghost and damped marks   | Cropped bars with all three marks, readable at 100 %                    | staff editing, instruments intro    | `notation/articulations.png`              |
-| S-25  | P3  | Subdivision menu                 | Selection popup with the eight ratios visible                           | staff editing                       | `en/staff-editing/subdivisions.png`       |
-| S-26  | P2  | Tuplet notation                  | Triplet and a nested tuplet in one bar, labels above and below          | staff editing                       | `notation/tuplets.png`                    |
-| S-27  | P3  | Entry mode switch                | Mode bar with `Overwrite` active and `Insert` visible                   | staff editing                       | `en/staff-editing/entry-modes.png`        |
-| S-28  | P2  | Selection rectangle              | Staff view, rectangle over two bars, selection highlight                | staff editing                       | `en/staff-editing/selection.png`          |
-| S-29  | P3  | Selection popup                  | Popup with structure actions for a whole-bar selection                  | staff editing                       | `en/staff-editing/selection-actions.png`  |
-| S-30  | P3  | Bar action strip                 | Edit mode strip above three bars with repeat and insert actions         | staff editing                       | `en/staff-editing/bar-actions.png`        |
-| S-31  | P3  | Track actions menu               | Track sidebar kebab open with add, duplicate, clear, delete             | staff editing                       | `en/staff-editing/track-actions.png`      |
-| S-32  | P3  | One-bar repeat                   | Track-piece toolbar with simile button and rendered simile sign         | staff editing                       | `en/staff-editing/simile.png`             |
-| S-33  | P2  | Measure width resizing           | One narrow and one wide bar side by side, resize handle visible         | staff editing, printing             | `en/staff-editing/measure-width.png`      |
-| S-34  | P2  | Dynamics                         | Hairpin and forte mark with drag handles                                | staff editing, instruments intro    | `notation/dynamics.png`                   |
-| S-35  | P3  | Paste mismatch warning           | Notification with an instrument mismatch message                        | staff editing                       | `en/staff-editing/paste-warning.png`      |
-| S-36  | —   | Grid radial note menu (removed)  | Not captured: the grid uses the shared note style bar                   | —                                   | —                                         |
-| S-37  | P2  | Grid note cells                  | Two bars of grid view with accent and ghost variants visible            | grid editing                        | `en/grid-editing/grid-cells.png`          |
-| S-56  | P2  | Simile in the grid view          | One track's bar shows the repeat sign, the others keep their notes      | grid editing                        | `en/grid-editing/simile.png`              |
-| S-57  | P2  | Nested tuplet in the grid view   | A quintuplet of five slots, the third one split into a triplet          | grid editing                        | `en/grid-editing/tuplets.png`             |
-| S-38  | P2  | Playback bar                     | Playback bar with BPM, volume, loop, metronome, count-in                | playback                            | `en/playback/playback-bar.png`            |
-| S-39  | P3  | Play Focus                       | Two bars marked as play range, others not                               | playback                            | `en/playback/play-focus.png`              |
-| S-40  | P2  | Mixer                            | Expanded mixer with focus boost above 100 % and mute legend             | playback, presentation              | `en/playback/mixer.png`                   |
-| S-41  | P3  | Footer                           | Navigator caption, zoom buttons, Zen toggle, version, notifications     | presentation                        | `en/presentation/footer.png`              |
-| S-42  | P3  | Notification center              | History panel with two informative entries and DND control              | presentation                        | `en/presentation/notification-center.png` |
-| S-43  | P1  | Print preview                    | I-Break, staff view, landscape, two pages visible                       | printing                            | `en/print/print-preview.png`              |
-| S-44  | P3  | Print preview controls           | Controls bar with orientation, borders, scale, tracks                   | printing                            | `en/print/preview-controls.png`           |
-| S-45  | P2  | Printed page                     | PDF page 1 with title block, notation and page number                   | printing                            | `en/print/printed-page.png`               |
-| S-46  | P3  | MP3 export                       | Export progress dialog with score title                                 | printing                            | `en/print/mp3-export.png`                 |
-| S-47  | P2  | Phone, staff view                | 390 × 844, staff view, compact playback bar, Zen off                    | presentation                        | `en/presentation/mobile-staff.png`        |
-| S-48  | P3  | Phone, Score Library             | 390 × 844, library drawer open                                          | library                             | `en/library/mobile-library.png`           |
-| S-49  | P3  | Tablet, grid view                | 1024 × 768, grid view with mixer visible                                | presentation                        | `en/presentation/tablet-grid.png`         |
-| S-50  | P3  | Connection lost                  | Reconnect dialog with attempt counter                                   | troubleshooting                     | `en/troubleshooting/connection-lost.png`  |
-| S-51  | P3  | Error page                       | Error boundary with retry, reload, report, details                      | troubleshooting                     | `en/troubleshooting/error-page.png`       |
-| S-52  | P3  | Backend setup                    | `Initialize Database` dialog with engine, host, port, database          | installation, troubleshooting       | `en/administration/backend-setup.png`     |
-| S-53  | P3  | Release notes dialog             | Dialog with the 2.0.0 notes once written                                | presentation                        | `en/presentation/release-notes.png`       |
-| S-54a | P1  | Agogô 2-Bell notation            | Reference score, Agogô 2-Bell track, both bells, accent and ghost       | instruments                         | `notation/agogo-2-bell.png`               |
-| S-54b | P1  | Agogô 4-Bell notation            | Four bells on four lines                                                | instruments                         | `notation/agogo-4-bell.png`               |
-| S-54c | P1  | Chocalho notation                | Accent and ghost variants                                               | instruments                         | `notation/chocalho.png`                   |
-| S-54d | P1  | Tamborim notation                | Accent and ghost variants                                               | instruments                         | `notation/tamborim.png`                   |
-| S-54e | P1  | Repinique notation               | All seven styles, including rim shot, rim, buzz, open and slap          | instruments                         | `notation/repinique.png`                  |
-| S-54f | P1  | Repinique Whippy notation        | Accent and ghost variants                                               | instruments                         | `notation/repinique-whippy.png`           |
-| S-54g | P1  | Caixa notation                   | Normal, ghost, press roll, rim shot                                     | instruments                         | `notation/caixa.png`                      |
-| S-54h | P1  | Timbau notation                  | Open, slap and bass                                                     | instruments                         | `notation/timbau.png`                     |
-| S-54i | P1  | Surdo Terceira notation          | Center and muted                                                        | instruments                         | `notation/surdo-terceira.png`             |
-| S-54j | P1  | Surdo Segunda notation           | Center and muted                                                        | instruments                         | `notation/surdo-segunda.png`              |
-| S-54k | P1  | Surdo Primeira notation          | Center and muted                                                        | instruments                         | `notation/surdo-primeira.png`             |
-| S-55  | P2  | Demo entry                       | Demo access screen once the separate task is implemented                | overview, first steps               | `en/getting-started/demo-access.png`      |
+| ID    | Pri | Subject                          | Capture context                                                                         | Destination                      | File                                      |
+| ----- | --- | -------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------- | ----------------------------------------- |
+| S-01  | P1  | Full window, staff view, playing | Ijexá, staff view, Light+, Bravura, playhead mid-score                                  | overview, presentation           | `en/presentation/staff-view.png`          |
+| S-02  | P1  | Full window, grid view           | Ijexá, grid view, Light+, same scroll position as S-01                                  | overview, presentation           | `en/presentation/grid-view.png`           |
+| S-03  | P1  | Zen mode, staff view             | Ijexá, staff view, Zen mode active, labels only in the track column                     | presentation                     | `en/presentation/zen-mode.png`            |
+| S-04  | P1  | Score Library open               | Library drawer, a folder with several scores and a shared score visible                 | library                          | `en/library/library-tree.png`             |
+| S-05  | P1  | Theme comparison                 | Same two bars of Ijexá in four themes, 2 × 2 montage                                    | presentation                     | `en/presentation/themes.png`              |
+| S-06  | P1  | Music font comparison            | Same two bars of Ijexá in Bravura, Leipzig, Petaluma, Sebastian                         | presentation                     | `en/presentation/music-fonts.png`         |
+| S-07  | P2  | Settings with font dropdown open | Settings dialog, `Music font` list open with per-font samples                           | presentation                     | `en/settings/music-font-picker.png`       |
+| S-08  | P3  | Font information popup           | Settings, font info popup with version, copyright, licence, source                      | presentation                     | `en/settings/music-font-info.png`         |
+| S-09  | P2  | Settings, remaining rows         | Settings dialog scrolled to zoom, auto-extend, permission                               | presentation                     | `en/settings/settings-rows.png`           |
+| S-10  | —   | Onboarding tutorial (removed)    | Not captured: the tutorial is disabled for 2.0.0 (issue #63)                            | —                                | —                                         |
+| S-11  | P2  | Login dialog, user tab           | Login dialog, user tab, empty fields                                                    | first steps                      | `en/getting-started/login.png`            |
+| S-12  | P3  | Login dialog, group tab          | Login dialog, group tab with group dropdown                                             | administration                   | `en/administration/group-login.png`       |
+| S-13  | P3  | Finish Installation wizard       | Admin user and initial group blocks                                                     | administration                   | `en/administration/first-run.png`         |
+| S-14  | P2  | New Song dialog                  | Default values, instrument list with a few selected                                     | library                          | `en/library/new-score.png`                |
+| S-15  | P3  | Import Score dialog              | Import dialog with BananaDrum URL example                                               | library                          | `en/library/import-score.png`             |
+| S-16  | P2  | Library row menu                 | Score row kebab open with load, copy URL, remove, group access                          | library                          | `en/library/score-menu.png`               |
+| S-17  | P2  | Group Access editor              | Owner header, read and write columns with group chips                                   | library, administration          | `en/library/group-access.png`             |
+| S-18  | P3  | Users & Groups, users tab        | Two users, admin chip visible, filter field                                             | administration                   | `en/administration/users.png`             |
+| S-19  | P3  | Users & Groups, groups tab       | Group list with member counts and admin column                                          | administration                   | `en/administration/groups.png`            |
+| S-20  | P1  | Staff edit mode                  | Ijexá, staff view, edit mode, one note selected, toolbars visible                       | staff editing, README            | `en/staff-editing/edit-mode.png`          |
+| S-21  | P2  | Note style and technique bar     | Repinique track selected, full style bar with icons                                     | staff editing, instruments       | `en/staff-editing/note-styles.png`        |
+| S-22  | P3  | Note length toolbar              | Whole to thirty-second buttons, dotted toggle active                                    | staff editing                    | `en/staff-editing/note-length.png`        |
+| S-23  | P3  | Articulation toolbar             | Caixa track, three articulation buttons                                                 | staff editing                    | `en/staff-editing/articulations.png`      |
+| S-24  | P2  | Accent, ghost and damped marks   | Cropped bars with all three marks, readable at 100 %                                    | staff editing, instruments intro | `notation/articulations.png`              |
+| S-25  | P3  | Subdivision menu                 | Selection popup with the eight ratios visible                                           | staff editing                    | `en/staff-editing/subdivisions.png`       |
+| S-26  | P2  | Tuplet notation                  | Triplet and a nested tuplet in one bar, labels above and below                          | staff editing                    | `notation/tuplets.png`                    |
+| S-27  | P3  | Entry mode switch                | Mode bar with `Overwrite` active and `Insert` visible                                   | staff editing                    | `en/staff-editing/entry-modes.png`        |
+| S-28  | P2  | Selection rectangle              | Staff view, rectangle over two bars, selection highlight                                | staff editing                    | `en/staff-editing/selection.png`          |
+| S-29  | P3  | Selection popup                  | Popup with structure actions for a whole-bar selection                                  | staff editing                    | `en/staff-editing/selection-actions.png`  |
+| S-30  | P3  | Bar action strip                 | Edit mode strip above three bars with repeat and insert actions                         | staff editing                    | `en/staff-editing/bar-actions.png`        |
+| S-31  | P3  | Track actions menu               | Track sidebar kebab open with add, duplicate, clear, delete                             | staff editing                    | `en/staff-editing/track-actions.png`      |
+| S-32  | P3  | One-bar repeat                   | Track-piece toolbar with simile button and rendered simile sign                         | staff editing                    | `en/staff-editing/simile.png`             |
+| S-33  | P2  | Measure width resizing           | One narrow and one wide bar side by side, resize handle visible                         | staff editing, printing          | `en/staff-editing/measure-width.png`      |
+| S-34  | P2  | Dynamics                         | Hairpin and forte mark with drag handles                                                | staff editing, instruments intro | `notation/dynamics.png`                   |
+| S-35  | P3  | Paste mismatch warning           | Notification with an instrument mismatch message                                        | staff editing                    | `en/staff-editing/paste-warning.png`      |
+| S-36  | —   | Grid radial note menu (removed)  | Not captured: the grid uses the shared note style bar                                   | —                                | —                                         |
+| S-37  | P2  | Grid note cells                  | Two bars of grid view with accent and ghost variants visible                            | grid editing                     | `en/grid-editing/grid-cells.png`          |
+| S-56  | P2  | Simile in the grid view          | One track's bar shows the repeat sign, the others keep their notes                      | grid editing                     | `en/grid-editing/simile.png`              |
+| S-57  | P2  | Nested tuplet in the grid view   | A quintuplet of five slots, the third one split into a triplet                          | grid editing                     | `en/grid-editing/tuplets.png`             |
+| S-38  | P2  | Playback bar                     | Playback bar with BPM, volume, loop, metronome, count-in                                | playback                         | `en/playback/playback-bar.png`            |
+| S-39  | P3  | Play Focus                       | Two bars marked as play range, others not                                               | playback                         | `en/playback/play-focus.png`              |
+| S-40  | P2  | Mixer                            | Expanded mixer with focus boost above 100 % and mute legend                             | playback, presentation           | `en/playback/mixer.png`                   |
+| S-41  | P3  | Footer                           | Navigator caption, zoom buttons, Zen toggle, version, notifications                     | presentation                     | `en/presentation/footer.png`              |
+| S-42  | P3  | Notification center              | History panel with two informative entries and DND control                              | presentation                     | `en/presentation/notification-center.png` |
+| S-43  | P1  | Print preview                    | I-Break, staff view, landscape, two pages visible                                       | printing                         | `en/print/print-preview.png`              |
+| S-44  | P3  | Print preview controls           | Controls bar with orientation, borders, scale, tracks                                   | printing                         | `en/print/preview-controls.png`           |
+| S-45  | P2  | Printed page                     | PDF page 1 with title block, notation and page number                                   | printing                         | `en/print/printed-page.png`               |
+| S-46  | P3  | MP3 export                       | Export progress dialog with score title                                                 | printing                         | `en/print/mp3-export.png`                 |
+| S-47  | P2  | Phone, staff view                | 390 × 844, staff view, compact playback bar, Zen off                                    | presentation                     | `en/presentation/mobile-staff.png`        |
+| S-48  | P3  | Phone, Score Library             | 390 × 844, library drawer open                                                          | library                          | `en/library/mobile-library.png`           |
+| S-49  | P3  | Tablet, grid view                | 1024 × 768, grid view with mixer visible                                                | presentation                     | `en/presentation/tablet-grid.png`         |
+| S-50  | P3  | Connection lost                  | Reconnect dialog with attempt counter                                                   | troubleshooting                  | `en/troubleshooting/connection-lost.png`  |
+| S-51  | P3  | Error page                       | Error boundary with retry, reload, report, details                                      | troubleshooting                  | `en/troubleshooting/error-page.png`       |
+| S-52  | P3  | Backend setup                    | `Initialize Database` dialog with engine, host, port, database                          | installation, troubleshooting    | `en/administration/backend-setup.png`     |
+| S-53  | P3  | Release notes dialog             | Dialog with the 2.0.0 notes once written                                                | presentation                     | `en/presentation/release-notes.png`       |
+| S-54a | P1  | Agogô 2-Bell notation            | Reference score, Agogô 2-Bell track, both bells, accent and ghost                       | instruments                      | `notation/agogo-2-bell.png`               |
+| S-54b | P1  | Agogô 4-Bell notation            | Four bells on four lines                                                                | instruments                      | `notation/agogo-4-bell.png`               |
+| S-54c | P1  | Chocalho notation                | Accent and ghost variants                                                               | instruments                      | `notation/chocalho.png`                   |
+| S-54d | P1  | Tamborim notation                | Accent and ghost variants                                                               | instruments                      | `notation/tamborim.png`                   |
+| S-54e | P1  | Repinique notation               | All seven styles, including rim shot, rim, buzz, open and slap                          | instruments                      | `notation/repinique.png`                  |
+| S-54f | P1  | Repinique Whippy notation        | Accent and ghost variants                                                               | instruments                      | `notation/repinique-whippy.png`           |
+| S-54g | P1  | Caixa notation                   | Normal, ghost, press roll, rim shot                                                     | instruments                      | `notation/caixa.png`                      |
+| S-54h | P1  | Timbau notation                  | Open, slap and bass                                                                     | instruments                      | `notation/timbau.png`                     |
+| S-54i | P1  | Surdo Terceira notation          | Center and muted                                                                        | instruments                      | `notation/surdo-terceira.png`             |
+| S-54j | P1  | Surdo Segunda notation           | Center and muted                                                                        | instruments                      | `notation/surdo-segunda.png`              |
+| S-54k | P1  | Surdo Primeira notation          | Center and muted                                                                        | instruments                      | `notation/surdo-primeira.png`             |
+| S-55  | P2  | Demo entry                       | Demo access screen once the separate task is implemented                                | overview, first steps            | `en/getting-started/demo-access.png`      |
+| S-58  | P1  | README hero, tablet              | I-Break, staff view at 100 % zoom, tablet 1024 × 768, Zen mode, framed as an iPad       | README hero, website hero        | `en/presentation/tablet-zen-mode.png`     |
+| S-59  | P1  | Website hero, grid               | Same capture as S-58 with the grid view instead of the staff view, nothing else changed | website hero only                | `en/presentation/tablet-zen-grid.png`     |
 
 ## Priority
 
@@ -245,16 +247,24 @@ All P3 motives are captured.
 
 ## README Image Set (Phase 5)
 
-Six images, in this order:
+Two images, in this order:
 
-1. S-01 staff view with playback
-2. S-03 Zen mode
-3. S-04 Score Library
-4. S-05 theme comparison
-5. S-06 music font comparison
-6. S-20 staff edit mode
+1. S-58 tablet in Zen mode showing I-Break, the README hero, with S-59 as its unlinked grid counterpart
+2. S-20 staff edit mode
 
-The README does not repeat the instrument crops; it links to `docs/en/instruments.md` instead.
+The gallery a first draft carried (S-01 staff view, S-04 Score Library, S-05 themes, S-06 fonts) was removed on
+2026-10-29; those images stay in the handbook chapters that use them. The README does not repeat the instrument
+crops; it links to `docs/en/instruments.md` instead.
+
+S-58 and S-59 are framed as a tablet. The frame is drawn in CSS around the genuine capture and is never part of the
+application: a 1080 × 824 body with a 28 px bezel, 44 px corner radius, a dark gradient edge and a camera dot, the
+1024 × 768 screen at device scale factor 2, a stage that leaves 60 px above, 100 px at the sides and 140 px below for
+the drop shadow, exported with a transparent margin at 1280 px width. Both variants come from one capture pass and
+differ only in the view switch, so they can sit side by side. Any device frame in a later capture follows the same
+rule: real screen content, decorative frame.
+
+S-59 is not linked from the README or from a handbook chapter. It pairs with the README hero for the website project,
+which uses the staff and grid variant together; the handbook keeps its own grid and staff images per chapter.
 
 ## Comparison Images
 

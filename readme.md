@@ -12,22 +12,22 @@ Animada Score Book keeps a Samba group's repertoire in one place and makes it pl
 
 A score is written for a bateria. Eleven instrument types, from Agogô 2-Bell to the three surdos, each bring their own note styles, symbols, and samples, and the same score appears both as a note grid and as percussion notation.
 
-![Staff view of Ijexá during playback, the playhead in bar 5](docs/images/en/presentation/staff-view.png)
+![A score in Zen mode on a tablet, with the arrangement title above the staff and the instrument names in the track column](docs/images/en/presentation/tablet-zen-mode.png)
 
-*Staff view of Ijexá while it plays: the playhead marks the current bar, and the footer names the visible bars.*
+*A score in Zen mode on a tablet: header and mode bar are gone, the title strip, the instrument names and the notation fill the screen, and the transport stays within reach.*
 
 ## Features
 
-| Area | What you get |
-| --- | --- |
-| Score library | A folder tree of every score you can reach, with permission indicators for own, group-shared, and `World` entries, share links, and score locks that keep two people from editing the same score at once. |
-| Two views | A grid view with one symbol per step, for learning and scanning, and a staff view with percussion notation, for playing; switch with `G` and `S`, also during playback. |
-| Notation | Percussion clef, instrument-specific noteheads, accents, ghost and damped notes, crescendo and decrescendo hairpins with `f` markings, tuplets and nested tuplets, repeats, one-bar repeats, and bars of any width. |
-| Editing | Note entry with a note-length toolbar, dotted values, rests, overwrite and insert, note styles, articulations, clipboard, undo and redo, and automatic bar extension; both views edit the same score. |
-| Playback | Transport, tempo, master volume, a per-track mixer with mute and focus, metronome, count-in, looping, `Play Focus` on a bar range, a scrolling playhead, and single-note preview. |
-| Presentation | Seven SMuFL music fonts, thirteen color themes plus `Auto`, zoom from 50 % to 150 %, Zen mode, the score navigator, the notification center, and layouts for phones and tablets. |
-| Export | A print preview with page setup for the browser's PDF output, and an MP3 export of the playback, including tempo, volume, and count-in. |
-| Administration | Users, groups, group login, fine-grained read and write access, brute-force limiting on logins, schema migrations, and documented backup, restore, and upgrade paths. |
+| Area           | What you get                                                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Score library  | A folder tree of every score you can reach, with permission indicators for own, group-shared, and `World` entries, share links, and score locks that keep two people from editing the same score at once.           |
+| Two views      | A grid view with one symbol per step, for learning and scanning, and a staff view with percussion notation, for playing; switch with `G` and `S`, also during playback.                                             |
+| Notation       | Percussion clef, instrument-specific noteheads, accents, ghost and damped notes, crescendo and decrescendo hairpins with `f` markings, tuplets and nested tuplets, repeats, one-bar repeats, and bars of any width. |
+| Editing        | Note entry with a note-length toolbar, dotted values, rests, overwrite and insert, note styles, articulations, clipboard, undo and redo, and automatic bar extension; both views edit the same score.               |
+| Playback       | Transport, tempo, master volume, a per-track mixer with mute and focus, metronome, count-in, looping, `Play Focus` on a bar range, a scrolling playhead, and single-note preview.                                   |
+| Presentation   | Seven SMuFL music fonts, thirteen color themes plus `Auto`, zoom from 50 % to 150 %, Zen mode, the score navigator, the notification center, and layouts for phones and tablets.                                    |
+| Export         | A print preview with page setup for the browser's PDF output, and an MP3 export of the playback, including tempo, volume, and count-in.                                                                             |
+| Administration | Users, groups, group login, fine-grained read and write access, brute-force limiting on logins, schema migrations, and documented backup, restore, and upgrade paths.                                               |
 
 ### Editing
 
@@ -39,28 +39,15 @@ Editing is part of the application, not a preview: notes are entered, given a no
 
 [Editing in the Staff View](docs/en/using/staff-editing.md) and [Editing in the Grid View](docs/en/using/grid-editing.md) describe every control, and the [Instrument and Notation Reference](docs/en/instruments.md) explains what each symbol means.
 
-## What It Looks Like
-
-<table>
-  <tr>
-    <td align="center"><img src="docs/images/en/presentation/zen-mode.png" alt="Zen mode of Ijexá with instrument names only" /><br/><em>Zen mode: the score and the instrument names, nothing else.</em></td>
-    <td align="center"><img src="docs/images/en/library/library-tree.png" alt="Score Library with two opened folders, their scores, and a globe on a shared entry" /><br/><em>The Score Library over the score, with a globe for entries shared with <code>World</code>.</em></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/images/en/presentation/themes.png" alt="The same bar in Light+, Dark+, Monokai Dimmed, and Solarized Light" /><br/><em>Thirteen color themes plus <code>Auto</code>.</em></td>
-    <td align="center"><img src="docs/images/en/presentation/music-fonts.png" alt="One bar of Ijexá in Bravura, Leipzig, Petaluma, and Sebastian" /><br/><em>Seven SMuFL music fonts draw the notation.</em></td>
-  </tr>
-</table>
-
 ## Start Here
 
-| I want to … | Start here |
-| --- | --- |
-| Use the application | [Your First Session](docs/en/getting-started/first-steps.md) — signing in, opening a score, playing it, saving it |
-| Install it on a server | [Installing Animada Score Book](docs/en/administration/installation.md) |
-| Run it from the source | [Development Setup](docs/en/development/setup.md) |
-| Look up a notation symbol | [Instrument and Notation Reference](docs/en/instruments.md) |
-| Fix a problem | [Troubleshooting and Known Limitations](docs/en/troubleshooting.md) |
+| I want to …               | Start here                                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Use the application       | [Your First Session](docs/en/getting-started/first-steps.md) — signing in, opening a score, playing it, saving it |
+| Install it on a server    | [Installing Animada Score Book](docs/en/administration/installation.md)                                           |
+| Run it from the source    | [Development Setup](docs/en/development/setup.md)                                                                 |
+| Look up a notation symbol | [Instrument and Notation Reference](docs/en/instruments.md)                                                       |
+| Fix a problem             | [Troubleshooting and Known Limitations](docs/en/troubleshooting.md)                                               |
 
 ## Handbook
 
@@ -94,14 +81,14 @@ npm run dev                                          # frontend on https://local
 
 The dev server terminates TLS itself and proxies `/api` and `/soundLib` to the backend, so the browser only ever talks HTTPS; the self-signed certificate warns once.
 
-| Command | What it does |
-| --- | --- |
-| `npm run check` | Type-checks all TypeScript source and test files |
-| `npm run lint` | Runs ESLint across the codebase |
-| `npm run test` | Runs the Vitest unit and integration tests |
-| `npm run test:e2e` | Runs the Playwright end-to-end tests against a production build |
-| `npm run build` | Builds fonts and themes, bundles the client, and checks the bundle budget |
-| `npm run package` | Writes `dist-package/animada-score-book-<version>.tar.gz` |
+| Command            | What it does                                                              |
+| ------------------ | ------------------------------------------------------------------------- |
+| `npm run check`    | Type-checks all TypeScript source and test files                          |
+| `npm run lint`     | Runs ESLint across the codebase                                           |
+| `npm run test`     | Runs the Vitest unit and integration tests                                |
+| `npm run test:e2e` | Runs the Playwright end-to-end tests against a production build           |
+| `npm run build`    | Builds fonts and themes, bundles the client, and checks the bundle budget |
+| `npm run package`  | Writes `dist-package/animada-score-book-<version>.tar.gz`                 |
 
 The project is written in TypeScript with Preact for the UI, SCSS and Tailwind for styling, and DaisyUI for components; the backend is a plain Node.js HTTP server with MySQL, MariaDB, and PostgreSQL adapters. [Development Setup](docs/en/development/setup.md) covers the toolchain, the branch-specific databases, and debugging in VS Code, and [Architecture and Decisions](docs/en/development/architecture.md) maps the codebase.
 
