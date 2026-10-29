@@ -160,7 +160,7 @@ Notes on this batch:
 
 All P3 motives are captured.
 
-- The nine version-dependent captures were re-shot for 2.0.0 on 2026-10-29; see [Version-Dependent Captures](#version-dependent-captures). Neither file name carries a version, so a re-capture replaces the image in place. All of them are linked from `en/using/presentation.md` and `en/staff-editing.md`, and S-58 from the README.
+- The nine version-dependent captures were re-shot for 2.0.0 on 2026-10-29; see [Version-Dependent Captures](#version-dependent-captures). Neither file name carries a version, so a re-capture replaces the image in place. All of them are linked from `en/using/presentation.md` and `en/staff-editing.md`, and S-58 from the README. 2.0.1 is a patch release, so the captures keep showing 2.0.0 until the next major or minor release.
 
 ## Storyboard
 
@@ -282,7 +282,7 @@ A capture is redone when any of these change: header or footer layout, toolbar l
 
 ## Version-Dependent Captures
 
-The version is baked into the pixels of every capture whose frame shows the footer. No link or asset check sees it, so the list is kept by hand and re-captured together with a version change. File names carry no version, so a re-capture replaces the image in place.
+The version is baked into the pixels of every capture whose frame shows the footer. No link or asset check sees it, so the list is kept by hand and re-captured together with a major or minor version change. A patch release leaves the captures alone, so until the next major or minor release they show the version that release carried. File names carry no version, so a re-capture replaces the image in place.
 
 | ID   | File                                  | Why                                    |
 | ---- | ------------------------------------- | -------------------------------------- |

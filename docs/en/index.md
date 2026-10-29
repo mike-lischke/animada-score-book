@@ -1,6 +1,6 @@
 # Animada Score Book Handbook
 
-Animada Score Book is a browser-based score library and playback application for Samba groups. It stores your repertoire, shows each score as a note grid or as staff notation, plays it back with per-track mixing, and prints or exports it. This handbook documents version 2.0.0.
+Animada Score Book is a browser-based score library and playback application for Samba groups. It stores your repertoire, shows each score as a note grid or as staff notation, plays it back with per-track mixing, and prints or exports it. This handbook documents version 2.0.1.
 
 Choose the path that matches your role:
 
@@ -50,7 +50,7 @@ Choose the path that matches your role:
 | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
 | [Keyboard Shortcuts](reference/keyboard-shortcuts.md)       | Global shortcuts, score input keys, selection modifiers, and dialog keys   |
 | [Glossary](reference/glossary.md)                           | Application terms, music terms, and the instruments of a bateria           |
-| [Troubleshooting and Known Limitations](troubleshooting.md) | Common problems with their cause, and the limitations documented for 2.0.0 |
+| [Troubleshooting and Known Limitations](troubleshooting.md) | Common problems with their cause, and the limitations documented for 2.0.1 |
 
 ## Development
 

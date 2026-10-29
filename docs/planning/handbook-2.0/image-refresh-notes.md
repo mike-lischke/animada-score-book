@@ -15,3 +15,5 @@ Text places are found with a grep for the previous version number across `readme
 **Checklist (2026-10-29).** The list of captures lives in the [storyboard](screenshot-storyboard.md#version-dependent-captures) and counts as a retake trigger there. The release checklist in [documentation.md](../../en/development/documentation.md) re-captures those images and greps the documentation for the previous version. A capture script was rejected for now: it would have to reproduce the capture context the storyboard records, and the checklist covers the nine captures with less machinery.
 
 The nine captures were re-shot for 2.0.0 on 2026-10-29; the storyboard records the capture status.
+
+**Narrowed to major and minor releases (2026-10-29).** A patch release does not re-capture them: the version digits are the only difference, which does not justify the work. 2.0.1 therefore ships the 2.0.0 captures, and the next re-capture happens with 2.1.0.

@@ -1,6 +1,6 @@
 # Troubleshooting and Known Limitations
 
-This chapter lists the problems that occur in practice, with their cause and remedy, and collects what the 2.0.0 release documents instead of fixing.
+This chapter lists the problems that occur in practice, with their cause and remedy, and collects what the 2.0.1 release documents instead of fixing.
 
 ## The Backend Is Unreachable
 

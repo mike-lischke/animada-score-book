@@ -51,7 +51,7 @@ Two rules follow from that split:
 
 1. Walk the changed features against the affected chapters; the coverage checklist in `docs/planning/handbook-2.0/` names a destination for every feature.
 2. Update the affected pages and re-capture the screenshots that show changed interface parts.
-3. Re-capture the version-dependent images: every capture whose frame shows the footer carries the application version in its pixels, and the release-notes dialog shows the newest entry. The list is the table in the [storyboard](../../planning/handbook-2.0/screenshot-storyboard.md#version-dependent-captures).
+3. Re-capture the version-dependent images for a major or a minor release: every capture whose frame shows the footer carries the application version in its pixels, and the release-notes dialog shows the newest entry. The list is the table in the [storyboard](../../planning/handbook-2.0/screenshot-storyboard.md#version-dependent-captures). A patch release keeps the existing captures, so until the next major or minor release they show the version that release carried.
 4. Grep `readme.md`, `docs/`, and `release-notes.md` for the previous version number; text that quotes it has to change as well.
 5. Update `readme.md` when the feature summary, an entry point, or a showcase image changed. It links into this handbook and repeats no chapter content.
 6. Check the [known limitations](../troubleshooting.md) table: removed limitations leave the table, new ones enter it.
