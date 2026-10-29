@@ -6,11 +6,11 @@ Dieses Kapitel führt dich vom `Sign In`-Dialog bis zu einem Score, der abgespie
 
 Öffne die Adresse, die dir dein Administrator genannt hat, zum Beispiel `https://scores.example.org/`. Das Backend liefert die Anwendung, die Musikfonts und die Klangsamples unter derselben Adresse aus, es muss also nichts weiter installiert werden.
 
-Während der Entwicklung läuft das Frontend separat unter `https://localhost:5173`; [Development Setup](../../en/development/setup.md) beschreibt dieses Setup.
+Während der Entwicklung läuft das Frontend separat unter `https://localhost:5173`; [Entwicklungs-Setup](../development/setup.md) beschreibt dieses Setup.
 
-Bei einer frischen Installation fragt die Anwendung zuerst die Datenbankverbindung und danach das erste Administratorkonto ab, bevor der `Sign In`-Dialog erscheint. [Installing Animada Score Book](../../en/administration/installation.md) führt durch beide Schritte.
+Bei einer frischen Installation fragt die Anwendung zuerst die Datenbankverbindung und danach das erste Administratorkonto ab, bevor der `Sign In`-Dialog erscheint. [Animada Score Book installieren](../administration/installation.md) führt durch beide Schritte.
 
-Ist das Backend nicht erreichbar, zeigt die Anwendung anstelle des Score einen Verbindungsdialog mit einem Zähler für die Verbindungsversuche. [Troubleshooting and Known Limitations](../../en/troubleshooting.md) erklärt, was zu prüfen ist.
+Ist das Backend nicht erreichbar, zeigt die Anwendung anstelle des Score einen Verbindungsdialog mit einem Zähler für die Verbindungsversuche. [Fehlerbehebung und bekannte Einschränkungen](../troubleshooting.md) erklärt, was zu prüfen ist.
 
 ## Anmelden
 
@@ -21,7 +21,7 @@ Der `Sign In`-Dialog hat zwei Tabs und bis zu zwei Aktionen:
 - **`Log In`** bestätigt beide Formulare.
 - **`Continue Anonymously`** wird angeboten, solange kein Benutzer erforderlich ist. Anonyme Besucher können alle öffentlich lesbaren Scores durchsuchen und abspielen.
 
-Deine Sitzung bleibt während der Arbeit offen, und das Backend erneuert sie im Hintergrund. Diese Erneuerung nutzt ein sicheres Cookie, weshalb die Installation über HTTPS erreichbar sein muss; siehe [Security Notes](../../en/administration/security.md).
+Deine Sitzung bleibt während der Arbeit offen, und das Backend erneuert sie im Hintergrund. Diese Erneuerung nutzt ein sicheres Cookie, weshalb die Installation über HTTPS erreichbar sein muss; siehe [Sicherheitshinweise](../administration/security.md).
 
 Um die Sitzung zu beenden, öffne das Benutzermenü im Header und wähle `Sign Out`.
 
@@ -49,7 +49,7 @@ Den Transport steuert die playback bar:
 - `Loop playback`, `Metronome`, `Count-in` und die Master-Lautstärke. In schmalen Layouts wandern diese in das Menü
   `More playback controls`.
 
-Das Kapitel [Playback and Practice](../../en/using/playback.md) behandelt den mixer, Play Focus und den Playhead.
+Das Kapitel [Wiedergabe und Üben](../using/playback.md) behandelt den mixer, Play Focus und den Playhead.
 
 ## Zwischen grid view und staff view wechseln
 
@@ -67,7 +67,7 @@ Der Footer enthält die Zoom-Schaltflächen und den Umschalter für den Zen mode
 - `Zoom out` und `Zoom in` ändern den track viewer zoom in 10-%-Schritten zwischen 50 % und 150 %. Derselbe Wert steht
   als `Track viewer zoom` in den Settings zur Verfügung, zusammen mit einer Schaltfläche `Reset`.
 - `Enter Zen mode` blendet die umliegenden Bedienelemente aus, sodass nur der Score bleibt; dieselbe Schaltfläche liest
-  danach `Exit Zen mode`. Das Kapitel [Reading a Score](../../en/using/presentation.md) beschreibt, was sich sonst noch
+  danach `Exit Zen mode`. Das Kapitel [Einen Score lesen](../using/presentation.md) beschreibt, was sich sonst noch
   ändert.
 
 ## Deine Arbeit speichern
@@ -101,6 +101,6 @@ Wenn du versuchst, die Seite mit ungespeicherten Änderungen zu verlassen, fragt
 
 ## Nächste Schritte
 
-- [The Score Library](../../en/using/score-library.md) erklärt Ordner, neue Scores, Importe und Freigaben.
-- [Reading a Score](../../en/using/presentation.md) erklärt die beiden Ansichten, Musikfonts und Themes.
-- [Editing in the Staff View](../../en/using/staff-editing.md) beginnt mit der Noteneingabe.
+- [Die Score Library](../using/score-library.md) erklärt Ordner, neue Scores, Importe und Freigaben.
+- [Einen Score lesen](../using/presentation.md) erklärt die beiden Ansichten, Musikfonts und Themes.
+- [Bearbeiten in der staff view](../using/staff-editing.md) beginnt mit der Noteneingabe.
