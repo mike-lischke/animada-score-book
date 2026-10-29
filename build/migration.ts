@@ -130,7 +130,11 @@ export const sanitizeBranchName = (branch: string): string => {
  */
 const getCurrentBranch = (): string => {
     try {
-        return execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
+        // The deployment package is not a Git repository, so Git's own complaint is dropped.
+        return execSync("git rev-parse --abbrev-ref HEAD", {
+            encoding: "utf-8",
+            stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
     } catch {
         return "main";
     }

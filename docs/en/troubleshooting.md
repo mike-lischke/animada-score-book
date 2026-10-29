@@ -13,6 +13,26 @@ When the browser cannot reach the backend at startup, it shows `Server Unreachab
 
 The process exits immediately when the port is taken: `Port <port> is already in use.`
 
+## The Page Shows `Not found`
+
+A deployment that answers every address with the plain text `Not found` is reaching the backend, but the process was started in the wrong directory. Every path the backend serves is relative to its working directory: `dist/index.html`, `public/`, `migrations/`, `build/seed.sql`, and `backend-config.json`. Started inside the `dist` subdirectory, it looks for `dist/dist/index.html` and `dist/backend-config.json`, finds neither, and answers `404` with that text.
+
+The health endpoint names the cause instead of hiding it:
+
+```json
+{"configLoaded":false,"configError":"No backend-config.json found. Missing database settings: database.host, database.port, database.database, database.user.","engine":"mysql","host":"","port":0,"database":"","status":"error","dbStatus":"db_unreachable","initialized":false,"hasData":false,"hasUsers":false}
+```
+
+`configLoaded: false` together with that `configError` means the process could not read `backend-config.json` from its working directory. The database is not the problem; the `Database unreachable` line is only a consequence of the empty connection settings.
+
+To fix it:
+
+1. Start the process in the package directory, where `server.js`, `dist/`, `public/`, `migrations/`, `build/`, and `backend-config.json` sit — not in `dist`. [Installing Animada Score Book](administration/installation.md#running-the-backend-on-a-server) states both requirements of a deployment.
+2. Route the domain to that process, for example through a reverse proxy on its port. `/api`, `/soundLib/`, and `/public/uploads/` are answered by the backend only, so a document root that points at `dist` cannot serve the application.
+3. `https://<host>/api?action=health` should then report `"status":"ok"` with `"configLoaded":true` and `"initialized":true`.
+
+The opposite misconfiguration has the opposite symptom: a statically served `dist` loads the interface, which then reports `Server Unreachable` because it cannot reach `/api`.
+
 ## The Connection Is Lost during a Session
 
 A broken connection during work opens a dialog with `Reconnecting… (attempt <n>)`. The application retries every three seconds and closes the dialog shortly after the backend answers again. Unsaved changes stay in the browser and are not lost; save once the connection is back.

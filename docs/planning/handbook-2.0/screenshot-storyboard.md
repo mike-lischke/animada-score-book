@@ -134,7 +134,7 @@ All P2 motives are captured.
 | S-50 | `en/troubleshooting/connection-lost.png`  | Backend Connection Lost dialog with the database error line                                                 |
 | S-51 | `en/troubleshooting/error-page.png`       | Error page of the error boundary: warning title, retry and reload, GitHub link, collapsed technical details |
 | S-52 | `en/administration/backend-setup.png`     | Backend Setup dialog with engine, host, port and database, offering `Initialize Database`                   |
-| S-53 | `en/presentation/release-notes.png`       | Release notes dialog; shows 1.5.0 and needs a re-capture once 2.0.0 is in                                   |
+| S-53 | `en/presentation/release-notes.png`       | Release notes dialog; shows 2.0.0                                                                           |
 
 Notes on this batch:
 
@@ -160,9 +160,7 @@ Notes on this batch:
 
 All P3 motives are captured.
 
-- `S-41` (footer) and `S-53` (release notes) still show the version `v1.5.0` and the 1.5.0 notes; both are re-captured
-  once 2.0.0 exists. Neither file name carries a version, so a re-capture replaces the image in place. Both are linked
-  from `en/using/presentation.md` already.
+- The nine version-dependent captures were re-shot for 2.0.0 on 2026-10-29; see [Version-Dependent Captures](#version-dependent-captures). Neither file name carries a version, so a re-capture replaces the image in place. All of them are linked from `en/using/presentation.md` and `en/staff-editing.md`, and S-58 from the README.
 
 ## Storyboard
 
@@ -280,4 +278,22 @@ S-05 and S-06 are montages of the same bars. Both are produced from one capture 
 
 ## Retake Triggers
 
-A capture is redone when any of these change: header or footer layout, toolbar layout, default theme, bundled fonts, instrument note styles, print preview controls, or the demo scores. The capture context column names what to keep identical; anything not listed may change freely.
+A capture is redone when any of these change: header or footer layout, toolbar layout, default theme, bundled fonts, instrument note styles, print preview controls, the demo scores, or the application version. The capture context column names what to keep identical; anything not listed may change freely.
+
+## Version-Dependent Captures
+
+The version is baked into the pixels of every capture whose frame shows the footer. No link or asset check sees it, so the list is kept by hand and re-captured together with a version change. File names carry no version, so a re-capture replaces the image in place.
+
+| ID   | File                                  | Why                                    |
+| ---- | ------------------------------------- | -------------------------------------- |
+| S-01 | `en/presentation/staff-view.png`      | Full window, footer in frame           |
+| S-02 | `en/presentation/grid-view.png`       | Full window, footer in frame           |
+| S-03 | `en/presentation/zen-mode.png`        | Zen mode keeps the footer              |
+| S-20 | `en/staff-editing/edit-mode.png`      | Full window, footer in frame           |
+| S-41 | `en/presentation/footer.png`          | The footer itself, shows `v<version>`  |
+| S-49 | `en/presentation/tablet-grid.png`     | Tablet, footer in frame                |
+| S-53 | `en/presentation/release-notes.png`   | Dialog with the newest version heading |
+| S-58 | `en/presentation/tablet-zen-mode.png` | README hero, footer in frame           |
+| S-59 | `en/presentation/tablet-zen-grid.png` | Website hero, footer in frame          |
+
+Unaffected: the notation crops, the theme and music-font montages, the print preview, and S-47 on the phone, whose footer folds the version into a menu.

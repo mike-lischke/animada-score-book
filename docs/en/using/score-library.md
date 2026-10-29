@@ -122,7 +122,7 @@ The backend decides, not the browser:
 - **Administrators** may manage and remove every entry and every permission.
 - **Anonymous visitors** see every entry in the `World` group and nothing else.
 
-Trying to edit a score without write access ends the attempt with `You do not have permission to edit this score.` If your session has ended instead, the application asks you to log in again before it lets you edit.
+Trying to edit a score without write access ends the attempt with `You do not have permission to edit this score.` Without a signed-in account — as an anonymous visitor, or with a session that has ended — the application says `Your session has ended. Log in again to edit.` and opens the sign-in dialog instead.
 
 ## Score Locks
 

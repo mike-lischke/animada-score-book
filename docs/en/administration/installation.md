@@ -47,12 +47,28 @@ cd animada-score-book-<version>
 
 There is no installation step: `server.js` carries the backend together with `mysql2`, `pg`, `jsonwebtoken`, and `mime-types`, and `dist/` carries the built browser application. The package needs Node.js, and nothing else.
 
+## Running the Backend on a Server
+
+The backend serves the whole application itself: `dist/index.html`, the built assets, the API under `/api`, the sound library under `/soundLib/`, and the files in `public/`. That has two consequences, and both are mandatory for the application to come up:
+
+1. **The working directory of the process is the package directory.** Every path is resolved against it: `dist/`, `public/`, `migrations/`, `build/seed.sql`, and `backend-config.json`. Start the process there:
+
+   ```bash
+   cd /path/to/animada-score-book-<version>
+   JWT_SECRET="<long random value>" node server.js
+   ```
+
+   If the hosting panel starts the process from somewhere else, use `cd /path/to/animada-score-book-<version> && node server.js` as its start command.
+
+2. **The domain points at the process, not at a folder.** Configure the host name as a reverse proxy to the port from `backend-config.json` (`3100` by default). A document root that serves the package directory or `dist/` statically does not work: the browser application calls `/api`, `/soundLib/`, and `/public/uploads/` on the same origin, and only the backend answers those.
+
+**Binding and the front end.** The examples bind to `0.0.0.0`, which is also the default, and most hosters need exactly that: their front end terminates TLS and forwards to the application from another host or container, so a process that listens on `127.0.0.1` disappears from the domain while everything else looks correct. Test it before deviating from the default: switch `host` to `127.0.0.1`, restart, reload the page. When the site stays reachable, the forwarder runs on the same host and the loopback binding keeps the port off the network; when it breaks, keep `0.0.0.0`. Check the port once from outside as well, for example `curl -I https://<host>:3100/`: if it answers, the backend is reachable around the front end and belongs behind a firewall. `"trustProxy"` stays `false` unless the front end overwrites `X-Forwarded-For`, because otherwise any client can claim a foreign address and walk around the login rate limit; [Configuring the Backend](configuration.md) documents both keys.
+
+The package has no `index.html` in its root, and `dist/` is not a document root; both are intentional, because the backend delivers the interface. Check a new deployment with `https://<host>/api?action=health`: it answers `"status":"ok"` together with `"configLoaded":true`, `"database":"…"`, and `"initialized":true`. A `404 Not found` for every address, or `"configLoaded":false`, means the process runs in another directory; a `Server Unreachable` dialog in the browser means the domain is served statically instead of through the backend. [Troubleshooting and Known Limitations](../troubleshooting.md#the-page-shows-not-found) walks through the first symptom.
+
 ## Configuring the Backend
 
-The backend reads `backend-config.json` from the directory it is started in. The file is not optional: it carries
-the database connection, and the backend never creates the database itself. In a hosting environment the database
-and its account are created with the tools of the hoster, which cannot be reached from the application, so these
-values are always supplied by hand.
+The backend reads `backend-config.json` from the directory it is started in. The file is not optional: it carries the database connection, and without a usable database block the browser only reports that the configuration is missing. In a hosting environment the database account and its credentials are supplied by the hoster, which cannot be reached from the application, so these values are always entered by hand.
 
 Create the file from the template:
 
@@ -87,7 +103,7 @@ JWT_SECRET="<long random value>" node server.js
 
 ## Preparing the Database
 
-Create an empty database and a user for it. The backend creates the schema itself, either when the dialog in the browser initialises the database or, with `"autoMigrate": true`, on start, so the database only has to exist. The account needs the right to create tables, indexes, and foreign keys, but not the database itself.
+Create the database and a user for it before the first start. The backend creates the schema inside that database, either when the dialog in the browser initialises it or, with `"autoMigrate": true`, on start; it does not create the database itself. The account needs the right to create tables, indexes, and foreign keys in that database.
 
 MySQL or MariaDB:
 

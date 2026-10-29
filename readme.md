@@ -19,7 +19,7 @@ A score is written for a bateria. Eleven instrument types, from Agogô 2-Bell to
 ## Features
 
 | Area           | What you get                                                                                                                                                                                                        |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Score library  | A folder tree of every score you can reach, with permission indicators for own, group-shared, and `World` entries, share links, and score locks that keep two people from editing the same score at once.           |
 | Two views      | A grid view with one symbol per step, for learning and scanning, and a staff view with percussion notation, for playing; switch with `G` and `S`, also during playback.                                             |
 | Notation       | Percussion clef, instrument-specific noteheads, accents, ghost and damped notes, crescendo and decrescendo hairpins with `f` markings, tuplets and nested tuplets, repeats, one-bar repeats, and bars of any width. |
@@ -64,7 +64,9 @@ The English handbook in [`docs/en/`](docs/en/index.md) is the reference for ever
 
 Animada Score Book runs on one server. The backend serves the browser application and talks to MySQL, MariaDB, or PostgreSQL; it needs Node.js 24.15 or 26, a database account that may create tables, indexes, and foreign keys, and HTTPS in front of it, because the session cookie is `Secure`.
 
-Build the deployment package with `npm run package`, unpack it on the server, copy `backend-config.example.json` to `backend-config.json` and fill in the database block, then start it with `JWT_SECRET="<long random value>" node server.js`. A successful start logs `Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)`, and the browser wizard afterwards creates the schema and the first administrator account.
+Build the deployment package with `npm run package`, unpack it on the server with `tar -xzf animada-score-book-<version>.tar.gz`, `cd` into the resulting directory, copy `backend-config.example.json` to `backend-config.json` and fill in the database block, then start it with `JWT_SECRET="<long random value>" node server.js`. A successful start logs `Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)`, and the browser wizard afterwards creates the schema and the first administrator account.
+
+The backend serves the interface itself, so a deployment needs two things: `node server.js` started **with the unpacked package as the working directory**, and the domain pointed at that process as a reverse proxy. The package carries no `index.html` in its root and `dist/` is not a document root; a statically served folder cannot answer `/api`, `/soundLib/`, or `/public/uploads/`.
 
 [Installing Animada Score Book](docs/en/administration/installation.md) covers the package contents, database preparation, the first start, HTTPS, and upgrades; [Configuring the Backend](docs/en/administration/configuration.md) documents every key and environment variable.
 

@@ -51,12 +51,14 @@ Two rules follow from that split:
 
 1. Walk the changed features against the affected chapters; the coverage checklist in `docs/planning/handbook-2.0/` names a destination for every feature.
 2. Update the affected pages and re-capture the screenshots that show changed interface parts.
-3. Update `readme.md` when the feature summary, an entry point, or a showcase image changed. It links into this handbook and repeats no chapter content.
-4. Check the [known limitations](../troubleshooting.md) table: removed limitations leave the table, new ones enter it.
-5. Link new decision records from [Architecture and Decisions](architecture.md) when a change introduced one.
-6. Write the release notes in `release-notes.md`, separate from the handbook.
-7. Verify the links and image references of `docs/en/` and `readme.md` before tagging the release.
-8. Hand the release tag to the website project.
+3. Re-capture the version-dependent images: every capture whose frame shows the footer carries the application version in its pixels, and the release-notes dialog shows the newest entry. The list is the table in the [storyboard](../../planning/handbook-2.0/screenshot-storyboard.md#version-dependent-captures).
+4. Grep `readme.md`, `docs/`, and `release-notes.md` for the previous version number; text that quotes it has to change as well.
+5. Update `readme.md` when the feature summary, an entry point, or a showcase image changed. It links into this handbook and repeats no chapter content.
+6. Check the [known limitations](../troubleshooting.md) table: removed limitations leave the table, new ones enter it.
+7. Link new decision records from [Architecture and Decisions](architecture.md) when a change introduced one.
+8. Write the release notes in `release-notes.md`, separate from the handbook.
+9. Verify the links and image references of `docs/en/` and `readme.md` before tagging the release.
+10. Hand the release tag to the website project.
 
 ## Related Chapters
 

@@ -50,7 +50,7 @@ Replacing the secret invalidates all tokens that were issued with the old one, s
 ## Database Settings
 
 - `engine` selects the adapter. `mysql` and `mariadb` share one adapter; `postgres` uses the other.
-- `host`, `port`, `database`, `user`, and `password` are passed to that adapter unchanged, so the database must already exist.
+- `host`, `port`, `database`, `user`, and `password` are passed to that adapter unchanged, so the database must already exist, together with an account that may create tables, indexes, and foreign keys in it.
 - On start the backend tests the connection. When it succeeds, it logs `Backend connected: <engine> @ <host>:<port>/<database>`; with `"autoMigrate": true` it applies the pending migrations and logs `Backend initialised: …` instead. When the connection fails, it logs `Could not auto-connect: …` and `Waiting for setup from frontend…`, keeps listening, and the browser reports that the database is unreachable.
 - Without `autoMigrate` a database without the application tables stays empty until someone chooses `Initialize Database` in the browser, which applies the migrations and seeds the demo data.
 

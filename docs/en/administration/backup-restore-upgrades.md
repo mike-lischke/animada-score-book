@@ -60,7 +60,7 @@ The backend applies the schema itself:
 - On start it creates or reads `migration_history` and applies every file from `migrations/` that it has not recorded yet, in file-name order.
 - Each applied file is stored with its SHA-256 checksum.
 - A migration file may carry `-- @mysql` and `-- @postgres` sections; the runner executes only the sections for the configured engine, plus everything outside such markers.
-- Pending migrations run in the background right after the process starts; the log lists them, and `Backend initialised: …` appears once the schema is ready.
+- Pending migrations run right after the process starts when `"autoMigrate": true` is set; otherwise they wait for `Initialize Database` in the browser. The log lists them, and `Backend initialised: …` appears once the schema is ready.
 
 ## A Modified Migration File
 
@@ -78,7 +78,7 @@ There are no down migrations and no repair step. The only ways forward are resto
 1. Stop the backend.
 2. Unpack the new package into a new directory.
 3. Copy `backend-config.json` and `public/uploads` from the old installation.
-4. Start the backend with `node server.js`. Pending migrations run automatically.
+4. Start the backend with `node server.js`. With `"autoMigrate": true` the pending migrations run right away; otherwise the browser offers `Initialize Database` once and applies them.
 
 After the upgrade:
 
