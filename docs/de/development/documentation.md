@@ -57,6 +57,8 @@ Aus dieser Trennung folgen zwei Regeln:
 - Die Website konsumiert eine veröffentlichte Version, Dokumentationsänderungen erreichen sie also mit dem nächsten
   Release, nicht dazwischen.
 
+Ausgeliefert wird nur die englische Ausgabe: Das deployment package enthält `docs/en/` und `docs/images/`, weitere Sprachfassungen wie `docs/de/` lädt die Website aus dem Repository.
+
 ## Die Dokumentation für ein Release aktualisieren
 
 1. Gehe die geänderten Funktionen gegen die betroffenen Kapitel durch; die Coverage-Checkliste in
