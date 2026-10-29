@@ -75,6 +75,7 @@ When a view fails while rendering, the application replaces the whole interface 
 
 - `You do not have permission to edit this score.` and `You do not have permission to save this score.` mean that the account has no write access. The owner, a group grant, or an administrator is needed; [Users, Groups and Permissions](administration/users-groups-permissions.md) explains how access is resolved.
 - `You do not have permission to save this score.` also appears when a score was opened through a link and the account may only read it.
+- Without a signed-in account, editing itself works: the changes stay in the browser and `Save Score` reports `Sign in to save this score.`
 
 ## A Score Is Locked
 

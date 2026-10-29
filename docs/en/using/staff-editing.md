@@ -12,7 +12,7 @@ The `Edit Mode` switch in the header turns into `Editing` when edit mode is acti
 - The editor adds a visible cursor, a bar action strip above the bars, and an action button on every track row.
 - The mode bar gains an `Entry` section next to `View`.
 
-Edit mode requires write access. Without it, the attempt ends with `You do not have permission to edit this score.` Without a signed-in account — as an anonymous visitor, or with a session that has ended — the application says `Your session has ended. Log in again to edit.` and opens the sign-in dialog.
+Edit mode needs read access only. Without a signed-in account you can edit the score and the changes stay in this browser; `Save Score` then reports `Sign in to save this score.` A signed-in account without write access is refused when it tries to enter edit mode, with `You do not have permission to edit this score.`
 
 `Save Score` in the header, or `Ctrl`/`Cmd`+`S`, writes the score to the backend. Leaving edit mode saves first and releases the lock; a failed save keeps you in edit mode so nothing is lost.
 

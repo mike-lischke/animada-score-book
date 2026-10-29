@@ -8,7 +8,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
-import { routeApi, scrollClearOfToolsBar } from "./e2e-test-helpers.js";
+import {
+    routeApi, scrollClearOfToolsBar, setupAnonymousSession, setupAuthenticatedSession,
+} from "./e2e-test-helpers.js";
 
 /** Four quarter notes, which give an edit something to remove. */
 const snapshot = {
@@ -59,9 +61,19 @@ const answerAt = (answer: IApiAnswer | IApiAnswer[], call: number): IApiAnswer =
  * @param page The page under test.
  * @param answers The action the backend answers how, keyed by the action name. A sequence answers call by call,
  *                which a test uses for a session that ends while the app runs.
+ * @param anonymous Boots the app without a session, as the `Continue Anonymously` path does.
  */
-const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAnswer[]>): Promise<void> => {
+const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAnswer[]>,
+    anonymous = false): Promise<void> => {
     await routeApi(page);
+
+    if (anonymous) {
+        // Registered after the catch-all of `routeApi`, so it answers the session calls instead of it.
+        await setupAnonymousSession(page);
+    } else {
+        // The catch-all of `routeApi` shadows its own session mocks, which leaves the app without an access token.
+        await setupAuthenticatedSession(page);
+    }
 
     const calls = new Map<string, number>();
 
@@ -94,6 +106,12 @@ const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAn
     });
 
     await page.goto("/");
+
+    if (anonymous) {
+        // Without a session the app waits for the dialog, and the cached score opens behind it.
+        await page.getByRole("button", { name: "Continue Anonymously" }).click();
+    }
+
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 };
 
@@ -155,4 +173,38 @@ test("asks for a login when the session cannot be renewed", async ({ page }) => 
     await page.locator("#editModeButton").click({ force: true });
 
     await expect(page.locator("#loginDialog")).toBeVisible();
+});
+
+test("lets a visitor without a session edit locally and refuses to save", async ({ page }) => {
+    let lockCalls = 0;
+    let saveCalls = 0;
+
+    await openScore(page, {}, true);
+
+    await page.route("**/api?action=lockScore", async (route) => {
+        lockCalls++;
+        await route.fulfill({ status: 401, body: JSON.stringify({ error: "Authentication required." }) });
+    });
+    await page.route("**/api?action=updateScore", async (route) => {
+        saveCalls++;
+        await route.fulfill({ status: 401, body: JSON.stringify({ error: "Authentication required." }) });
+    });
+
+    await editSomething(page);
+
+    // The edit starts without a lock and stays in this browser.
+    await expect(page.locator(".toast.info")).toContainText("Editing locally. Sign in to save your changes.");
+    await expect(page.locator(".arrangement-save-chip")).toHaveText("Unsaved changes");
+
+    await page.locator("#saveButton").click();
+
+    // Saving is refused in the browser instead of reaching the backend and losing the local copy to a reload.
+    await expect(page.locator(".toast.warning")).toContainText("Sign in to save this score.");
+    await expect(page.locator("#loginDialog")).toHaveCount(0);
+    expect(lockCalls).toBe(0);
+    expect(saveCalls).toBe(0);
+
+    // Leaving edit mode keeps the local edit; only a save would have written it.
+    await page.locator("#editModeButton").click({ force: true });
+    await expect(page.locator(".staff-measure-viewer")).toHaveCount(2);
 });

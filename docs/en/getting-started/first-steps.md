@@ -79,7 +79,7 @@ A badge next to the score title tells you where the score stands:
 | `Unsaved changes` | The score differs from the version stored on the server. |
 | `Saved`           | The score was saved during this session.                 |
 
-`Save Score` in the header writes the score to the backend and is enabled while there are unsaved changes. In edit mode, `Ctrl+S` or `Cmd+S` does the same. Leaving edit mode saves first and keeps you in edit mode if the save fails.
+`Save Score` in the header writes the score to the backend and is enabled while there are unsaved changes. In edit mode, `Ctrl+S` or `Cmd+S` does the same. Leaving edit mode saves first when a session is active and keeps you in edit mode if the save fails. Without a signed-in account, `Save Score` reports `Sign in to save this score.`, and the edits stay in the browser copy.
 
 Two independent things happen here:
 
