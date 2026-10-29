@@ -92,7 +92,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     /**
      * Checks whether this measure's DOM element intersects the given rectangle.
      *
-     * @param rect The selection rectangle in viewport coordinates.
+     * @param rect The selection rectangle in the layout coordinates of the score.
      *
      * @returns A single-element array with this measure's entry if intersected, or an empty array.
      */

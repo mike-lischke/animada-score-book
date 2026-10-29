@@ -7,7 +7,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import { routeApi, showTrackView } from "./e2e-test-helpers.js";
+import type { IArrangementSnapshot } from "../../src/core/types/general.js";
+import { clickScoreElement, routeApi, showTrackView, viewerZoomScale } from "./e2e-test-helpers.js";
 
 const bolero3Url = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
 
@@ -96,6 +97,29 @@ const slopedBeamSnapshot = (noteStyleIds: string[]) => {
     };
 };
 
+/** A one-bar arrangement of quarter notes: a click selects one of them alone instead of a beam group. */
+const quarterNoteSnapshot: IArrangementSnapshot = {
+    version: arrangementSnapshotVersion,
+    title: "E2E Quarter Notes",
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+    tracks: [{
+        id: 100,
+        instrumentId: fourLineInstrument,
+        measures: [{
+            number: 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            events: [0, 4, 8, 12].map((start) => {
+                return {
+                    start: { numerator: start, denominator: 16 },
+                    duration: { numerator: 4, denominator: 16 },
+                    noteStyleId: "1",
+                };
+            }),
+            subdivisions: [],
+        }],
+    }],
+};
+
 /**
  * Opens the staff view on a sloped beam arrangement.
  *
@@ -117,6 +141,101 @@ const openSlopedBeamStaff = async (page: Page, noteStyleIds: string[], sessionId
 
     await page.goto("/");
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+};
+
+/**
+ * Opens the staff view on a seeded arrangement at the given zoom.
+ *
+ * @param page The page to seed.
+ * @param snapshot The arrangement to seed.
+ * @param zoomLevel The zoom level of the viewer, in percent.
+ * @param sessionId The session to seed the arrangement under.
+ * @param editMode Whether the score opens with edit mode already on.
+ */
+const openZoomedStaff = async (page: Page, snapshot: IArrangementSnapshot, zoomLevel: number, sessionId: string,
+    editMode = false): Promise<void> => {
+    const packed = stringifyPackedArrangement(snapshot);
+
+    await page.addInitScript((data: {
+        packed: string; sessionId: string; zoomLevel: number; editMode: boolean;
+    }) => {
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId: data.sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", data.sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${data.sessionId}`, JSON.stringify({
+            currentScore: data.packed,
+            editMode: data.editMode,
+            viewSettings: {
+                arrangementViewSettings: { displayMode: "staff", zoomLevel: data.zoomLevel },
+            },
+        }));
+    }, { packed, sessionId, zoomLevel, editMode });
+
+    await page.goto("/");
+    await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+};
+
+/** Where the selection popup sits relative to the slot it belongs to, in viewport pixels. */
+interface IPopupPlacement {
+    /** Distance from the popup's centre to the centre of the selected slot; negative means further left. */
+    deltaCenterX: number;
+
+    /** Distance from the popup's top edge to the bottom edge of the selected slot. */
+    deltaBelowSlot: number;
+}
+
+/**
+ * @param page The page under test.
+ *
+ * @returns The index of the first note head that lies far enough from the view's edges for the popup to fit
+ *          beside it without being clamped or flipped.
+ */
+const comfortableHeadIndex = (page: Page): Promise<number> => {
+    return page.evaluate(() => {
+        const container = document.querySelector<HTMLElement>("#trackViewerContainer");
+        const zoom = container?.style.zoom ?? "100%";
+        const scale = zoom.endsWith("%") ? Number.parseFloat(zoom) / 100 : Number.parseFloat(zoom);
+        const heads = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-run .staff-note-head")];
+        const margin = 200;
+
+        return heads.findIndex((head) => {
+            const box = head.getBoundingClientRect();
+            const centerX = ((box.left + box.right) / 2) * scale;
+            const centerY = ((box.top + box.bottom) / 2) * scale;
+
+            return centerX > margin && centerX < window.innerWidth - margin
+                && centerY < window.innerHeight - 320;
+        });
+    });
+};
+
+/**
+ * @param page The page under test.
+ * @param head A note head of the selected note.
+ *
+ * @returns Where the popup sits relative to the slot that head is drawn in, or undefined while one of them
+ *          is missing.
+ */
+const popupPlacement = async (page: Page, head: Locator): Promise<IPopupPlacement | undefined> => {
+    const scale = await viewerZoomScale(page);
+
+    return head.evaluate((element, zoomScale) => {
+        const popup = document.querySelector<HTMLElement>("#selectionEditPopup");
+        const slot = element.closest<HTMLElement>(".staff-note-viewer-run");
+        if (!popup || !slot) {
+            return undefined;
+        }
+
+        // The popup is drawn outside the score, so its rect is in viewport pixels, while the slot reports its
+        // rect divided by the viewer's zoom.
+        const popupBox = popup.getBoundingClientRect();
+        const slotBox = slot.getBoundingClientRect();
+
+        return {
+            deltaCenterX: (popupBox.left + (popupBox.width / 2))
+                - (((slotBox.left + slotBox.right) / 2) * zoomScale),
+            deltaBelowSlot: popupBox.top - (slotBox.bottom * zoomScale),
+        };
+    }, scale);
 };
 
 /**
@@ -616,5 +735,70 @@ test.describe("Staff view sloped beam selection", () => {
         // not address the group: the row's own zone answers instead and covers the whole column.
         await page.mouse.click(box.x + 2, box.y + 2);
         expect(await selectionReach(page)).toBeGreaterThan(0.5);
+    });
+});
+
+test.describe("Staff view selection at other zoom levels", () => {
+    // The popup is a tall card, so the view has to offer the room it needs beside a note.
+    test.use({ viewport: { width: 1280, height: 1000 } });
+
+    test("selects the note the pointer clicked", async ({ page }) => {
+        for (const zoomLevel of [50, 150]) {
+            await openZoomedStaff(page, slopedBeamSnapshot(["1", "1", "1", "1"]), zoomLevel,
+                `e2e-zoom-note-${zoomLevel}`);
+
+            const head = page.locator(".staff-note-viewer-run .staff-note-head").nth(1);
+            await expect(head).toBeVisible();
+            const headBox = await head.boundingBox();
+            if (!headBox) {
+                throw new Error(`The note head has no bounding box at ${zoomLevel} percent.`);
+            }
+
+            // A plain locator click would use the rect the element reports, which the viewer divides by its
+            // zoom, and miss the head.
+            await clickScoreElement(page, head);
+
+            const selectedRun = page.locator(".staff-note-viewer-run.note-selected");
+            await expect(selectedRun).toHaveCount(1);
+            const runBox = await selectedRun.boundingBox();
+            if (!runBox) {
+                throw new Error(`The selected run has no bounding box at ${zoomLevel} percent.`);
+            }
+
+            // Run and head report their rects in the same space, so the containment says the selection took
+            // the run the click addressed.
+            expect(runBox.x, `selected run left at ${zoomLevel} percent`).toBeLessThanOrEqual(headBox.x);
+            expect(runBox.x + runBox.width, `selected run right at ${zoomLevel} percent`)
+                .toBeGreaterThanOrEqual(headBox.x + headBox.width);
+        }
+    });
+
+    test("places the popup under the selected note", async ({ page }) => {
+        for (const zoomLevel of [50, 150]) {
+            await openZoomedStaff(page, quarterNoteSnapshot, zoomLevel, `e2e-zoom-popup-${zoomLevel}`, true);
+
+            const headIndex = await comfortableHeadIndex(page);
+            expect(headIndex, `a note clear of the view edges at ${zoomLevel} percent`).toBeGreaterThanOrEqual(0);
+
+            const head = page.locator(".staff-note-viewer-run .staff-note-head").nth(headIndex);
+            await expect(head).toBeVisible();
+            await clickScoreElement(page, head);
+
+            await expect(page.locator("#selectionEditPopup")).toBeVisible();
+
+            // The popup is placed in the viewport pixels the score elements were scaled out of, so the
+            // distances to the slot it hangs on stay the same at every zoom level.
+            await expect.poll(async () => {
+                return Math.abs((await popupPlacement(page, head))?.deltaCenterX ?? Number.POSITIVE_INFINITY);
+            }, { message: `popup centre at ${zoomLevel} percent` }).toBeLessThanOrEqual(12);
+
+            const placement = await popupPlacement(page, head);
+            if (!placement) {
+                throw new Error(`The popup or the slot of the clicked note is missing at ${zoomLevel} percent.`);
+            }
+
+            expect(placement.deltaBelowSlot, `popup top at ${zoomLevel} percent`).toBeGreaterThanOrEqual(0);
+            expect(placement.deltaBelowSlot, `popup top at ${zoomLevel} percent`).toBeLessThanOrEqual(24);
+        }
     });
 });

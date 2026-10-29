@@ -145,7 +145,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
     /**
      * Checks whether this bar's DOM element intersects the given rectangle.
      *
-     * @param rect The selection rectangle in viewport coordinates.
+     * @param rect The selection rectangle in the layout coordinates of the score.
      *
      * @returns Entries for any intersected elements, or a fallback measure entry.
      */
@@ -398,7 +398,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
     }
 
     /**
-     * @param selection The selection rectangle in viewport coordinates.
+     * @param selection The selection rectangle in the layout coordinates of the score.
      * @param bar The bar element to inspect.
      *
      * @returns Whether the rectangle touches a tuplet marker the bar draws, which may sit outside the
@@ -423,7 +423,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
     /**
      * Tests whether a selection rectangle touches a rectangular region.
      *
-     * @param selection The selection rectangle in viewport coordinates.
+     * @param selection The selection rectangle in the layout coordinates of the score.
      * @param left Left edge of the region.
      * @param top Top edge of the region.
      * @param right Right edge of the region.
@@ -441,7 +441,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
     /**
      * Tests whether the selection rectangle touches a rendered element.
      *
-     * @param selection The selection rectangle in viewport coordinates.
+     * @param selection The selection rectangle in the layout coordinates of the score.
      * @param element The element to test.
      *
      * @returns True when the element's bounds overlap the selection rectangle.
@@ -518,7 +518,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      * once per beam level, kept to the stroke's own thickness. The empty room a stroke's bounding box
      * spans around that line does not address the group.
      *
-     * @param selection The selection rectangle in viewport coordinates.
+     * @param selection The selection rectangle in the layout coordinates of the score.
      * @param band The band to test.
      *
      * @returns True when the rectangle touches the band at any beam level.
@@ -702,7 +702,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      * number the bracket carries.
      *
      * @param bar The bar element the hit test runs on.
-     * @param rect The selection rectangle in viewport coordinates.
+     * @param rect The selection rectangle in the layout coordinates of the score.
      * @param arrangement The arrangement the bar belongs to.
      * @param barNumber The one-based measure number of the bar.
      * @param registry The element registry the rendered elements are resolved through.

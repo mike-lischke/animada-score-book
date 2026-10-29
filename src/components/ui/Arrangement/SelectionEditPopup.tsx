@@ -12,7 +12,7 @@ import { compareFractions } from "../../../core/serialisation/numeric-functions.
 import { EditEntryMode, TrackViewMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
+import { ScoreElementKind, ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionTarget,
 } from "../../../ui/SelectionSerializer.js";
@@ -173,7 +173,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 continue;
             }
 
-            const rect = parent.getBoundingClientRect();
+            const rect = SelectionEditPopup.viewportRect(parent, parent.getBoundingClientRect());
             if (overflowX !== "visible") {
                 left = Math.max(left, rect.left);
                 right = Math.min(right, rect.right);
@@ -186,6 +186,24 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         }
 
         return new DOMRect(left, top, right - left, bottom - top);
+    }
+
+    /**
+     * Score elements report their rects divided by the viewer's zoom, while elements outside the score report
+     * theirs as they are. Placement compares both kinds, so every rect is taken into viewport coordinates.
+     *
+     * @param element The element the rect was taken from.
+     * @param rect The rect the element reports.
+     *
+     * @returns The rect in viewport coordinates.
+     */
+    private static viewportRect(element: HTMLElement, rect: DOMRect): DOMRect {
+        const scale = ScoreElementRegistry.zoomScaleOf(element);
+        if (scale === 1) {
+            return rect;
+        }
+
+        return new DOMRect(rect.left * scale, rect.top * scale, rect.width * scale, rect.height * scale);
     }
 
     /**
@@ -493,7 +511,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 }
 
                 anchor ??= element;
-                const rect = element.getBoundingClientRect();
+                const rect = SelectionEditPopup.viewportRect(element, element.getBoundingClientRect());
                 left = Math.min(left, rect.left);
                 top = Math.min(top, rect.top);
                 right = Math.max(right, rect.right);
@@ -501,7 +519,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
 
                 const content = SelectionEditPopup.contentElementOf(element);
                 if (content !== undefined) {
-                    const contentRect = content.getBoundingClientRect();
+                    const contentRect = SelectionEditPopup.viewportRect(content, content.getBoundingClientRect());
                     contentLeft = Math.min(contentLeft, contentRect.left);
                     contentRight = Math.max(contentRight, contentRect.right);
                 }
@@ -523,6 +541,8 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             return { anchor };
         }
 
+        // Everything above is measured in viewport coordinates, which is where the popup, being drawn outside the
+        // score, is placed in.
         return { anchor, bounds: new DOMRect(center, top, 0, bottom - top) };
     }
 

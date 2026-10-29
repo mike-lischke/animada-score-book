@@ -13,6 +13,41 @@ const normalizeWhitespace = (value: string): string => {
 };
 
 /**
+ * Score elements report their rects divided by the CSS zoom the viewer draws them with, while a pointer works in
+ * viewport pixels. Tests that click a score element at a zoom other than 100 percent have to state the centre in
+ * viewport pixels, which a plain locator click cannot do.
+ *
+ * @param page The page under test.
+ * @param locator The score element to click.
+ */
+export const clickScoreElement = async (page: Page, locator: Locator): Promise<void> => {
+    const point = await locator.evaluate((element) => {
+        const container = element.closest<HTMLElement>("#trackViewerContainer");
+        const zoom = container?.style.zoom ?? "100%";
+        const scale = zoom.endsWith("%") ? Number.parseFloat(zoom) / 100 : Number.parseFloat(zoom);
+        const rect = element.getBoundingClientRect();
+
+        return { x: (rect.left + (rect.width / 2)) * scale, y: (rect.top + (rect.height / 2)) * scale };
+    });
+
+    await page.mouse.click(point.x, point.y);
+};
+
+/**
+ * @param page The page under test.
+ *
+ * @returns The factor the viewer draws the score with, taken from its CSS zoom.
+ */
+export const viewerZoomScale = async (page: Page): Promise<number> => {
+    return page.evaluate(() => {
+        const container = document.querySelector<HTMLElement>("#trackViewerContainer");
+        const zoom = container?.style.zoom ?? "100%";
+
+        return zoom.endsWith("%") ? Number.parseFloat(zoom) / 100 : Number.parseFloat(zoom);
+    });
+};
+
+/**
  * Scrolls the staff viewer until the given measure is rendered. The staff view renders only the measures around
  * the viewport, so a test that inspects a measure has to bring it into that window first.
  *
