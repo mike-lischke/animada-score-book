@@ -126,10 +126,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private autoScrollLeft = -1;
 
     /**
-     * Scroll position a visibility request asked for, which the content could not reach at the time: a measure the
-     * request grew the score by is not in the document yet, so the scroll clamps to the measures that are there.
+     * Work that the change which scheduled it could not do yet, because the measures it needs are not in the document
+     * at that moment: a scroll the content was too narrow for, the position a loaded score is shown at. The jobs run
+     * at the end of the next update, when those measures are mounted.
      */
-    private pendingVisibilityLeft?: number;
+    private readonly deferredJobs: Array<() => void> = [];
 
     /** Column widths and offsets of the measures in layout px at 100% zoom, as used by the staff window. */
     private staffColumns: number[] = [];
@@ -139,12 +140,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     /** The arrangement the cached row geometry was measured for. Another one drops the cache. */
     private staffGeometryArrangement?: ISbDmArrangement;
-
-    /**
-     * Scroll position a loaded score is to be shown at, applied once its own measures are laid out: a scroll
-     * offset set before them is read against the extent of the score that is gone and clamped.
-     */
-    private pendingViewportTarget?: IPoint;
 
     /**
      * Row geometry of the staff tracks, keyed by track id, so the height of a row is measured once and stays
@@ -253,7 +248,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const stored = AppStorage.loadUISettings()?.currentScoreScroll;
         const arrangement = dataModel.arrangement;
         if (arrangement !== undefined && stored?.scoreId === arrangement.id) {
-            this.pendingViewportTarget = { x: stored.x, y: stored.y };
+            this.stageViewport({ x: stored.x, y: stored.y });
         }
 
         this.updateStaffWindow();
@@ -308,11 +303,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
         this.actionBarRef.current?.layout();
 
-        // A loaded score states the position it is to be shown at, which needs the measures of that score to be in
-        // the document: the scroll right after them is the one that counts.
-        this.applyStagedViewport();
+        // Deferred work first: a position or a scroll that the latest change could not set yet is applied while the
+        // measures it addresses are in the document, so the window below is the one that position shows.
+        this.runDeferredJobs();
         this.updateStaffWindow();
-        this.applyPendingVisibilityScroll();
         this.updateContentCenterShift();
         this.handleTrackViewerScroll();
         this.updatePlayBeamExtent();
@@ -363,6 +357,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             cancelAnimationFrame(this.contentShiftFrame);
             this.contentShiftFrame = 0;
         }
+
+        // No update follows an unmount, so work that waits for one would never run.
+        this.deferredJobs.length = 0;
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
@@ -815,33 +812,52 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const target = MeasureLayout.scrollToShow(this.staffOffsets, bar, point, scrollLeft, host.clientWidth,
             staffVisibilityMargin, placement);
         if (target !== scrollLeft) {
-            this.autoScrollLeft = target;
-            host.scrollLeft = target;
-            this.updateStaffWindow();
+            this.scrollViewerTo(target);
 
             // The measure the request is about may be one an entry just added, which is not in the document yet —
-            // the browser then clamps the scroll to the measures that are there. The re-render that mounts it
-            // repeats the scroll.
-            this.pendingVisibilityLeft = host.scrollLeft === target ? undefined : target;
+            // the browser then clamps the scroll to the measures that are there. The next update, which mounts the
+            // measure, repeats the scroll.
+            if (host.scrollLeft !== target) {
+                this.deferAfterRender(() => {
+                    this.scrollViewerTo(target);
+                });
+            }
         }
 
         return Promise.resolve(true);
     };
 
-    /** Repeats a visibility scroll that the content could not reach before the new measures were mounted. */
-    private applyPendingVisibilityScroll(): void {
-        const target = this.pendingVisibilityLeft;
+    /**
+     * Queues work for the end of the next update, where the measures the latest change added are mounted.
+     *
+     * @param job The work to run then.
+     */
+    private deferAfterRender(job: () => void): void {
+        this.deferredJobs.push(job);
+    }
+
+    /** Runs what the latest change could not do yet, in the order it was deferred in. */
+    private runDeferredJobs(): void {
+        const jobs = this.deferredJobs.splice(0);
+        for (const job of jobs) {
+            job();
+        }
+    }
+
+    /**
+     * Sets the horizontal scroll position, remembers it as the viewer's own and mounts the measures it shows.
+     *
+     * @param target The scroll position to show.
+     */
+    private scrollViewerTo(target: number): void {
         const host = this.viewerRef.current;
-        if (target === undefined || !host) {
+        if (!host) {
             return;
         }
 
-        this.pendingVisibilityLeft = undefined;
-        if (host.scrollLeft !== target) {
-            this.autoScrollLeft = target;
-            host.scrollLeft = target;
-            this.updateStaffWindow();
-        }
+        this.autoScrollLeft = target;
+        host.scrollLeft = target;
+        this.updateStaffWindow();
     }
 
     private handleTimeParamsChange = (): Promise<boolean> => {
@@ -919,35 +935,29 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { dataModel } = this.props;
         const arrangement = dataModel.arrangement;
         const stored = AppStorage.loadUISettings()?.currentScoreScroll;
-
-        this.pendingViewportTarget = arrangement !== undefined && stored?.scoreId === arrangement.id
+        const target = arrangement !== undefined && stored?.scoreId === arrangement.id
             ? { x: stored.x, y: stored.y }
             : { x: 0, y: 0 };
+
+        this.stageViewport(target);
     }
 
-    /** Applies the staged position, which waits for the measures of the score it belongs to. */
-    private applyStagedViewport(): void {
-        const target = this.pendingViewportTarget;
-        if (target === undefined) {
-            return;
-        }
-
-        this.pendingViewportTarget = undefined;
-        this.applyViewportTarget(target);
+    /**
+     * Stages the position the score now in place is to be shown at.
+     *
+     * @param target The scroll position to show.
+     */
+    private stageViewport(target: IPoint): void {
+        this.deferAfterRender(() => {
+            this.applyViewportTarget(target);
+        });
     }
 
     /**
      * @param target The scroll position to show.
      */
     private applyViewportTarget(target: IPoint): void {
-        const viewer = this.viewerRef.current;
-        if (viewer !== null) {
-            viewer.scrollLeft = target.x;
-
-            // The auto-follow tells its own scrolling from the user's by this offset, so the position just set is
-            // the one it has to know.
-            this.autoScrollLeft = viewer.scrollLeft;
-        }
+        this.scrollViewerTo(target.x);
 
         const verticalHost = this.verticalScrollHost();
         if (verticalHost !== undefined) {
