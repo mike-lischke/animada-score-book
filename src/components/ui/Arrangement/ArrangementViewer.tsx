@@ -7,7 +7,7 @@ import { createRef, type ComponentChild, type JSX } from "preact";
 
 import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
 import {
-    MeasureLayout, barActionStripWidth, staffPrefixWidth, type IMeasureRange,
+    MeasureLayout, MeasureScrollPlacement, barActionStripWidth, staffPrefixWidth, type IMeasureRange,
 } from "../../../core/MeasureLayout.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import {
@@ -124,6 +124,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     /** Offset the auto-follow scrolled to last, to tell its own scrolling from the user's. */
     private autoScrollLeft = -1;
+
+    /**
+     * Scroll position a visibility request asked for, which the content could not reach at the time: a measure the
+     * request grew the score by is not in the document yet, so the scroll clamps to the measures that are there.
+     */
+    private pendingVisibilityLeft?: number;
 
     /** Column widths and offsets of the measures in layout px at 100% zoom, as used by the staff window. */
     private staffColumns: number[] = [];
@@ -306,6 +312,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         // the document: the scroll right after them is the one that counts.
         this.applyStagedViewport();
         this.updateStaffWindow();
+        this.applyPendingVisibilityScroll();
         this.updateContentCenterShift();
         this.handleTrackViewerScroll();
         this.updatePlayBeamExtent();
@@ -783,15 +790,19 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * @returns A promise that resolves when the measure is inside the viewport.
      */
     private handleMeasureVisibilityRequested = (request: IMeasureVisibilityRequest): Promise<boolean> => {
-        const { bar, position } = request;
-        const { arrangementPlayer } = this.props;
+        const { bar, position, centre } = request;
+        const { dataModel, arrangementPlayer } = this.props;
         const { trackViewMode } = this.state;
         const host = this.viewerRef.current;
         if (trackViewMode !== TrackViewMode.Staff || !host) {
             return Promise.resolve(false);
         }
 
-        this.updateStaffGeometry(arrangementPlayer.scoreMetrics.bars);
+        // The measure count comes from the arrangement: an entry that grew the score asks for the new measure in
+        // the same task, while the player beside it still holds the previous count. It is only used to rebuild the
+        // geometry, so the player is still what the caller's own bar range is read against.
+        const barCount = dataModel.arrangement?.timeParams.length ?? arrangementPlayer.scoreMetrics.bars;
+        this.updateStaffGeometry(barCount);
         if (bar < 1 || bar > this.staffColumns.length) {
             return Promise.resolve(false);
         }
@@ -800,16 +811,38 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const fraction = position === undefined ? 0 : position.numerator / position.denominator;
         const point = this.staffOffsets[bar - 1] + (fraction * column);
         const scrollLeft = host.scrollLeft;
+        const placement = centre === true ? MeasureScrollPlacement.Position : MeasureScrollPlacement.Measure;
         const target = MeasureLayout.scrollToShow(this.staffOffsets, bar, point, scrollLeft, host.clientWidth,
-            staffVisibilityMargin);
+            staffVisibilityMargin, placement);
         if (target !== scrollLeft) {
             this.autoScrollLeft = target;
             host.scrollLeft = target;
             this.updateStaffWindow();
+
+            // The measure the request is about may be one an entry just added, which is not in the document yet —
+            // the browser then clamps the scroll to the measures that are there. The re-render that mounts it
+            // repeats the scroll.
+            this.pendingVisibilityLeft = host.scrollLeft === target ? undefined : target;
         }
 
         return Promise.resolve(true);
     };
+
+    /** Repeats a visibility scroll that the content could not reach before the new measures were mounted. */
+    private applyPendingVisibilityScroll(): void {
+        const target = this.pendingVisibilityLeft;
+        const host = this.viewerRef.current;
+        if (target === undefined || !host) {
+            return;
+        }
+
+        this.pendingVisibilityLeft = undefined;
+        if (host.scrollLeft !== target) {
+            this.autoScrollLeft = target;
+            host.scrollLeft = target;
+            this.updateStaffWindow();
+        }
+    }
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         // Time params changed — internal layout may need recalculation. The staff measures may now be a

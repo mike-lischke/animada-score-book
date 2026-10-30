@@ -88,6 +88,15 @@ export interface IMeasureRange {
     last: number;
 }
 
+/** How a requested position is placed in the viewport by {@link MeasureLayout.scrollToShow}. */
+export enum MeasureScrollPlacement {
+    /** The measure is the anchor: its left edge goes to the left edge of the viewport. */
+    Measure,
+
+    /** The position is the anchor: it goes to the middle of the viewport, as far as the scroll range allows. */
+    Position,
+}
+
 export class MeasureLayout {
     /** @returns The default column width of a measure, in px at 100% zoom. */
     public static defaultWidth(): number {
@@ -220,21 +229,26 @@ export class MeasureLayout {
      * @param scrollLeft The current scroll position of the viewport.
      * @param clientWidth The width of the viewport.
      * @param margin The distance a position keeps from the viewport edge, so a note head is not cut off.
+     * @param placement How the position is placed, which only matters when a scroll is needed at all.
      *
      * @returns The scroll position to use, clamped to the scrollable range. It equals the current scroll position
      *          when the measure and the position are visible already.
      */
     public static scrollToShow(offsets: number[], bar: number, point: number, scrollLeft: number, clientWidth: number,
-        margin: number): number {
+        margin: number, placement = MeasureScrollPlacement.Measure): number {
 
         if (point >= scrollLeft + margin && point <= scrollLeft + clientWidth - margin) {
             return scrollLeft;
         }
 
+        const maxScroll = Math.max(0, MeasureLayout.totalWidth(offsets) - clientWidth);
+        if (placement === MeasureScrollPlacement.Position) {
+            return clampValue(Math.floor(point - (clientWidth / 2)), 0, maxScroll);
+        }
+
         // Measure 1 is preceded by the staff prefix, which stays visible with it, so the content start anchors it.
         const anchor = bar === 1 ? 0 : offsets[bar - 1] - margin;
         const followPoint = point - clientWidth + margin;
-        const maxScroll = Math.max(0, MeasureLayout.totalWidth(offsets) - clientWidth);
 
         return clampValue(Math.floor(Math.max(anchor, followPoint)), 0, maxScroll);
     }
