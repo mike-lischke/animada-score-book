@@ -727,6 +727,15 @@ interface IWhoamiResponse {
     capabilities: ICapabilities;
 }
 
+/** How the session logged in, as the tab remembers it so a token refresh can state it again. */
+interface IAuthHints {
+    /** Set to "group" when the session logged in through a group password. */
+    authType?: string;
+
+    /** The id of that group, as a string because that is what the request header takes. */
+    groupId?: string;
+}
+
 /** An event whose duration should change, addressed by its exact start within a measure. */
 export interface IEventResizeRequest {
     /** The one-based measure number containing the event. */
@@ -3467,6 +3476,38 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Remembers how the session logged in, for a refresh that has lost the in-memory token.
+     *
+     * @param group The group the session logged in through, or undefined for a plain login.
+     */
+    private static storeAuthHints(group?: IGroupInfo): void {
+        const store = AppStorage.sessionStore;
+        if (store === undefined) {
+            return;
+        }
+
+        if (group === undefined) {
+            store.removeItem("authType");
+            store.removeItem("groupId");
+        } else {
+            store.setItem("authType", "group");
+            store.setItem("groupId", String(group.id));
+        }
+    }
+
+    /**
+     * @returns How the session logged in, as far as the tab still remembers it.
+     */
+    private static readAuthHints(): IAuthHints {
+        const store = AppStorage.sessionStore;
+
+        return {
+            authType: store?.getItem("authType") ?? undefined,
+            groupId: store?.getItem("groupId") ?? undefined,
+        };
+    }
+
+    /**
      * Drops the session state and tells the app about it, so it can ask for a login again.
      */
     private clearAuthState(): void {
@@ -3480,8 +3521,7 @@ export class ScoreBookDataModel {
             canExportMP3: false,
         };
 
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
+        ScoreBookDataModel.storeAuthHints();
 
         void requisitions.execute("authChanged", undefined);
     }
@@ -3502,13 +3542,7 @@ export class ScoreBookDataModel {
         // A login ends the state a failed refresh left behind, so the next expired token is refreshed again.
         this.sessionRefreshFailed = false;
 
-        if (group === undefined) {
-            sessionStorage.removeItem("authType");
-            sessionStorage.removeItem("groupId");
-        } else {
-            sessionStorage.setItem("authType", "group");
-            sessionStorage.setItem("groupId", String(group.id));
-        }
+        ScoreBookDataModel.storeAuthHints(group);
 
         void requisitions.execute("authChanged", undefined);
     }
@@ -5372,15 +5406,14 @@ export class ScoreBookDataModel {
     private async refreshAccessToken(): Promise<boolean> {
         // Restore group-login context from sessionStorage (lost from in-memory token on reload).
         const headers: Record<string, string> = {};
-        const storedAuthType = sessionStorage.getItem("authType");
-        const storedGroupId = sessionStorage.getItem("groupId");
+        const { authType, groupId } = ScoreBookDataModel.readAuthHints();
 
-        if (storedAuthType) {
-            headers["X-Auth-Type"] = storedAuthType;
+        if (authType) {
+            headers["X-Auth-Type"] = authType;
         }
 
-        if (storedGroupId) {
-            headers["X-Group-Id"] = storedGroupId;
+        if (groupId) {
+            headers["X-Group-Id"] = groupId;
         }
 
         if (this.accessToken) {
@@ -5422,13 +5455,7 @@ export class ScoreBookDataModel {
                 this.currentGroup = whoami.group;
                 this.currentCapabilities = whoami.capabilities;
 
-                if (whoami.group) {
-                    sessionStorage.setItem("authType", "group");
-                    sessionStorage.setItem("groupId", String(whoami.group.id));
-                } else {
-                    sessionStorage.removeItem("authType");
-                    sessionStorage.removeItem("groupId");
-                }
+                ScoreBookDataModel.storeAuthHints(whoami.group);
             }
         }
 

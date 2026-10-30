@@ -1246,7 +1246,9 @@ export class App extends UIComponent<{}, IAppState> {
                     const [score, status] = await this.dataModel.fetchScoreById(scoreId);
                     if (score) {
                         this.loadScorebook(score);
-                        this.setState({ phase: AppPhase.Running });
+                        this.setState({ phase: AppPhase.Running }, () => {
+                            this.warnAboutBlockedStorage();
+                        });
 
                         return;
                     }
@@ -1266,10 +1268,26 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         this.setState({ phase: AppPhase.Running }, () => {
+            this.warnAboutBlockedStorage();
+
             if (pendingWarning) {
                 void requisitions.execute("showWarning", pendingWarning);
             }
         });
+    }
+
+    /**
+     * Tells the user that the browser denies website data, which is what keeps the app from remembering settings,
+     * the cached score and the tab's session. Safari hides that switch behind its advanced settings.
+     */
+    private warnAboutBlockedStorage(): void {
+        if (AppStorage.hasLocalStorage) {
+            return;
+        }
+
+        void requisitions.execute("showWarning", "This browser blocks website data, so your settings and the score"
+            + " you had open are not remembered between reloads. In Safari, open Settings › Advanced, show the"
+            + " advanced settings and turn off “Block All Cookies” in the Privacy section.");
     }
 
     private handleGithubClick = () => {

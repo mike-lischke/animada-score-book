@@ -83,6 +83,17 @@ const tuplet = (startIndex: number, actual: number, normal: number): ISubdivisio
 };
 
 /**
+ * Builds a plain subdivision, which halves one note into two equal slots without needing tuplet notation.
+ *
+ * @param startIndex The index of the measure event the subdivision starts at.
+ *
+ * @returns The subdivision.
+ */
+const split = (startIndex: number): ISubdivision => {
+    return { startIndex, actual: 2, normal: 1, isTuplet: false };
+};
+
+/**
  * Builds a measure as the grouping rules see it. The track player resolves audio data for every
  * event except the rests, which is what makes a rest end a beam group.
  *
@@ -188,6 +199,24 @@ describe("MeasureProjection note groups", () => {
         const groups = MeasureProjection.noteGroups(measure, gridOf());
 
         expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2, 3], [4, 5]]);
+    });
+
+    it("breaks a beam group at a pulse boundary after a subdivision", () => {
+        // Two pulses, each a dotted eighth followed by a split of two thirty-seconds. The split may beam
+        // across its own slots, but not across the pulse boundary that follows it.
+        const measure = measureOf([
+            note(fraction(0, 1), fraction(3, 16)),
+            note(fraction(3, 16), fraction(1, 32)),
+            note(fraction(7, 32), fraction(1, 32)),
+            note(fraction(1, 4), fraction(3, 16)),
+            note(fraction(7, 16), fraction(1, 32)),
+            note(fraction(15, 32), fraction(1, 32)),
+            rest(fraction(1, 2), fraction(1, 2)),
+        ], [split(1), split(4)]);
+
+        const groups = MeasureProjection.noteGroups(measure, gridOf());
+
+        expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2], [3, 4, 5]]);
     });
 
     it("breaks a beam group at a rest, even when the rest is written as a flag-carrying value", () => {

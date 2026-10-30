@@ -144,6 +144,14 @@ export interface IUISettings {
  * This class takes care for saving and loading settings and the like to and from localStorage.
  */
 export class AppStorage {
+    /**
+     * The tab's session storage, or undefined where the browser denies it. A caller reaches the storage only
+     * through this handle, which is what keeps a denied storage from throwing at the place it is used.
+     */
+    public static readonly sessionStore: Storage | undefined = AppStorage.#openStorage(() => {
+        return window.sessionStorage;
+    });
+
     /** Local storage key for global UI settings shared across sessions. */
     static #settingsKey = "asb-ui-settings";
 
@@ -176,25 +184,9 @@ export class AppStorage {
      * Whether localStorage is available and writable in the current environment.
      * This check is done once at class initialization time.
      */
-    static #hasLocalStorage: boolean = (() => {
-        if ("setItem" in window.localStorage) {
-            try {
-                const testKey = "__asb-test__";
-                window.localStorage.setItem(testKey, "1");
-                window.localStorage.removeItem(testKey);
-
-                return true;
-            } catch (e) {
-                console.warn("LocalStorage is not available:", e);
-
-                return false;
-            }
-        } else {
-            console.warn("LocalStorage is not available.");
-
-            return false;
-        }
-    })();
+    static #hasLocalStorage: boolean = AppStorage.#openStorage(() => {
+        return window.localStorage;
+    }) !== undefined;
 
     static {
         if (this.#hasLocalStorage) {
@@ -207,6 +199,14 @@ export class AppStorage {
         } else {
             this.#sessionId = uuid();
         }
+    }
+
+    /**
+     * @returns Whether the browser stores settings for this page. A denied storage leaves the app working, but
+     * nothing is remembered between reloads.
+     */
+    public static get hasLocalStorage(): boolean {
+        return this.#hasLocalStorage;
     }
 
     /**
@@ -224,6 +224,13 @@ export class AppStorage {
      * @param desiredSessionId Optional explicit session id to activate.
      */
     public static resetSession(desiredSessionId?: string): void {
+        if (!this.#hasLocalStorage) {
+            // Without storage there is no stored id to collide with, so a plain one is enough.
+            this.#sessionId = desiredSessionId ?? uuid();
+
+            return;
+        }
+
         this.#sessionId = desiredSessionId ?? this.#generateSessionId();
         this.#persistSessionId();
         this.#touchSession(this.#sessionId);
@@ -308,6 +315,29 @@ export class AppStorage {
     }
 
     /**
+     * Opens a browser storage, which the browser may deny: Safari raises a `SecurityError` on the property
+     * itself when the user blocks site data, and a storage that refuses the write is no use either.
+     *
+     * @param open Reads the storage from the window.
+     *
+     * @returns The storage, or undefined when it is not available for writing.
+     */
+    static #openStorage(open: () => Storage): Storage | undefined {
+        try {
+            const store = open();
+            const testKey = "__asb-test__";
+            store.setItem(testKey, "1");
+            store.removeItem(testKey);
+
+            return store;
+        } catch (e) {
+            console.warn("Browser storage is not available:", e);
+
+            return undefined;
+        }
+    }
+
+    /**
      * Resolves an existing session id from tab-local browser state.
      *
      * Uses only tab-bound sources to avoid cross-tab session id reuse.
@@ -322,7 +352,7 @@ export class AppStorage {
             }
         }
 
-        return sessionStorage.getItem(this.#sessionStorageKey)
+        return this.sessionStore?.getItem(this.#sessionStorageKey)
             ?? undefined;
     }
 
@@ -404,7 +434,7 @@ export class AppStorage {
      */
     static #persistSessionId(): void {
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId: this.#sessionId }, "");
-        sessionStorage.setItem(this.#sessionStorageKey, this.#sessionId);
+        this.sessionStore?.setItem(this.#sessionStorageKey, this.#sessionId);
     }
 
     /**

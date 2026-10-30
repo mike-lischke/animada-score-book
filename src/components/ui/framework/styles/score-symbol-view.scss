@@ -61,11 +61,16 @@
 
     text {
         text-anchor: start;
-        transform-box: view-box;
-        transform-origin: 50% 50%;
-        transform:
-            translate(calc(-1 * var(--icon-ink-scale) * var(--staff-space, 10px) * (var(--ink-pen-x) + var(--ink-left) + (var(--ink-width) / 2) - (var(--ink-box-width) / 2))),
-                calc(var(--icon-ink-scale) * var(--staff-space, 10px) * ((var(--ink-top) + var(--ink-bottom)) / 2 + (var(--ink-box-height) / 2) - var(--ink-pen-y)))) scale(var(--icon-ink-scale));
+
+        /* The scale is the glyph's font size and not a transform: WebKit resolves the `transform-origin` of an SVG
+         * `text` against the text's own box, ignoring `transform-box`, so a scaling transform would place the glyph
+         * somewhere else there than in every other engine. */
+        font-size: calc(var(--staff-space, 10px) * 4 * var(--icon-ink-scale));
+
+        /* What is left is a translation, which no origin applies to: the scaled ink's centre onto the box's
+         * centre. */
+        transform: translate(calc(var(--staff-space, 10px) * (var(--ink-box-width) / 2 - var(--ink-pen-x)) - var(--icon-ink-scale) * var(--staff-space, 10px) * (var(--ink-left) + (var(--ink-width) / 2))),
+                calc(var(--staff-space, 10px) * (var(--ink-box-height) / 2 - var(--ink-pen-y)) + var(--icon-ink-scale) * var(--staff-space, 10px) * ((var(--ink-top) + var(--ink-bottom)) / 2)));
     }
 }
 

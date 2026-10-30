@@ -173,7 +173,10 @@ export interface INoteGroup {
 /** A measure event as the grouping rules see it: where it sits in the tree and which tuplet holds it. */
 interface IProjectedLeaf {
     event: IProjectedEvent;
-    subdivisionDepth: number;
+
+    /** The subdivisions that enclose the event, outermost first. */
+    enclosing: readonly ISubdivision[];
+
     tupletDepth: number;
     tuplet?: ISubdivision;
 }
@@ -341,7 +344,7 @@ export class MeasureProjection {
 
         for (const leaf of MeasureProjection.flattenLeaves(items)) {
             const beams = measure.noteEvents[leaf.event.eventIndex]?.audioData !== undefined
-                ? beamCountForEvent(leaf.event.duration, leaf.subdivisionDepth, grid.stepsPerBar,
+                ? beamCountForEvent(leaf.event.duration, leaf.enclosing.length, grid.stepsPerBar,
                     pulseLengthAt(leaf.event.start, grid))
                 : 0;
 
@@ -367,35 +370,54 @@ export class MeasureProjection {
     }
 
     /**
-     * Checks whether a pulse boundary lies between two notes at the top level of the measure.
+     * Checks whether a pulse boundary lies between two notes that no subdivision holds together.
      *
      * @param first The earlier note.
      * @param second The later note.
      * @param grid The timing of the arrangement.
      *
-     * @returns True when the two notes fall into different pulses.
+     * @returns True when the two notes fall into different pulses and no subdivision spans them both.
      */
     private static crossesPulse(first: IProjectedLeaf, second: IProjectedLeaf, grid: INotationGrid): boolean {
-        if (first.subdivisionDepth > 0 || second.subdivisionDepth > 0) {
+        if (MeasureProjection.sharesSubdivision(first, second)) {
             return false;
         }
 
         return pulseIndexOf(first.event.start, grid) !== pulseIndexOf(second.event.start, grid);
     }
 
-    private static flattenLeaves(items: IProjectedItem[], subdivisionDepth = 0, tupletDepth = 0,
+    /**
+     * Checks whether one subdivision holds both notes. Only there may a beam cross a pulse boundary — a split
+     * inside a tuplet keeps its inner beams connected. Between two subdivisions, or between a subdivision and
+     * the top level, the pulse boundary still ends the beam.
+     *
+     * @param first The earlier note.
+     * @param second The later note.
+     *
+     * @returns True when both notes lie in one chain of nested subdivisions.
+     */
+    private static sharesSubdivision(first: IProjectedLeaf, second: IProjectedLeaf): boolean {
+        const shorter = first.enclosing.length <= second.enclosing.length ? first.enclosing : second.enclosing;
+        const longer = shorter === first.enclosing ? second.enclosing : first.enclosing;
+
+        return shorter.length > 0 && shorter.every((group, index) => {
+            return group === longer[index];
+        });
+    }
+
+    private static flattenLeaves(items: IProjectedItem[], enclosing: readonly ISubdivision[] = [], tupletDepth = 0,
         tuplet?: ISubdivision): IProjectedLeaf[] {
         const leaves: IProjectedLeaf[] = [];
 
         for (const item of items) {
             if (item.kind === ProjectedItemKind.Event) {
-                leaves.push({ event: item, subdivisionDepth, tupletDepth, tuplet });
+                leaves.push({ event: item, enclosing, tupletDepth, tuplet });
 
                 continue;
             }
 
             leaves.push(...MeasureProjection.flattenLeaves(item.items,
-                subdivisionDepth + 1,
+                [...enclosing, item.group],
                 tupletDepth + (item.isTuplet ? 1 : 0),
                 item.isTuplet ? item.group : tuplet));
         }
