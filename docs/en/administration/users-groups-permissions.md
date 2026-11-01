@@ -66,7 +66,7 @@ Behind the scenes three rules matter:
 Both groups always exist and behave differently from ordinary ones:
 
 - `Admins` members bypass every permission check. The group's members can be edited, but the group cannot be deleted, cannot receive a password, and the last remaining admin cannot be removed.
-- `World` is the public group. Every user and every anonymous visitor is a member of it automatically, so a score shared with `World` is publicly readable. The group itself cannot be edited or deleted.
+- `World` is the public group. Every user and every anonymous visitor is a member of it automatically, so a score shared with `World` is publicly readable. The group itself cannot be edited or deleted, and a grant for it is always read-only: the backend stores a write grant as read.
 
 ## Ownership and Inherited Access
 
@@ -98,7 +98,6 @@ That deletes every user, group, grant, and score. Export the scores you need and
 - Neither list is paginated; large installations need a database query for an overview.
 - There is no self-service password change and no session or device management, so a forgotten password always goes through `Reset Password` by an administrator.
 - The `login_audit` table records logins and group logins, but no view in the application reads it.
-- The permission editor never gives `World` write access; the backend does not enforce that rule itself.
 
 ## Related Chapters
 

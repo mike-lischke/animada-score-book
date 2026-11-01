@@ -6,6 +6,97 @@
 import { describe, expect, it } from "vitest";
 
 import { Auth, AccessLevel, EntityType, LoginAuditEvent } from "../../src/server/Auth.js";
+import type { DbRow, IDatabaseAdapter, IDbExecuteResult, ITestConnectionResult } from "../../src/server/database.js";
+
+const adminsGroupId = 1;
+const worldGroupId = 2;
+
+/** In-memory stand-in for the adapter, covering the queries `Auth` runs for permissions. */
+class FakeDatabaseAdapter implements IDatabaseAdapter {
+    /** Group id → group name. */
+    public readonly groups = new Map<number, string>([
+        [adminsGroupId, Auth.adminGroupName],
+        [worldGroupId, Auth.worldGroupName],
+    ]);
+
+    /** `entityType:entityId` → group id → writable. */
+    public readonly entityGroups = new Map<string, Map<number, boolean>>();
+
+    public testConnection(): Promise<ITestConnectionResult> {
+        return Promise.resolve({ success: true });
+    }
+
+    public initialize(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public dropAllTables(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public isInitialized(): boolean {
+        return true;
+    }
+
+    public ping(): Promise<boolean> {
+        return Promise.resolve(true);
+    }
+
+    public query<T extends DbRow = DbRow>(sql: string, params: unknown[] = []): Promise<T[]> {
+        if (sql.includes("FROM `groups` WHERE name = ?")) {
+            const name = String(params[0]);
+            const match = Array.from(this.groups.entries()).find(([, groupName]) => {
+                return groupName === name;
+            });
+
+            return Promise.resolve((match ? [{ id: match[0] }] : []) as unknown as T[]);
+        }
+
+        if (sql.includes("FROM entity_groups")) {
+            const key = `${String(params[0])}:${String(params[1])}`;
+            const rows = Array.from((this.entityGroups.get(key) ?? new Map<number, boolean>()).entries())
+                .map(([groupId, writable]) => {
+                    return { group_id: groupId, writable: writable ? 1 : 0 };
+                });
+
+            return Promise.resolve(rows as unknown as T[]);
+        }
+
+        if (sql.includes("FROM scores")) {
+            return Promise.resolve([{ folderid: null }] as unknown as T[]);
+        }
+
+        return Promise.resolve([] as T[]);
+    }
+
+    public execute(sql: string, params: unknown[] = []): Promise<IDbExecuteResult> {
+        const key = `${String(params[0])}:${String(params[1])}`;
+        const groupId = Number(params[2]);
+        const groupRows = this.entityGroups.get(key) ?? new Map<number, boolean>();
+
+        this.entityGroups.set(key, groupRows);
+
+        // The World branch writes a constant 0, the other branch only upgrades with GREATEST.
+        const writable = sql.includes("GREATEST")
+            && (groupRows.get(groupId) === true || Number(params[3]) === 1);
+
+        groupRows.set(groupId, writable);
+
+        return Promise.resolve({ affectedRows: 1, insertId: 0 });
+    }
+
+    public insertReturningId(): Promise<IDbExecuteResult> {
+        return Promise.resolve({ affectedRows: 1, insertId: 0 });
+    }
+
+    public executeMultiple(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public shutdown(): Promise<void> {
+        return Promise.resolve();
+    }
+}
 
 describe("auth — JWT", () => {
     it("round-trip: access token", () => {
@@ -77,5 +168,48 @@ describe("auth — LoginAuditEvent", () => {
         const values = Object.values(LoginAuditEvent);
 
         expect(new Set(values).size).toBe(values.length);
+    });
+});
+
+describe("auth — World group is read-only", () => {
+    it("stores a write grant for World as read", async () => {
+        const adapter = new FakeDatabaseAdapter();
+
+        await new Auth(adapter).addEntityGroup(EntityType.Score, 7, worldGroupId, true);
+
+        expect(adapter.entityGroups.get("score:7")?.get(worldGroupId)).toBe(false);
+    });
+
+    it("downgrades an existing write grant for World", async () => {
+        const adapter = new FakeDatabaseAdapter();
+
+        adapter.entityGroups.set("score:7", new Map([[worldGroupId, true]]));
+
+        await new Auth(adapter).addEntityGroup(EntityType.Score, 7, worldGroupId, true);
+
+        expect(adapter.entityGroups.get("score:7")?.get(worldGroupId)).toBe(false);
+    });
+
+    it("keeps write grants for other groups", async () => {
+        const adapter = new FakeDatabaseAdapter();
+
+        await new Auth(adapter).addEntityGroup(EntityType.Score, 7, adminsGroupId, true);
+
+        expect(adapter.entityGroups.get("score:7")?.get(adminsGroupId)).toBe(true);
+    });
+
+    it("ignores a stale World write grant when access is checked", async () => {
+        const adapter = new FakeDatabaseAdapter();
+
+        adapter.entityGroups.set("score:7", new Map([[worldGroupId, true]]));
+
+        const auth = new Auth(adapter);
+        const canWrite = await auth.checkPermission(undefined, EntityType.Score, 7, AccessLevel.Write);
+        const canRead = await auth.checkPermission(undefined, EntityType.Score, 7, AccessLevel.Read);
+        const summary = await auth.getPermissionSummary(undefined, EntityType.Score, 7);
+
+        expect(canWrite).toBe(false);
+        expect(canRead).toBe(true);
+        expect(summary.canWrite).toBe(false);
     });
 });

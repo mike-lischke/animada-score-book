@@ -71,7 +71,8 @@ Beide Gruppen existieren immer und verhalten sich anders als gewöhnliche Gruppe
   Gruppe lässt sich nicht löschen, kann kein Passwort bekommen, und der letzte verbleibende Administrator lässt sich
   nicht entfernen.
 - `World` ist die öffentliche Gruppe. Jeder Benutzer und jeder anonyme Besucher ist automatisch Mitglied, ein mit `World`
-  geteilte Partitur ist also öffentlich lesbar. Die Gruppe selbst lässt sich weder bearbeiten noch löschen.
+  geteilte Partitur ist also öffentlich lesbar. Die Gruppe selbst lässt sich weder bearbeiten noch löschen, und ihre Freigabe
+  ist immer nur lesend: Das Backend speichert einen Schreibzugriff als Lesezugriff.
 
 ## Eigentum und geerbter Zugriff
 
@@ -106,7 +107,6 @@ Das löscht jeden Benutzer, jede Gruppe, jede Freigabe und jede Partitur. Export
 - Es gibt keinen Self-Service-Passwortwechsel und keine Verwaltung von Sitzungen oder Geräten, ein vergessenes Passwort
   führt also immer über `Reset Password` durch einen Administrator.
 - Die Tabelle `login_audit` zeichnet Anmeldungen und Gruppen-Logins auf, aber keine Ansicht in der Anwendung liest sie.
-- Der Berechtigungseditor vergibt `World` nie Schreibzugriff; das Backend erzwingt diese Regel selbst nicht.
 
 ## Verwandte Kapitel
 
