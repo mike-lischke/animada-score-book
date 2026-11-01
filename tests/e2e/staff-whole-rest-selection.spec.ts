@@ -14,14 +14,14 @@ import { routeApi } from "./e2e-test-helpers.js";
 const snapshot = {
     version: arrangementSnapshotVersion,
     title: "E2E Whole Rest Selection",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4" },
     tracks: [{
         id: 200,
         instrumentId: "0",
         measures: [
             {
                 number: 1,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events: [
                     {
                         start: { numerator: 0, denominator: 1 },
@@ -34,7 +34,7 @@ const snapshot = {
             },
             {
                 number: 2,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } }],
                 subdivisions: [],
             },

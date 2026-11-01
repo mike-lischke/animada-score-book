@@ -15,7 +15,6 @@ import type {
     IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent, IRangeArticulation, IRepeatBar, ISubdivision,
 } from "../../src/core/types/general.js";
 import { RangeArticulationKind } from "../../src/core/types/general.js";
-import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 
 const fraction = (numerator: number, denominator: number): IFraction => {
@@ -95,8 +94,6 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
         meter: {
             beats: 4,
             beatUnits: 4,
-            stepResolution: 16,
-            beatGroups: [4, 4, 4, 4],
         },
         events,
         subdivisions,
@@ -111,7 +108,6 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
             start: { ...measureEvent.start },
             duration: { ...measureEvent.duration },
             track: trackEntity,
-            timing: { bar: 1, step: 0 },
             audioData: measureEvent.noteStyleId !== undefined ? audioData : undefined,
         };
     });
@@ -148,20 +144,6 @@ const buildNestedMeasure = (): ISbDmTrackPiece => {
     ];
 
     return buildMeasure(events, subdivisions);
-};
-
-const scoreMetrics: IScoreMetrics = {
-    realTimeLength: 2,
-    secondsPerBar: 2,
-    secondsPerStep: 0.125,
-    bars: 1,
-    performedBars: 1,
-    beatsPerBar: 4,
-    beatUnit: 4,
-    pulsesPerBar: 4,
-    stepsPerBar: 16,
-    beatGroups: [4, 4, 4, 4],
-    stepsPerPulse: 4,
 };
 
 /**
@@ -225,8 +207,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -255,8 +235,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -296,8 +274,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -331,8 +307,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -358,8 +332,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -385,8 +357,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -412,8 +382,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -445,8 +413,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={false}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -491,8 +457,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -520,8 +484,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -559,8 +521,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -586,8 +546,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -616,8 +574,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -637,8 +593,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -664,8 +618,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
                 <StaffNoteViewer
                     isLastBar={true}
                     timeSignature="4/4"
-                    scoreMetrics={scoreMetrics}
-                    baseSteps={16}
                     measure={measure}
                     barNumber={1}
                     trackId={100}
@@ -687,8 +639,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -715,8 +665,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -739,8 +687,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={false}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -763,8 +709,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={false}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -792,8 +736,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -819,8 +761,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={false}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -843,8 +783,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={false}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -868,8 +806,6 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={false}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={2}
                 trackId={100}
@@ -910,8 +846,6 @@ describe("StaffNoteViewer barlines", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={isLastBar}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={barNumber}
                 trackId={100}
@@ -1023,8 +957,6 @@ describe("StaffNoteViewer printed markings", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}
@@ -1127,8 +1059,6 @@ describe("StaffNoteViewer measure width", { concurrent: false }, () => {
             <StaffNoteViewer
                 isLastBar={true}
                 timeSignature="4/4"
-                scoreMetrics={scoreMetrics}
-                baseSteps={16}
                 measure={measure}
                 barNumber={1}
                 trackId={100}

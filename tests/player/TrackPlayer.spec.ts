@@ -8,9 +8,9 @@ import { describe, expect, it, vi } from "vitest";
 import { RangeArticulations } from "../../src/core/RangeArticulations.js";
 import {
     Damping, SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackPiece, type ITiming, type RealTime
+    type ISbDmTrackPiece, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
-import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import type { IAudioData, IFraction, ITimeParamsBase, Mutable } from "../../src/core/types/general.js";
 import { RangeArticulationKind } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
@@ -37,9 +37,6 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
             beatUnit: 4,
             pulsesPerBar: 8,
         },
-        convertToRealTime: (timing: ITiming) => {
-            return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
-        },
         convertToLoopProgress: () => {
             return 0;
         },
@@ -49,7 +46,7 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
 
 const makeNote = (
     track: ISbDmTrack,
-    timing: ITiming,
+    start: IFraction,
     noteStyle?: IAudioData,
 ): ISbDmNoteEvent => {
     const measure = {
@@ -57,7 +54,7 @@ const makeNote = (
         id: 1,
         track,
         number: 1,
-        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [16] },
+        meter: { beats: 4, beatUnits: 4 },
         events: [],
         subdivisions: [],
         noteEvents: [],
@@ -67,10 +64,9 @@ const makeNote = (
         type: SbDmEntityType.NoteEvent,
         id: Math.floor(Math.random() * 100000),
         measure,
-        start: { numerator: timing.step - 1, denominator: 16 },
+        start: { ...start },
         duration: { numerator: 1, denominator: 16 },
         track,
-        timing,
         audioData: noteStyle,
     };
 };
@@ -80,16 +76,11 @@ const makeTrack = (opts?: {
     withPolyrhythmNote?: boolean;
 }): ISbDmTrack & { _notes: ISbDmNoteEvent[]; } => {
     const instrumentLoaded = opts?.instrumentLoaded ?? true;
-    const timeParams: ITimeParams = {
+    const timeParams: ITimeParamsBase = {
         timeSignature: "4/4",
         tempo: 120,
         length: 1,
         pulse: "2/8",
-        stepResolution: 16,
-        timings: [],
-        isValid: (_timing: ITiming) => {
-            return true;
-        },
     };
 
     const arrangement: ISbDmArrangement = {
@@ -168,11 +159,11 @@ const makeTrack = (opts?: {
     // The player resolves the measure events' style ids through the instrument, so the stub publishes the style.
     (track.instrument as Mutable<ISbDmInstrument>).noteStyles = { [noteStyle.id]: noteStyle };
 
-    const note = makeNote(track, { bar: 1, step: 1 }, noteStyle);
+    const note = makeNote(track, { numerator: 0, denominator: 1 }, noteStyle);
     track._notes.push(note);
 
     if (opts?.withPolyrhythmNote) {
-        const polyNote = makeNote(track, { bar: 1, step: 2 }, noteStyle);
+        const polyNote = makeNote(track, { numerator: 1, denominator: 16 }, noteStyle);
         track._notes.push(polyNote);
     }
 
@@ -185,8 +176,6 @@ const makeTrack = (opts?: {
         meter: {
             beats: 4,
             beatUnits: 4,
-            stepResolution: track._notes.length,
-            beatGroups: [track._notes.length],
         },
         events: track._notes.map((currentNote, index) => {
             return {
@@ -213,7 +202,6 @@ const makeTrack = (opts?: {
                 denominator: track._notes.length,
             },
             track,
-            timing: currentNote.timing,
             audioData: currentNote.audioData,
         });
     });

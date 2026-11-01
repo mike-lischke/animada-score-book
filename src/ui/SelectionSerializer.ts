@@ -5,6 +5,7 @@
 
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../core/ScoreBookDataModel.js";
 import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
+import { StepGrid } from "../core/StepGrid.js";
 import type { IFraction, IMeasureEvent, ISubdivision } from "../core/types/general.js";
 
 /** Granularity of a selection entry — determines what level of the score hierarchy is selected. */
@@ -374,7 +375,7 @@ export class SelectionSerializer {
 
         const start = target.start ?? target.event.start;
         const cellStart = reduceFraction(SelectionSerializer.cellOf(start, target.measure),
-            target.measure.meter.stepResolution);
+            StepGrid.stepsPerBarOfMeter(target.measure.meter));
 
         return compareFractions(start, cellStart) !== 0;
     }
@@ -396,7 +397,7 @@ export class SelectionSerializer {
             return eventEnd;
         }
 
-        const cellEnd = addFractions(start, reduceFraction(1, measure.meter.stepResolution));
+        const cellEnd = addFractions(start, reduceFraction(1, StepGrid.stepsPerBarOfMeter(measure.meter)));
 
         return compareFractions(cellEnd, eventEnd) < 0 ? cellEnd : eventEnd;
     }
@@ -417,7 +418,7 @@ export class SelectionSerializer {
         const subdivision = SelectionSerializer.subdivisionAt(measure, start);
         const position = subdivision === undefined ? start : measure.events[subdivision.startIndex].start;
 
-        return Math.floor(position.numerator * measure.meter.stepResolution / position.denominator);
+        return Math.floor(position.numerator * StepGrid.stepsPerBarOfMeter(measure.meter) / position.denominator);
     }
 
     /**

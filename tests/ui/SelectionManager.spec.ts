@@ -30,11 +30,6 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
             tempo: 120,
             length: 1,
             pulse: "1/4",
-            stepResolution: 8,
-            timings: [],
-            isValid: () => {
-                return true;
-            },
         },
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
@@ -108,14 +103,13 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
             id: 1,
             track: { id: 7, measures: [] } as unknown as ISbDmTrack,
             number: 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            meter: { beats: 4, beatUnits: 4 },
             events: [],
             subdivisions: [],
             noteEvents: [],
         },
         start: { numerator: 0, denominator: 1 },
         duration: { numerator: 1, denominator: 1 },
-        timing: { bar: 1, step: 1 },
         track: undefined as unknown as ISbDmTrack,
     };
 };

@@ -2286,7 +2286,6 @@ export class App extends UIComponent<{}, IAppState> {
             title: result.title,
             timeSignature: result.timeSignature,
             pulse: result.pulse,
-            stepResolution: result.stepResolution,
             length: result.barCount,
             tempo: result.tempo,
         });

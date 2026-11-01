@@ -19,7 +19,7 @@ describe("Track", () => {
     it("reserves an explicitly assigned id so it is never handed out again", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         const assignedId = getNewId() + 10;
         const track = new Track(arrangement, instrument, assignedId);
@@ -96,7 +96,8 @@ describe("Track", () => {
         });
 
         // getNoteAt synthesises rest events on demand for empty grid slots.
-        const restAtBar1Step5 = track.getNoteAt({ bar: 1, step: 5 });
+        const restAtBar1Step5 = track.getNoteAt(1, { numerator: 1, denominator: 4 },
+            { numerator: 1, denominator: 16 });
         expect(restAtBar1Step5).toMatchObject({
             measure: firstMeasure,
             start: { numerator: 1, denominator: 4 },
@@ -105,8 +106,10 @@ describe("Track", () => {
         });
 
         // getNoteAt finds stored sounding events.
-        expect(track.getNoteAt({ bar: 1, step: 1 })?.audioData?.id).toBe(noteStyle.id);
-        expect(track.getNoteAt({ bar: 2, step: 5 })?.audioData?.id).toBe(noteStyle.id);
+        expect(track.getNoteAt(1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 16 })?.audioData?.id).toBe(noteStyle.id);
+        expect(track.getNoteAt(2, { numerator: 1, denominator: 4 },
+            { numerator: 1, denominator: 16 })?.audioData?.id).toBe(noteStyle.id);
     });
 
     it("includes sounding polyrhythm notes in derived measures", () => {

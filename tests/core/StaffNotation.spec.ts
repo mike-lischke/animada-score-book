@@ -5,7 +5,6 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { INotationGrid } from "../../src/core/MeasureProjection.js";
 import { Damping, NoteDisplayType, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
 import { HeadMark } from "../../src/core/StaffInk.js";
@@ -13,9 +12,6 @@ import {
     StaffNodeKind, StaffNotation, type IStaffNoteNode, type IStaffSubdivisionNode, type IStaffTreeNode,
 } from "../../src/core/StaffNotation.js";
 import type { ISubdivision } from "../../src/core/types/general.js";
-
-/** A 4/4 grid, which is all the notation rules these tests call need. */
-const grid: INotationGrid = { stepsPerBar: 16, beatGroups: [4, 4, 4, 4] };
 
 /**
  * @param noteLine The staff line the resolved note sits on.
@@ -100,7 +96,7 @@ const subdivisionNode = (children: IStaffTreeNode[]): IStaffSubdivisionNode => {
 describe("StaffNotation", () => {
     describe("project", () => {
         it("builds a note node for the event of a measure", () => {
-            const { nodes, beamSpans } = StaffNotation.project(measureWithNote(1), grid, 1, 100);
+            const { nodes, beamSpans } = StaffNotation.project(measureWithNote(1), 1, 100);
 
             expect(nodes).toHaveLength(1);
             expect(nodes[0].kind).toBe(StaffNodeKind.Note);
@@ -111,7 +107,7 @@ describe("StaffNotation", () => {
             const measure = measureWithNote(1);
             measure.simile = true;
 
-            const { nodes } = StaffNotation.project(measure, grid, 1, 100);
+            const { nodes } = StaffNotation.project(measure, 1, 100);
 
             expect(nodes).toHaveLength(0);
         });
@@ -158,8 +154,8 @@ describe("StaffNotation", () => {
 
     describe("rowInk", () => {
         it("reaches deeper below the staff line for an accented note than for the same note without accent", () => {
-            const plain = StaffNotation.project(measureWithNote(1), grid, 1, 100);
-            const accented = StaffNotation.project(measureWithNote(1, true), grid, 1, 100);
+            const plain = StaffNotation.project(measureWithNote(1), 1, 100);
+            const accented = StaffNotation.project(measureWithNote(1, true), 1, 100);
 
             const plainInk = StaffNotation.rowInk(plain.nodes, plain.beamSpans, 1);
             const accentedInk = StaffNotation.rowInk(accented.nodes, accented.beamSpans, 1);

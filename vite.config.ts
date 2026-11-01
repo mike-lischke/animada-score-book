@@ -142,7 +142,7 @@ export default defineConfig(({ command }) => {
         } : undefined,
         plugins: [
             preact({
-                prefreshEnabled: false, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
+                prefreshEnabled: true, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
             }),
             tailwindcss(),
             bundleBudgetCheck(),

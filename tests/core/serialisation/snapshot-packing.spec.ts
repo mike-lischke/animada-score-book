@@ -15,7 +15,7 @@ import type { IArrangementSnapshot } from "../../../src/core/types/general.js";
 const sampleSnapshot: IArrangementSnapshot = {
     version: arrangementSnapshotVersion,
     title: "Sample",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "4n", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "4n" },
     tracks: [
         {
             id: 1,
@@ -26,8 +26,6 @@ const sampleSnapshot: IArrangementSnapshot = {
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events: [
                         {
@@ -50,8 +48,6 @@ const sampleSnapshot: IArrangementSnapshot = {
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } }],
                     subdivisions: [],
@@ -66,8 +62,6 @@ const sampleSnapshot: IArrangementSnapshot = {
                 meter: {
                     beats: 4,
                     beatUnits: 4,
-                    stepResolution: 16,
-                    beatGroups: [4, 4, 4, 4],
                 },
                 events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } }],
                 subdivisions: [],

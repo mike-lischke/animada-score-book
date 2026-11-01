@@ -24,7 +24,7 @@ import { arrangementSnapshotVersion, isNaturalNumber, isReadableSnapshotVersion 
  * { v, t?, p, k, s?, c? }
  *   v          schema version (matches IArrangementSnapshot.version)
  *   t          optional title
- *   p          packed time params:  [timeSignature, tempo, length, pulse, stepResolution]
+ *   p          packed time params:  [timeSignature, tempo, length, pulse]
  *   k          tracks: [ [id, instrumentId, measures], ... ]
  *     measure: [ number, meter, events, subdivisions, simile? ]
  *   s          optional database score ID
@@ -47,14 +47,11 @@ export type PackedTimeParams = [
     tempo: number,
     length: number,
     pulse: string,
-    stepResolution: number,
 ];
 
 export type PackedMeter = [
     numerator: number,
     denominator: number,
-    stepResolution: number,
-    beatGroups: number[],
 ];
 
 export type PackedEvent = [
@@ -131,22 +128,24 @@ export const unpackArrangementSnapshot = (packed: IPackedArrangement): IArrangem
         throw new Error(`Unsupported snapshot schema version: ${packed.v}`);
     }
 
+    const current = packed.v === arrangementSnapshotVersion ? packed : upgradePackedArrangement(packed);
+
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
-        timeParams: unpackTimeParams(packed.p),
-        tracks: packed.k.map(unpackTrack),
+        timeParams: unpackTimeParams(current.p),
+        tracks: current.k.map(unpackTrack),
     };
 
-    if (packed.t !== undefined) {
-        snapshot.title = packed.t;
+    if (current.t !== undefined) {
+        snapshot.title = current.t;
     }
 
-    if (packed.s !== undefined) {
-        snapshot.scoreId = packed.s;
+    if (current.s !== undefined) {
+        snapshot.scoreId = current.s;
     }
 
-    if (packed.c !== undefined && Object.keys(packed.c).length > 0) {
-        snapshot.extensions = { ...packed.c };
+    if (current.c !== undefined && Object.keys(current.c).length > 0) {
+        snapshot.extensions = { ...current.c };
     }
 
     return snapshot;
@@ -215,14 +214,52 @@ const packTimeParams = (timeParams: ITimeParamsBase): PackedTimeParams => {
         timeParams.tempo,
         timeParams.length,
         timeParams.pulse,
-        timeParams.stepResolution,
     ];
 };
 
 const unpackTimeParams = (packed: PackedTimeParams): ITimeParamsBase => {
-    const [timeSignature, tempo, length, pulse, stepResolution] = packed;
+    const [timeSignature, tempo, length, pulse] = packed;
 
-    return { timeSignature, tempo, length, pulse, stepResolution };
+    return { timeSignature, tempo, length, pulse };
+};
+
+/** The time params of a packed arrangement of schema 6 or older, which still state the step grid. */
+type PackedLegacyTimeParams = [string, number, number, string, number];
+
+/** A packed meter of schema 6 or older: numerator, denominator, step resolution, pulse groups. */
+type PackedLegacyMeter = [number, number, number, number[]];
+
+/** A packed measure of schema 6 or older. */
+type PackedLegacyTrackPiece = [number, PackedLegacyMeter, PackedEvent[], PackedSubdivision[], boolean?];
+
+/** A packed track of schema 6 or older. */
+type PackedLegacyTrack = [number, string, PackedLegacyTrackPiece[]];
+
+/**
+ * Upgrades a packed arrangement of schema 6 or older, which stored the step grid in the time params and in every
+ * meter. The current schema derives the grid from the meter instead.
+ *
+ * @param packed The packed arrangement of an older schema.
+ *
+ * @returns The same arrangement in the current schema.
+ */
+const upgradePackedArrangement = (packed: IPackedArrangement): IPackedArrangement => {
+    const [timeSignature, tempo, length, pulse] = packed.p as unknown as PackedLegacyTimeParams;
+
+    const tracks = (packed.k as unknown as PackedLegacyTrack[]).map(([id, instrumentId, measures]) => {
+        const upgraded = measures.map(([number, meter, events, subdivisions, simile]): PackedTrackPiece => {
+            const piece: PackedTrackPiece = [number, [meter[0], meter[1]], events, subdivisions];
+            if (simile === true) {
+                piece.push(true);
+            }
+
+            return piece;
+        });
+
+        return [id, instrumentId, upgraded] as PackedTrack;
+    });
+
+    return { ...packed, v: arrangementSnapshotVersion, p: [timeSignature, tempo, length, pulse], k: tracks };
 };
 
 const packTrack = (track: ITrackSnapshot): PackedTrack => {
@@ -271,19 +308,15 @@ const packMeter = (meter: IMeterSnapshot): PackedMeter => {
     return [
         meter.beats,
         meter.beatUnits,
-        meter.stepResolution,
-        [...meter.beatGroups],
     ];
 };
 
 const unpackMeter = (packed: PackedMeter): IMeterSnapshot => {
-    const [numerator, denominator, stepResolution, beatGroups] = packed;
+    const [numerator, denominator] = packed;
 
     return {
         beats: numerator,
         beatUnits: denominator,
-        stepResolution,
-        beatGroups: [...beatGroups],
     };
 };
 

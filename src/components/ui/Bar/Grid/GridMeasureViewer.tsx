@@ -7,6 +7,7 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import { ScoreSymbol, ScoreSymbols } from "../../../../core/ScoreSymbols.js";
+import { StepGrid } from "../../../../core/StepGrid.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
@@ -191,7 +192,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
         for (const track of tracks) {
             const measure = track.measures[measureNumber - 1];
             if (baseSteps === 0) {
-                baseSteps = measure.meter.stepResolution;
+                baseSteps = StepGrid.stepsPerBarOfMeter(measure.meter);
             }
 
             rows.push(<GridMeasureRow

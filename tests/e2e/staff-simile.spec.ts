@@ -13,7 +13,7 @@ import {
     findStaffMeasure, readStoredCurrentScore, routeApi, selectTrackPiece, showEntryMode, showTrackView, toolbarButton,
 } from "./e2e-test-helpers.js";
 
-const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
+const meter = { beats: 4, beatUnits: 4 };
 
 /** A bar holding a quarter note and a rest. */
 const notePiece: ITrackPieceSnapshot = {
@@ -43,7 +43,7 @@ const snapshotWith = (measures: ITrackPieceSnapshot[]): IArrangementSnapshot => 
     return {
         version: arrangementSnapshotVersion,
         title: "E2E One-bar repeat",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: measures.length, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: measures.length, pulse: "1/4" },
         tracks: [{ id: 200, instrumentId: "0", measures }],
     };
 };

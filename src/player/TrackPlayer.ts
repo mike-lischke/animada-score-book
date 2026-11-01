@@ -6,7 +6,7 @@
 import {
     SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack, type ISbDmTrackPiece, type RealTime
 } from "../core/ScoreBookDataModel.js";
-import type { IFraction } from "../core/types/general.js";
+
 import { RangeArticulations } from "../core/RangeArticulations.js";
 import { requisitions, type IPlaybackOrderChange } from "../supplement/Requisitions.js";
 import { PlaybackOrder } from "./PlaybackOrder.js";
@@ -51,7 +51,7 @@ export class TrackPlayer {
      * Creates a player for the given track and sets up note timing caches and subscriptions.
      *
      * @param track The track view to observe and play.
-     * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
+     * @param timeCoordinator Supplies the metrics of the score and its loop/length context.
      * @param playOrder The current performance order remembered by the arrangement player.
      */
     public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator, playOrder?: readonly number[]) {
@@ -199,11 +199,7 @@ export class TrackPlayer {
             }
 
             for (const event of source.noteEvents) {
-                const repeated = {
-                    ...event,
-                    measure,
-                    timing: this.timingForEventStart(event.start, barNumber, measure.meter.stepResolution),
-                };
+                const repeated = { ...event, measure };
 
                 events.push({ event: repeated, realTime: timeOf(event), dynamicsFactor: factorOf(event) });
             }
@@ -219,8 +215,6 @@ export class TrackPlayer {
      * @returns The resolved note events, one per measure event.
      */
     private resolveMeasureEvents(measure: ISbDmTrackPiece): ISbDmNoteEvent[] {
-        const stepsPerBar = measure.meter.stepResolution;
-
         return measure.events.map((event, eventIndex) => {
             return {
                 // Deterministic id, so note references (e.g. selection note ids) stay valid across
@@ -231,22 +225,11 @@ export class TrackPlayer {
                 start: { ...event.start },
                 duration: { ...event.duration },
                 track: this.track,
-                timing: this.timingForEventStart(event.start, measure.number, stepsPerBar),
                 audioData: event.noteStyleId !== undefined
                     ? this.track.instrument.noteStyles[event.noteStyleId]
                     : undefined,
             };
         });
-    }
-
-    private timingForEventStart(start: IFraction, measureNumber: number, stepsPerBar: number): {
-        bar: number;
-        step: number;
-    } {
-        const stepIndex = (start.numerator * stepsPerBar) / start.denominator;
-        const step = Math.floor(stepIndex) + 1;
-
-        return { bar: measureNumber, step };
     }
 
     /**

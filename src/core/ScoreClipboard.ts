@@ -14,6 +14,7 @@ import type {
 import {
     addFractions, compareFractions, divideFraction, multiplyFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
+import { StepGrid } from "./StepGrid.js";
 import { computeIsTuplet } from "./tuplets.js";
 import {
     ClipboardContentKind, type IClipboardArticulation, type IClipboardContent, type IClipboardTrackPiece,
@@ -664,7 +665,7 @@ export class ScoreClipboard {
         // Scale the single subdivision to the selected slots: normal becomes the selected span in
         // steps, actual becomes the number of captured slots.
         const span = subtractFractions(rangeEnd, rangeStart);
-        const normal = this.fractionSteps(span, measure.meter.stepResolution);
+        const normal = this.fractionSteps(span, StepGrid.stepsPerBarOfMeter(measure.meter));
 
         return {
             subdivisions: [{
@@ -689,7 +690,7 @@ export class ScoreClipboard {
      */
     private captureRangeSubdivisions(measure: ISbDmTrackPiece, rangeStart: IFraction, rangeEnd: IFraction,
         events: IMeasureEvent[]): ISubdivision[] {
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const subdivisions: ISubdivision[] = [];
 
         for (const span of this.topLevelSubdivisionSpans(measure)) {
@@ -1144,7 +1145,7 @@ export class ScoreClipboard {
             return { kind: PasteResultKind.MeterMismatch, replacements: [] };
         }
 
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const isCursor = options.singleNote && slots.length === 1;
 
         let targetStart: IFraction;
@@ -2350,16 +2351,11 @@ export class ScoreClipboard {
     }
 
     private copyMeter(meter: IMeterSnapshot): IMeterSnapshot {
-        return {
-            ...meter,
-            beatGroups: [...meter.beatGroups],
-        };
+        return { ...meter };
     }
 
     private meterMatches(source: IMeterSnapshot, target: IMeterSnapshot): boolean {
-        return source.stepResolution === target.stepResolution
-            && source.beats === target.beats
-            && source.beatUnits === target.beatUnits;
+        return source.beats === target.beats && source.beatUnits === target.beatUnits;
     }
 
     /**

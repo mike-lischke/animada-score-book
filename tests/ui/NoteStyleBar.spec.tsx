@@ -12,6 +12,7 @@ import {
     type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece,
     type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
+import { StepGrid } from "../../src/core/StepGrid.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { EditEntryMode, TrackViewMode } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -90,7 +91,7 @@ const makeTrackWithNote = (
     } as unknown as ISbDmTrack;
     const measure = {
         number: 1,
-        meter: { stepResolution: 16 },
+        meter: { beats: 4, beatUnits: 4 },
         subdivisions: [],
         track,
         events: [
@@ -143,7 +144,7 @@ const makeDataModel = (tracks: ISbDmTrack[]): ScoreBookDataModel => {
 const noteEntryOf = (track: ISbDmTrack): ISelectionEntry => {
     const measure = track.measures[0];
 
-    return noteEntry(measure, { numerator: 0, denominator: measure.meter.stepResolution });
+    return noteEntry(measure, { numerator: 0, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) });
 };
 
 describe("NoteStyleBar", { concurrent: false }, () => {

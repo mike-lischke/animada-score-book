@@ -166,7 +166,6 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
         const layout = PrintLayout.layout({
             arrangement,
             barCount: arrangementPlayer.scoreMetrics.bars,
-            grid: arrangementPlayer.scoreMetrics,
             setup: session.pageSetup,
             tracks,
             viewMode,

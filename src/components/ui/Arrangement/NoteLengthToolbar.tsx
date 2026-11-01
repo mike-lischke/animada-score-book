@@ -12,8 +12,8 @@ import {
     defaultEntryValue, NoteLength, noteLengthDenominator, noteValueForEvent, noteValueFraction, type INoteValue,
 } from "../../../core/rest-notation.js";
 import { reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { StepGrid } from "../../../core/StepGrid.js";
 import { EditEntryMode } from "../../../core/types/general.js";
-import { TimeCoordinator } from "../../../player/TimeCoordinator.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
@@ -385,8 +385,8 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
 
         const depth = MeasureProjection.subdivisionDepthOf(measure, index);
 
-        return noteValueForEvent(measure.events[index].duration, depth, measure.meter.stepResolution,
-            TimeCoordinator.stepsPerPulseOf(arrangement.timeParams));
+        return noteValueForEvent(measure.events[index].duration, depth,
+            StepGrid.stepsPerBarOfMeter(measure.meter), StepGrid.stepsPerPulseOf(arrangement.timeParams));
     }
 
     /**
@@ -602,16 +602,14 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     private isAvailable(value: INoteValue): boolean {
         const { dataModel } = this.props;
         const arrangement = dataModel.arrangement;
-        const stepsPerWholeNote = arrangement?.timeParams.stepResolution;
-        const stepsPerBar = arrangement?.tracks[0]?.measures[0]?.meter.stepResolution;
+        const meter = arrangement?.tracks[0]?.measures[0]?.meter;
 
-        if (stepsPerWholeNote === undefined || stepsPerBar === undefined) {
+        if (meter === undefined) {
             return false;
         }
 
         const fraction = noteValueFraction(value);
-        const duration = reduceFraction(stepsPerWholeNote * fraction.numerator,
-            fraction.denominator * stepsPerBar);
+        const duration = reduceFraction(fraction.numerator * meter.beatUnits, fraction.denominator * meter.beats);
 
         return duration.numerator > 0 && duration.numerator <= duration.denominator;
     }

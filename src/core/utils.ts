@@ -3,20 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ITiming } from "./ScoreBookDataModel.js";
-
-/**
- * Comparing timings is easy, but long winded and mistake-prone
- *
- * @param timing1 The first timing to compare.
- * @param timing2 The second timing to compare.
- *
- * @returns true if the timings are the same, false otherwise.
- */
-export const isSameTiming = (timing1: ITiming, timing2: ITiming): boolean => {
-    return (timing1.bar === timing2.bar) && (timing1.step === timing2.step);
-};
-
 /**
  * Checks if a value exists (is not null or undefined).
  *
@@ -221,86 +207,6 @@ export const maxValue = <T extends number | bigint>(a: T, b: T): T => {
  */
 export const getApiBase = (): string => {
     return "";
-};
-
-/**
- * Builds beat group sizes for a measure from time-signature components and step resolution.
- *
- * Each entry in the returned array is the number of steps belonging to one beat group (pulse).
- * The array sums to {@link stepResolution}.  For example, 4/4 with stepResolution=16 produces
- * `[4, 4, 4, 4]`; 7/8 with stepResolution=14 produces `[4, 4, 3, 3]`; 6/8 with stepResolution=12
- * produces `[6, 6]`.
- *
- * Complex and irregular numerators (5, 7) alternate ceil/floor to distribute steps as evenly as
- * possible while respecting the natural accent pattern (strong-weak).
- *
- * @param numerator      Beats per bar (e.g. 4 from "4/4").
- * @param denominator    Beat unit (e.g. 4 from "4/4").
- * @param stepResolution Total grid steps in the bar (= beats × stepsPerBeat).
- *
- * @returns Beat group sizes summing to stepResolution.
- */
-export const createBeatGroups = (numerator: number, denominator: number, stepResolution: number): number[] => {
-    if (numerator <= 0 || denominator <= 0 || stepResolution <= 0 || denominator % 2 !== 0) {
-        return [stepResolution];
-    }
-
-    switch (denominator) {
-        case 4: {
-            switch (numerator) {
-                case 2: case 4: case 8:
-                    return Array.from({ length: numerator }, () => {
-                        return stepResolution / 4;
-                    });
-
-                case 3: case 6:
-                    return Array.from({ length: numerator }, () => {
-                        return stepResolution / 3;
-                    });
-
-                case 5: case 7: {
-                    const spb = stepResolution / numerator;
-
-                    return Array.from({ length: numerator }, (_, beat) => {
-                        return beat % 2 === 0 ? Math.ceil(spb) : Math.floor(spb);
-                    });
-                }
-
-                default:
-                    return [stepResolution];
-            }
-        }
-
-        case 8: {
-            switch (numerator) {
-                case 6: return Array.from({ length: 2 }, () => {
-                    return stepResolution / 2;
-                });
-
-                case 7: {
-                    const spb = stepResolution / numerator;
-
-                    return Array.from({ length: numerator }, (_, beat) => {
-                        return beat % 2 === 0 ? Math.ceil(spb) : Math.floor(spb);
-                    });
-                }
-
-                case 9: return Array.from({ length: 3 }, () => {
-                    return stepResolution / 3;
-                });
-
-                case 12: return Array.from({ length: 4 }, () => {
-                    return stepResolution / 4;
-                });
-
-                default:
-                    return [stepResolution];
-            }
-        }
-
-        default:
-            return [stepResolution];
-    }
 };
 
 /** Key names to key strings. */
@@ -571,59 +477,4 @@ export const KeyboardKeys = {
     X: "x",
     Y: "y",
     Z: "z",
-};
-
-/**
- * Determines parity class for alternating beat shading in the grid.
- *
- * @param bar The 1-based bar number.
- * @param step The 1-based step within the bar.
- * @param timeSignature The time signature string (e.g., "4/4").
- * @param stepResolution The number of steps per bar.
- * @returns "even-beat" or "odd-beat".
- */
-export const getParityClass = (bar: number, step: number, timeSignature: string,
-    stepResolution: number): string => {
-    if (timeSignature === "4/4" && stepResolution === 16) {
-        const beat = Math.floor((step - 1) / 4) + 1;
-
-        return beat % 2 === 0 ? "even-beat" : "odd-beat";
-    }
-
-    if (timeSignature === "6/8" && stepResolution === 8) {
-        const beat = Math.floor((step - 1) / 3) + 1;
-
-        return beat % 2 === 0 ? "even-beat" : "odd-beat";
-    }
-
-    if (timeSignature === "5/4" && stepResolution === 8) {
-        const beat = Math.floor((step - 1) / 2) + 1;
-        let beatIsEven = beat % 2 === 0;
-        if (bar % 2 === 0) {
-            beatIsEven = !beatIsEven;
-        }
-
-        return beatIsEven ? "even-beat" : "odd-beat";
-    }
-
-    if (timeSignature === "7/8" && stepResolution === 8) {
-        return (step === 1 || step === 3 || step === 5) ? "odd-beat" : "even-beat";
-    }
-
-    const [beatsPerBar, beatUnit] = timeSignature.split("/").map((str) => {
-        return Number(str);
-    });
-
-    const stepsPerBeat = stepResolution / beatUnit;
-    if (stepsPerBeat > 1) {
-        const beat = Math.floor((step - 1) / stepsPerBeat) + 1;
-        let beatIsEven = beat % 2 === 0;
-        if (beatsPerBar % 2 === 1 && bar % 2 === 0) {
-            beatIsEven = !beatIsEven;
-        }
-
-        return beatIsEven ? "even-beat" : "odd-beat";
-    }
-
-    return "even-beat";
 };

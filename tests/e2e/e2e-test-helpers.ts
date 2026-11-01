@@ -498,7 +498,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
 const seededMeasure = (number: number) => {
     return {
         number,
-        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+        meter: { beats: 4, beatUnits: 4 },
         events: [0, 1, 2, 3].map((beat) => {
             return {
                 start: { numerator: beat, denominator: 4 },
@@ -530,7 +530,7 @@ const seededScoreSnapshot = (trackCount: number, measureCount: number) => {
     return {
         version: arrangementSnapshotVersion,
         title: "E2E Seeded Score",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: measureCount, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: measureCount, pulse: "1/4" },
         tracks,
     };
 };

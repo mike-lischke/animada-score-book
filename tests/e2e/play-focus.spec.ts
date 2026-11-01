@@ -14,7 +14,7 @@ import { ensureStaffBarRendered, playbackBars, routeApi, showTrackView } from ".
 const snapshot: IArrangementSnapshot = {
     version: arrangementSnapshotVersion,
     title: "E2E Play Focus",
-    timeParams: { timeSignature: "4/4", tempo: 240, length: 3, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 240, length: 3, pulse: "1/4" },
     tracks: [0, 1].map((track) => {
         return {
             id: 400 + track,
@@ -22,7 +22,7 @@ const snapshot: IArrangementSnapshot = {
             measures: [1, 2, 3].map((number) => {
                 return {
                     number,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [0, 1, 2, 3].map((beat) => {
                         return {
                             start: { numerator: beat, denominator: 4 },

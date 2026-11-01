@@ -14,7 +14,7 @@ const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = fals
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E Zen Score",
-        timeParams: { timeSignature: "4/4", tempo: 240, length: 3, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 240, length: 3, pulse: "1/4" },
         tracks: Array.from({ length: 10 }, (_, track) => {
             return {
                 id: 300 + track,
@@ -22,7 +22,7 @@ const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = fals
                 measures: Array.from({ length: 3 }, (_, measure) => {
                     return {
                         number: measure + 1,
-                        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                        meter: { beats: 4, beatUnits: 4 },
                         events: [0, 1, 2, 3].map((beat) => {
                             return {
                                 start: { numerator: beat, denominator: 4 },

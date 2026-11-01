@@ -6,13 +6,14 @@
 import { addFractions, compareFractions, reduceFraction, subtractFractions }
     from "./serialisation/numeric-functions.js";
 import { beamCountForEvent } from "./rest-notation.js";
-import type { IFraction, IMeasureEvent, ISubdivision } from "./types/general.js";
+import { StepGrid, type INotationGrid } from "./StepGrid.js";
+import type { IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision } from "./types/general.js";
 
 /** The minimal measure shape {@link MeasureProjection.project} needs to build the render tree. */
 export interface IMeasureProjectionInput {
     events: IMeasureEvent[];
     subdivisions: ISubdivision[];
-    meter: { stepResolution: number; };
+    meter: IMeterSnapshot;
 }
 
 /**
@@ -21,19 +22,6 @@ export interface IMeasureProjectionInput {
  */
 export interface IMeasureGroupingInput extends IMeasureProjectionInput {
     noteEvents: ReadonlyArray<{ audioData?: unknown; }>;
-}
-
-/**
- * The timing grid the notation rules work on. It is the arrangement's timing, so `IScoreMetrics`
- * satisfies it: the length of a bar in steps and the exact pulse boundaries. Those differ for an
- * irregular meter — 7/8 has [3, 2, 2] — so an averaged pulse length cannot stand in for them.
- */
-export interface INotationGrid {
-    /** How many base-grid steps one bar holds. */
-    stepsPerBar: number;
-
-    /** Pulse boundaries as step counts, summing to `stepsPerBar`. */
-    beatGroups: number[];
 }
 
 /**
@@ -227,7 +215,7 @@ export class MeasureProjection {
      */
     public static project(measure: IMeasureProjectionInput): IProjectedItem[] {
         const tree = MeasureProjection.buildSubdivisionTree(
-            measure.subdivisions, measure.events, measure.meter.stepResolution,
+            measure.subdivisions, measure.events, StepGrid.stepsPerBarOfMeter(measure.meter),
         );
 
         return MeasureProjection.buildItems(measure.events, 0, measure.events.length, tree);
@@ -265,14 +253,13 @@ export class MeasureProjection {
      * back resolves the group a position addresses first.
      *
      * @param measure The measure to compose.
-     * @param grid The timing of the arrangement, which supplies the bar's step count and its pulse
-     *             boundaries.
      *
      * @returns The measure's note groups, innermost first.
      */
-    public static noteGroups(measure: IMeasureGroupingInput, grid: INotationGrid): INoteGroup[] {
+    public static noteGroups(measure: IMeasureGroupingInput): INoteGroup[] {
         const items = MeasureProjection.project(measure);
         const groups: INoteGroup[] = [];
+        const grid = StepGrid.gridOfMeter(measure.meter);
 
         MeasureProjection.collectTupletGroups(items, 0, groups);
         groups.push(...MeasureProjection.collectBeamGroups(items, measure, grid));

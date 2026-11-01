@@ -26,7 +26,7 @@ const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") =
     return {
         version: arrangementSnapshotVersion,
         title,
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: [{
             id: 100,
             instrumentId,
@@ -35,8 +35,6 @@ const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") =
                 meter: {
                     beats: 4,
                     beatUnits: 4,
-                    stepResolution: 16,
-                    beatGroups: [4, 4, 4, 4],
                 },
                 events: [
                     {
@@ -168,13 +166,13 @@ test.describe("Staff view multi-line rendering", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Stem Length",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 100,
                 instrumentId: "a",
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         // One eighth per pulse, alternating with a rest, from the lowest to the highest line.
                         ...[1, 2, 3, 4].flatMap((noteStyleId, index) => {
@@ -258,13 +256,13 @@ test.describe("Staff view multi-line rendering", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Multi-Line Beam",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 100,
                 instrumentId: "a",
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         ...[1, 2, 3, 4].map((noteStyleId, index) => {
                             return {

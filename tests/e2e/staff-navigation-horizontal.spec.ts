@@ -17,13 +17,13 @@ test("horizontal navigation reaches a rest run", async ({ page }) => {
     const snapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E Horizontal Navigation",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: [{
             id: 200,
             instrumentId: "0",
             measures: [{
                 number: 1,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events: [
                     // Four beamed sixteenths, a quarter rest, then two blocks of sixteenths: the
                     // rest sits between two beamed groups.

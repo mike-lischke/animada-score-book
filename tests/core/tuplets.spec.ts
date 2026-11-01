@@ -9,7 +9,7 @@ import { computeIsTuplet, meterBasis } from "../../src/core/tuplets.js";
 import type { IMeterSnapshot } from "../../src/core/types/general.js";
 
 const meter = (beats: number, beatUnits: number): IMeterSnapshot => {
-    return { beats, beatUnits, stepResolution: 16, beatGroups: [beats] };
+    return { beats, beatUnits };
 };
 
 describe("meterBasis", () => {

@@ -70,7 +70,6 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
         const measure = track.measures[barNumber - 1];
         const playbackSource = measure.simile && arrangementPlayer.state === PlayerPlayState.Playing
             ? trackPlayer.sourceOfBar(barNumber) : undefined;
-        const baseSteps = measure.meter.stepResolution;
 
         const maxNoteLine = StaffRowGeometry.maxNoteLineOf(track);
 
@@ -85,8 +84,6 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 className={rowClassName}
                 isLastBar={barNumber === timeParams.length}
                 timeSignature={timeParams.timeSignature}
-                scoreMetrics={arrangementPlayer.scoreMetrics}
-                baseSteps={baseSteps}
                 measure={playbackSource ?? measure}
                 barNumber={barNumber}
                 trackId={track.id}

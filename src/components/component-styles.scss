@@ -1228,37 +1228,6 @@
     }
 }
 
-.guiderail {
-    height: 20pt;
-    margin-left: 2px;
-}
-
-.staff-measure-viewer .guiderail {
-    visibility: hidden;
-}
-
-.guiderail-timing {
-    flex-basis: calc(var(--note-height) + 4px);
-    border-color: var(--color-neutral-content);
-
-    &.odd-beat {
-        background-color: var(--color-neutral);
-    }
-}
-
-.guiderail-timing-content {
-    padding: 2px 0 0 12px;
-    color: var(--color-neutral-content);
-}
-
-@media only screen and (min-width: 1000px) {
-
-    /* We label the bar numbers always. On smaller screens only, we show the sub-bar labels too */
-    .guiderail-timing:not(.startOfBar) .guiderail-timing-content {
-        display: none;
-    }
-}
-
 .polyrhythm-viewer .polyrhythm-decoration {
     position: absolute;
     width: calc(100% - 2 * 1.5pt);

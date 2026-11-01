@@ -19,11 +19,6 @@ export interface IAudioEvent extends IEventDetails {
     dynamicsFactor: number;
 }
 
-export interface ICallbackEvent extends IEventDetails {
-    kind: "callback";
-    callback(): void;
-}
-
 export interface IMetronomeEvent extends IEventDetails {
     kind: "metronome";
 
@@ -34,7 +29,7 @@ export interface IMetronomeEvent extends IEventDetails {
     isAccent: boolean;
 }
 
-export type Event = ICallbackEvent | IAudioEvent | IMetronomeEvent;
+export type Event = IAudioEvent | IMetronomeEvent;
 
 export interface IEventSource {
     getEvents(interval: IInterval): Event[];

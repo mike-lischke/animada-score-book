@@ -12,7 +12,7 @@ import {
 } from "../../src/core/types/general.js";
 import { routeApi, scrollClearOfToolsBar, showEntryMode, showTrackView } from "./e2e-test-helpers.js";
 
-const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
+const meter = { beats: 4, beatUnits: 4 };
 
 /** The codepoint of the glyph the repeat dots are drawn with. */
 const repeatDots = String.fromCodePoint(0xE043);
@@ -80,7 +80,7 @@ const snapshotWith = (barCount: number, repeats: Record<number, IRepeatBar>,
     return {
         version: arrangementSnapshotVersion,
         title: "E2E repeat barlines",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4" },
         tracks: [{
             id: 300,
             instrumentId: "0",

@@ -10,7 +10,7 @@ import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapsho
 import type { IArrangementSnapshot, ITrackPieceSnapshot } from "../../src/core/types/general.js";
 import { beijaFlorImportPath, expectImportedPolyrhythmSong, routeApi } from "./e2e-test-helpers.js";
 
-const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
+const meter = { beats: 4, beatUnits: 4 };
 
 /**
  * @param number The 1-based measure number.
@@ -33,7 +33,7 @@ const repeatedSnapshot = (): IArrangementSnapshot => {
     return {
         version: arrangementSnapshotVersion,
         title: "E2E arrangement stats repeat",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 3, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 3, pulse: "1/4" },
         tracks: [{ id: 300, instrumentId: "0", measures: [restPiece(1), restPiece(2), restPiece(3)] }],
         extensions: { repeatBars: { 2: { start: true, end: true } } },
     };

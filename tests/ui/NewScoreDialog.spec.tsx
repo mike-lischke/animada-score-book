@@ -100,7 +100,6 @@ describe("NewScoreDialog", { concurrent: false }, () => {
         expect(result?.title).toBe("My Samba");
         expect(result?.timeSignature).toBe("6/8");
         expect(result?.pulse).toBe("3/8");
-        expect(result?.stepResolution).toBe(8);
         expect(result?.barCount).toBe(4);
         expect(result?.tempo).toBe(132);
         expect(result?.selectedItems.map((item) => {
@@ -124,7 +123,6 @@ describe("NewScoreDialog", { concurrent: false }, () => {
         expect(result?.title).toBe("Untitled Arrangement");
         expect(result?.timeSignature).toBe("4/4");
         expect(result?.pulse).toBe("1/4");
-        expect(result?.stepResolution).toBe(16);
         expect(result?.barCount).toBe(1);
         expect(result?.tempo).toBe(110);
         expect(result?.selectedItems).toHaveLength(3);

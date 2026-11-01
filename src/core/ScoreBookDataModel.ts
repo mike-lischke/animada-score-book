@@ -21,6 +21,7 @@ import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
+import { StepGrid } from "./StepGrid.js";
 import type {
     IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent,
     IMeterSnapshot, IArticulationSymbol, IRangeArticulationAnchor, IRangeArticulationPlacement,
@@ -28,15 +29,6 @@ import type {
 } from "./types/general.js";
 import { RangeArticulationKind, RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
-
-/**
- * Steps are usually sixteenths (2/4, 4/4).
- * For other time signatures, they can be different. For example in 6/8, steps are usually eighths.
- */
-export interface ITiming {
-    readonly bar: number,
-    readonly step: number;
-};
 
 export interface ISubdivisionSlotContent {
     noteStyleId?: string;
@@ -323,9 +315,6 @@ export interface ITimeParamsView {
     readonly tempo: number;
     readonly length: number;
     readonly pulse: string;
-    readonly stepResolution: number;
-    isValid(timing: ITiming): boolean;
-    readonly timings: ITiming[];
 }
 
 /**
@@ -489,7 +478,7 @@ export interface ISbDmTrack extends ISbDmCommon {
 
     readonly measures: ISbDmTrackPiece[];
 
-    getNoteAt(timing: ITiming): ISbDmNoteEvent | undefined;
+    getNoteAt(bar: number, start: IFraction, slot: IFraction): ISbDmNoteEvent | undefined;
     readonly notes: IterableIterator<ISbDmNoteEvent>;
     clear(): void;
 }
@@ -539,7 +528,6 @@ export interface ISbDmNoteEvent extends ISbDmCommon {
     readonly start: IFraction;
     readonly duration: IFraction;
     readonly track: ISbDmTrack;
-    readonly timing: ITiming;
 
     /** Reference to audio data and instrument. If unassigned this event represents a rest. */
     audioData?: IAudioData;
@@ -582,7 +570,6 @@ export interface ISbDmTimeParams extends ITimeParamsView {
     tempo: number;
     length: number;
     pulse: string;
-    stepResolution: number;
 }
 
 export interface ISbDmArrangement extends ISbDmCommon {
@@ -2307,12 +2294,11 @@ export class ScoreBookDataModel {
      * Sets the time signature of the arrangement.
      *
      * @param timeSignature The new time signature string (e.g. "4/4").
-     * @param pulse         The pulse value (e.g. "1/4").
-     * @param stepResolution The step resolution.
+     * @param pulse The pulse value (e.g. "1/4").
      *
      * @returns True if the time signature was changed.
      */
-    public setTimeSignature(timeSignature: string, pulse: string, stepResolution: number): boolean {
+    public setTimeSignature(timeSignature: string, pulse: string): boolean {
         const arrangement = this.arrangement;
         if (!arrangement) {
             return false;
@@ -2325,7 +2311,6 @@ export class ScoreBookDataModel {
 
         tp.timeSignature = timeSignature;
         tp.pulse = pulse;
-        tp.stepResolution = stepResolution;
         void requisitions.execute("arrangementMutated", undefined);
 
         return true;
@@ -4201,7 +4186,7 @@ export class ScoreBookDataModel {
 
         const unit = enclosing
             ? divideFraction(enclosing.span, enclosing.actual)
-            : { numerator: 1, denominator: measure.meter.stepResolution };
+            : { numerator: 1, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) };
         const span = subtractFractions(end, start);
         const ratio = reduceFraction(span.numerator * unit.denominator, span.denominator * unit.numerator);
 

@@ -12,7 +12,7 @@ import { RangeArticulations } from "../../../../core/RangeArticulations.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../../core/StaffRowGeometry.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import {
-    MeasureProjection, NoteGroupKind, type INoteGroup, type INotationGrid,
+    MeasureProjection, NoteGroupKind, type INoteGroup,
 } from "../../../../core/MeasureProjection.js";
 import { addFractions, compareFractions } from "../../../../core/serialisation/numeric-functions.js";
 import type { IMeasureEvent } from "../../../../core/types/general.js";
@@ -150,7 +150,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      * @returns Entries for any intersected elements, or a fallback measure entry.
      */
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
-        const { barNumber, arrangement, arrangementPlayer, scoreElementRegistry } = this.props;
+        const { barNumber, arrangement, scoreElementRegistry } = this.props;
         const element = this.viewerElement;
         if (!element) {
             return [];
@@ -173,8 +173,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
         // Group markers are drawn outside the note band of a row, so they are resolved from the
         // marker element itself rather than from the row's bounds.
-        const groupHits = this.findGroupHits(element, rect, arrangement, barNumber, scoreElementRegistry,
-            arrangementPlayer.scoreMetrics);
+        const groupHits = this.findGroupHits(element, rect, arrangement, barNumber, scoreElementRegistry);
 
         for (const row of rows) {
             const rowRect = row.getBoundingClientRect();
@@ -360,7 +359,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 })
                 : undefined;
             const rowGeometry = rowGeometries?.get(track.id)
-                ?? StaffRowGeometry.ofTrack(track, arrangement, arrangementPlayer.scoreMetrics);
+                ?? StaffRowGeometry.ofTrack(track, arrangement);
 
             return (
                 <StaffMeasureTrackRow
@@ -706,12 +705,11 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      * @param arrangement The arrangement the bar belongs to.
      * @param barNumber The one-based measure number of the bar.
      * @param registry The element registry the rendered elements are resolved through.
-     * @param grid The timing of the arrangement.
      *
      * @returns The groups hit per track id, for the tracks whose markers were touched.
      */
     private findGroupHits(bar: HTMLElement, rect: DOMRect, arrangement: ISbDmArrangement, barNumber: number,
-        registry: ScoreElementRegistry | undefined, grid: INotationGrid): Map<number, INoteGroupHit[]> {
+        registry: ScoreElementRegistry | undefined): Map<number, INoteGroupHit[]> {
         const hitsByTrack = new Map<number, INoteGroupHit[]>();
         const groupsByTrack = new Map<number, INoteGroup[]>();
 
@@ -724,7 +722,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         const groupsOf = (trackId: number, measure: ISbDmTrackPiece): INoteGroup[] => {
             let groups = groupsByTrack.get(trackId);
             if (groups === undefined) {
-                groups = MeasureProjection.noteGroups(measure, grid);
+                groups = MeasureProjection.noteGroups(measure);
                 groupsByTrack.set(trackId, groups);
             }
 

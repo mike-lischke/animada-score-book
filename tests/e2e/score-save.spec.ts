@@ -19,13 +19,13 @@ const snapshot = {
     // A DB-backed id, which puts the model on its "update an existing score" path.
     scoreId: 10996,
     title: "E2E Score Save",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
     tracks: [{
         id: 300,
         instrumentId: "0",
         measures: [{
             number: 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            meter: { beats: 4, beatUnits: 4 },
             events: Array.from({ length: 4 }, (_, index) => {
                 return {
                     start: { numerator: index, denominator: 4 },

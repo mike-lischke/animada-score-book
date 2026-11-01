@@ -423,14 +423,14 @@ test("printed engraving keeps vector beams and connects stems to the actual note
     const packed = stringifyPackedArrangement({
         version: arrangementSnapshotVersion,
         title: "Print Engraving Quality",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: ["0", "2", "1", "6"].map((instrumentId, index) => {
             return {
                 id: 300 + index,
                 instrumentId,
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: Array.from({ length: 16 }, (_, step) => {
                         return {
                             start: { numerator: step, denominator: 16 },
@@ -534,7 +534,7 @@ test("preview lays the measures out at their stored widths", async ({ page }) =>
     const measures = Array.from({ length: barCount }, (_, index) => {
         return {
             number: index + 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            meter: { beats: 4, beatUnits: 4 },
             events: Array.from({ length: 4 }, (_, beat) => {
                 return {
                     start: { numerator: beat, denominator: 4 },
@@ -549,7 +549,7 @@ test("preview lays the measures out at their stored widths", async ({ page }) =>
     const packed = stringifyPackedArrangement({
         version: arrangementSnapshotVersion,
         title: "E2E Print Widths",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4" },
         tracks: [{ id: 230, instrumentId: "0", measures }],
         extensions: { measureWidths: { 2: narrowWidth, 3: narrowWidth } },
     });
@@ -654,7 +654,7 @@ const seedNarrowScore = async (page: Page, displayMode: string, sessionId: strin
         return Array.from({ length: barCount }, (_, index) => {
             return {
                 number: index + 1,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events,
                 subdivisions: [],
             };
@@ -669,7 +669,7 @@ const seedNarrowScore = async (page: Page, displayMode: string, sessionId: strin
     const packed = stringifyPackedArrangement({
         version: arrangementSnapshotVersion,
         title: "E2E Print Resize",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4" },
         tracks: instrumentIds.map((instrumentId, index) => {
             return { id: 231 + index, instrumentId, measures: measuresOf() };
         }),

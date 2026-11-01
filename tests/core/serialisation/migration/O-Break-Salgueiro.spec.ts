@@ -38,7 +38,6 @@ describe("O-Break Salgueiro 2007 - Migration", () => {
         expect(migrated.timeParams.tempo).toBe(100);
         expect(migrated.timeParams.length).toBe(19);
         expect(migrated.timeParams.pulse).toBe("1/4");
-        expect(migrated.timeParams.stepResolution).toBe(16);
     });
 
     it("has 9 tracks with correct instrument assignments", () => {

@@ -17,7 +17,7 @@ test("vertical navigation from a rest picks the note directly below its glyph", 
     const snapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E Vertical Navigation",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: [
             {
                 id: 100,
@@ -27,8 +27,6 @@ test("vertical navigation from a rest picks the note directly below its glyph", 
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events: [
                         // Half rest spanning steps 0..8 — its glyph sits at the centre (step 4),
@@ -51,8 +49,6 @@ test("vertical navigation from a rest picks the note directly below its glyph", 
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events: Array.from({ length: 16 }, (_, index) => {
                         return {

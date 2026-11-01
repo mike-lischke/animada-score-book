@@ -174,7 +174,7 @@ describe("Polyrhythm UI Integration", { concurrent: false }, () => {
         const snapshot = shareLink(16, notesWithHits(17, [2]), [{ id: 1, start: 0, end: 1, length: 3 }]);
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
         arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
@@ -196,7 +196,7 @@ describe("Polyrhythm UI Integration", { concurrent: false }, () => {
         const snapshot = shareLink(16, notesWithHits(15, [0, 1]), [{ id: 1, start: 0, end: 2, length: 2 }]);
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
         arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
@@ -225,7 +225,7 @@ describe("Polyrhythm UI Integration", { concurrent: false }, () => {
         const snapshot = shareLink(16, notesWithHits(17, [3, 4, 5]), [{ id: 1, start: 3, end: 3, length: 2 }]);
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
         arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
@@ -265,7 +265,7 @@ describe("Polyrhythm UI Integration", { concurrent: false }, () => {
         const snapshot = shareLink(16, notesWithHits(17, [3, 4]), [{ id: 1, start: 3, end: 3, length: 2 }]);
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
         arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;

@@ -13,6 +13,7 @@ import {
     SbDmEntityType, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../src/core/ScoreBookDataModel.js";
 import { addFractions, reduceFraction } from "../src/core/serialisation/numeric-functions.js";
+import { StepGrid } from "../src/core/StepGrid.js";
 import type { IFraction, IMeasureEvent, ITrackSnapshot } from "../src/core/types/general.js";
 import { PlayerPlayState } from "../src/player/ArrangementPlayer.js";
 import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
@@ -118,7 +119,7 @@ export const noteGroupEntry = (measure: ISbDmTrackPiece, events: IMeasureEvent[]
  * @returns The events of the range, in measure order.
  */
 export const eventsInSteps = (measure: ISbDmTrackPiece, startStep: number, endStep: number): IMeasureEvent[] => {
-    const stepsPerBar = measure.meter.stepResolution;
+    const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
 
     return measure.events.filter((event) => {
         const step = event.start.numerator * stepsPerBar / event.start.denominator;
@@ -206,7 +207,7 @@ export const setCellNote = (dataModel: ScoreBookDataModel, trackId: number, bar:
         return false;
     }
 
-    const stepsPerBar = measure.meter.stepResolution;
+    const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
 
     return dataModel.setNoteAt(trackId, bar, reduceFraction(step, stepsPerBar),
         reduceFraction(1, stepsPerBar), noteStyleId);
@@ -268,23 +269,20 @@ export const hydrateMeasureEvents = (arrangement: Arrangement): void => {
  *
  * @param id The track id.
  * @param instrumentId The instrument type id.
- * @param stepsPerBar Steps per bar for the measure; defaults to 16.
+ * @param beats Beats per bar of the measure's meter; defaults to 4.
+ * @param beatUnits Beat unit of the measure's meter; defaults to 4.
  *
  * @returns A minimal track snapshot.
  */
-export const emptyMeasureTrack = (id: number, instrumentId: string, stepsPerBar = 16): ITrackSnapshot => {
+export const emptyMeasureTrack = (id: number, instrumentId: string, beats = 4, beatUnits = 4): ITrackSnapshot => {
     return {
         id,
         instrumentId,
         measures: [{
             number: 1,
             meter: {
-                beats: stepsPerBar,
-                beatUnits: 4,
-                stepResolution: stepsPerBar,
-                beatGroups: Array.from({ length: stepsPerBar }, () => {
-                    return 1;
-                }),
+                beats,
+                beatUnits,
             },
             events: [{
                 start: { numerator: 0, denominator: 1 },

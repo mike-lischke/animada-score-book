@@ -13,6 +13,7 @@ import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode,
 } from "../../src/core/ScoreClipboard.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
+import { StepGrid } from "../../src/core/StepGrid.js";
 import { RangeArticulationKind } from "../../src/core/types/general.js";
 import { type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import {
@@ -28,7 +29,7 @@ import {
  * @returns The note style id covering the step, or undefined.
  */
 const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined => {
-    const stepsPerBar = measure.meter.stepResolution;
+    const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
     const start = { numerator: step, denominator: stepsPerBar };
 
     const event = measure.events.find((candidate) => {
@@ -88,7 +89,7 @@ describe("ScoreClipboard", () => {
     const cell = (track: ISbDmTrack, step: number, bar = 1): ISelectionEntry => {
         const measure = track.measures[bar - 1];
 
-        return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+        return noteEntry(measure, { numerator: step, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) });
     };
 
     /**
@@ -641,7 +642,7 @@ describe("ScoreClipboard", () => {
 
         clipboard.copy([trackPieceEntry(track, track.measures[0])]);
 
-        model.startNewArrangement([instrumentA()], { stepResolution: 8 });
+        model.startNewArrangement([instrumentA()], { timeSignature: "6/8", pulse: "3/8" });
         const targetTrack = model.arrangement!.tracks[0];
 
         const result = clipboard.paste([trackPieceEntry(targetTrack, targetTrack.measures[0])]);

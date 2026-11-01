@@ -6,15 +6,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    MeasureProjection, NoteGroupKind, type IMeasureGroupingInput, type INoteGroup, type INotationGrid,
+    MeasureProjection, NoteGroupKind, type IMeasureGroupingInput, type INoteGroup,
 } from "../../src/core/MeasureProjection.js";
-import type { IFraction, IMeasureEvent, ISubdivision } from "../../src/core/types/general.js";
-
-/**
- * Steps in one bar of the fixtures that use the default meter: a 4/4 bar with sixteenth steps. The
- * count follows from the meter, so a 6/8 bar holds fewer and a test may set its own.
- */
-const fixtureStepsPerBar = 16;
+import type { IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision } from "../../src/core/types/general.js";
 
 /**
  * Builds a fraction, so the fixtures read as positions rather than as object literals.
@@ -26,23 +20,6 @@ const fixtureStepsPerBar = 16;
  */
 const fraction = (numerator: number, denominator: number): IFraction => {
     return { numerator, denominator };
-};
-
-/**
- * Builds the timing grid of a bar: how many steps it holds and how many steps one pulse covers.
- *
- * @param stepsPerBar The number of base-grid steps the bar holds.
- * @param pulseSteps The number of base-grid steps one pulse covers.
- *
- * @returns The grid the grouping rules work on.
- */
-const gridOf = (stepsPerBar = fixtureStepsPerBar, pulseSteps = 4): INotationGrid => {
-    return {
-        stepsPerBar,
-        beatGroups: Array.from({ length: stepsPerBar / pulseSteps }, () => {
-            return pulseSteps;
-        }),
-    };
 };
 
 /**
@@ -99,16 +76,16 @@ const split = (startIndex: number): ISubdivision => {
  *
  * @param events The measure's events, in display order.
  * @param subdivisions The measure's subdivisions, flat and in expansion order.
- * @param stepsPerBar The number of base-grid steps the bar holds.
+ * @param meter The measure's meter, which states the grid its groups follow.
  *
  * @returns The measure to compose note groups from.
  */
 const measureOf = (events: IMeasureEvent[], subdivisions: ISubdivision[] = [],
-    stepsPerBar = fixtureStepsPerBar): IMeasureGroupingInput => {
+    meter: IMeterSnapshot = { beats: 4, beatUnits: 4 }): IMeasureGroupingInput => {
     return {
         events,
         subdivisions,
-        meter: { stepResolution: stepsPerBar },
+        meter,
         noteEvents: events.map((event) => {
             return { audioData: event.noteStyleId === undefined ? undefined : {} };
         }),
@@ -141,7 +118,7 @@ describe("MeasureProjection note groups", () => {
             rest(fraction(1, 4), fraction(3, 4)),
         ]);
 
-        const groups = MeasureProjection.noteGroups(measure, gridOf());
+        const groups = MeasureProjection.noteGroups(measure);
 
         expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2, 3]]);
         expect(groups[0].start).toEqual(fraction(0, 1));
@@ -159,16 +136,16 @@ describe("MeasureProjection note groups", () => {
             note(fraction(3, 6), eighth),
             note(fraction(4, 6), eighth),
             note(fraction(5, 6), eighth),
-        ], [], 6);
+        ], [], { beats: 6, beatUnits: 8 });
 
-        const groups = MeasureProjection.noteGroups(measure, gridOf(6, 3));
+        const groups = MeasureProjection.noteGroups(measure);
 
         expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2], [3, 4, 5]]);
     });
 
-    it("uses the exact pulse boundaries of an irregular meter", () => {
-        // A 7/8 bar grouped as 2 + 2 + 3. The average pulse length of such a bar would place the
-        // boundaries elsewhere and split the run differently.
+    it("takes the pulses of an irregular meter from its own meter", () => {
+        // A 7/8 bar counts eighths, so every eighth holds one step and is a pulse of its own. No two
+        // of them may beam together, whatever the average pulse length of the bar would suggest.
         const eighth = fraction(1, 7);
         const measure = measureOf([
             note(fraction(0, 7), eighth),
@@ -178,11 +155,11 @@ describe("MeasureProjection note groups", () => {
             note(fraction(4, 7), eighth),
             note(fraction(5, 7), eighth),
             note(fraction(6, 7), eighth),
-        ], [], 7);
+        ], [], { beats: 7, beatUnits: 8 });
 
-        const groups = MeasureProjection.noteGroups(measure, { stepsPerBar: 7, beatGroups: [2, 2, 3] });
+        const groups = MeasureProjection.noteGroups(measure);
 
-        expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1], [2, 3], [4, 5, 6]]);
+        expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([]);
     });
 
     it("breaks a beam group at a pulse boundary between top-level notes", () => {
@@ -196,7 +173,7 @@ describe("MeasureProjection note groups", () => {
             rest(fraction(6, 16), fraction(10, 16)),
         ]);
 
-        const groups = MeasureProjection.noteGroups(measure, gridOf());
+        const groups = MeasureProjection.noteGroups(measure);
 
         expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2, 3], [4, 5]]);
     });
@@ -214,7 +191,7 @@ describe("MeasureProjection note groups", () => {
             rest(fraction(1, 2), fraction(1, 2)),
         ], [split(1), split(4)]);
 
-        const groups = MeasureProjection.noteGroups(measure, gridOf());
+        const groups = MeasureProjection.noteGroups(measure);
 
         expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2], [3, 4, 5]]);
     });
@@ -230,8 +207,8 @@ describe("MeasureProjection note groups", () => {
             rest(fraction(6, 16), fraction(10, 16)),
         ]);
 
-        // A half-note pulse keeps both runs within one pulse, so only the rest can split them.
-        const groups = MeasureProjection.noteGroups(measure, gridOf(fixtureStepsPerBar, 8));
+        // A quarter-note pulse keeps both runs in one pulse each, so only the rest can split them.
+        const groups = MeasureProjection.noteGroups(measure);
 
         expect(indexesOf(groups, NoteGroupKind.Beam)).toEqual([[0, 1, 2], [4, 5]]);
     });
@@ -244,7 +221,7 @@ describe("MeasureProjection note groups", () => {
             rest(fraction(1, 4), fraction(3, 4)),
         ], [tuplet(0, 3, 4)]);
 
-        const groups = MeasureProjection.noteGroups(measure, gridOf());
+        const groups = MeasureProjection.noteGroups(measure);
         const tuplets = groups.filter((group) => {
             return group.kind === NoteGroupKind.Tuplet;
         });
@@ -267,7 +244,7 @@ describe("MeasureProjection note groups", () => {
             rest(fraction(1, 4), fraction(3, 4)),
         ], [tuplet(0, 3, 4), tuplet(0, 3, 1)]);
 
-        const groups = MeasureProjection.noteGroups(measure, gridOf());
+        const groups = MeasureProjection.noteGroups(measure);
         const tuplets = groups.filter((group) => {
             return group.kind === NoteGroupKind.Tuplet;
         });

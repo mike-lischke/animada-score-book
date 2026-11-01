@@ -11,7 +11,7 @@ import type { IArrangementSnapshot, IMeasureEvent } from "../../src/core/types/g
 import { EditEntryMode, RangeArticulationKind } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
-const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
+const meter = { beats: 4, beatUnits: 4 };
 
 const rangeToolButton = (page: Page, tooltip: string) => {
     return page.locator(`#toolsBarHost button[title="${tooltip}"]`);
@@ -55,7 +55,7 @@ const snapshotOf = (events: IMeasureEvent[], bars = 3): IArrangementSnapshot => 
     return {
         version: arrangementSnapshotVersion,
         title: "E2E range articulations",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: bars, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: bars, pulse: "1/4" },
         tracks: [{
             id: 100,
             instrumentId: "0",

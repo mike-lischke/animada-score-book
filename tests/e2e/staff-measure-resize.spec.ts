@@ -30,7 +30,7 @@ const dragPx = 150;
 const measures = Array.from({ length: barCount }, (_, index) => {
     return {
         number: index + 1,
-        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+        meter: { beats: 4, beatUnits: 4 },
         events: Array.from({ length: 4 }, (_, beat) => {
             return {
                 start: { numerator: beat, denominator: 4 },
@@ -45,7 +45,7 @@ const measures = Array.from({ length: barCount }, (_, index) => {
 const snapshot = {
     version: arrangementSnapshotVersion,
     title: "E2E Staff Measure Resize",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4" },
     tracks: [{ id: 220, instrumentId: "0", measures }],
 };
 
@@ -330,13 +330,13 @@ test("shrinks a measure down to the room its symbols take", async ({ page }) => 
     const packed = stringifyPackedArrangement({
         version: arrangementSnapshotVersion,
         title: "E2E Measure Floor",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: [{
             id: 221,
             instrumentId: "0",
             measures: [{
                 number: 1,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events: sixteenths,
                 subdivisions: [],
             }],

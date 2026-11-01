@@ -17,7 +17,7 @@ vi.mock("../../src/core/serialisation/snapshots.js", () => {
             const snapshot: IArrangementSnapshot = {
                 version: 2,
                 title: _arr.title,
-                timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "quarter", stepResolution: 16 },
+                timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "quarter" },
                 tracks: []
             };
 
@@ -31,11 +31,6 @@ const stubTimeParams: ISbDmTimeParams = {
     tempo: 120,
     length: 1,
     pulse: "quarter",
-    stepResolution: 16,
-    isValid: () => {
-        return true;
-    },
-    timings: [{ bar: 1, step: 1 }],
 };
 
 const makeArrangement = (title: string): ISbDmArrangement => {

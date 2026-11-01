@@ -4,7 +4,6 @@
  */
 
 import { MeasureLayout, noteHeightPx, staffPrefixWidth, staffSpacePx } from "./MeasureLayout.js";
-import type { INotationGrid } from "./MeasureProjection.js";
 import type { ISbDmArrangement, ISbDmTrack } from "./ScoreBookDataModel.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "./StaffRowGeometry.js";
 import { TrackViewMode } from "./types/general.js";
@@ -210,9 +209,6 @@ export interface IPrintLayoutInput {
     /** Number of measures to print, in the order the tracks hold them. */
     readonly barCount: number;
 
-    /** The arrangement's timing grid, which the notation rules that derive the row heights work on. */
-    readonly grid: INotationGrid;
-
     readonly setup: IPrintPageSetup;
 
     /** Tracks to print, in display order. */
@@ -292,7 +288,7 @@ export class PrintLayout {
      * @returns The pages of the document with their systems placed, plus the content that did not fit.
      */
     public static layout(input: IPrintLayoutInput): IPrintLayout {
-        const { arrangement, barCount, grid, setup, tracks, viewMode, widthOverrides } = input;
+        const { arrangement, barCount, setup, tracks, viewMode, widthOverrides } = input;
         const geometry = PrintLayout.pageGeometry(setup);
         const widths = PrintLayout.effectiveWidths(arrangement, barCount, widthOverrides);
         const widthMap = new Map<number, number>();
@@ -306,7 +302,7 @@ export class PrintLayout {
                 return printGridRowHeight;
             }
 
-            const geometry = StaffRowGeometry.ofTrack(track, arrangement, grid, 1, widthMap);
+            const geometry = StaffRowGeometry.ofTrack(track, arrangement, 1, widthMap);
             rowGeometries.set(track.id, geometry);
 
             return geometry.heightPx;

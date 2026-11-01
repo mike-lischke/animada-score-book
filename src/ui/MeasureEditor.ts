@@ -855,10 +855,10 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Converts a note value into its duration as a fraction of the measure. The arrangement's step
-     * resolution counts steps per whole note, the measure's resolution steps per bar. The duration
-     * stays a fraction: the grid adds its raster on top, because a value the raster cannot address
-     * has no cell, while the staff places any value the meter can express.
+     * Converts a note value into its duration as a fraction of the measure. A note value is a fraction of a
+     * whole note, and the measure's meter states how many beat units its bar holds. The duration stays a
+     * fraction: the grid adds its raster on top, because a value the raster cannot address has no cell, while
+     * the staff places any value the meter can express.
      *
      * @param value The selected note value, including its augmentation dot.
      * @param measure The measure the duration is expressed in.
@@ -866,14 +866,13 @@ export abstract class MeasureEditor {
      * @returns The duration as a fraction of the measure, or undefined when the value is invalid.
      */
     protected noteValueDurationFor(value: INoteValue, measure: ISbDmTrackPiece): IFraction | undefined {
-        const arrangement = this.dataModel.arrangement;
-        if (!arrangement) {
+        if (!this.dataModel.arrangement) {
             return undefined;
         }
 
         const fraction = noteValueFraction(value);
-        const duration = reduceFraction(arrangement.timeParams.stepResolution * fraction.numerator,
-            fraction.denominator * measure.meter.stepResolution);
+        const { beats, beatUnits } = measure.meter;
+        const duration = reduceFraction(fraction.numerator * beatUnits, fraction.denominator * beats);
 
         return compareFractions(duration, barLine) <= 0 ? duration : undefined;
     }
