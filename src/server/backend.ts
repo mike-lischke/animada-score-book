@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { convertErrorToString } from "../core/utils.js";
-import { resolveDatabaseName, runMigrations } from "../../build/migration.js";
+import { runMigrations } from "../../build/migration.js";
 import { Auth } from "./Auth.js";
 
 import { loadConfig, uploadsPath } from "./config.js";
@@ -27,27 +27,14 @@ const main = (): void => {
     auth = new Auth(router.createAdapter());
     router.auth = auth;
 
-    // Connect with the saved or default config on startup. The schema stays untouched unless automatic
-    // migrations are switched on; otherwise an empty database waits for the setup dialog in the browser.
+    // Connect with the saved or default config on startup and bring the schema up to date. The database account
+    // needs the rights for that; a failed connection leaves the setup dialog to the browser.
     auth.adapter.testConnection(config.database).then((result) => {
         if (!result.success) {
             console.log(`Could not auto-connect: ${result.error ?? "unknown reason"}`);
             console.log("Waiting for setup from frontend…");
 
             return undefined;
-        }
-
-        if (!config.autoMigrate) {
-            // Keep the branch separation of the migration pipeline, so a checkout does not touch the main data.
-            config.database.database = resolveDatabaseName(config.database.database);
-
-            return auth.adapter.initialize(config.database).then(() => {
-                const { engine, host, port, database } = config.database;
-                console.log(`Backend connected: ${engine} @ ${host}:${port}/${database}`);
-                console.log(
-                    "Automatic migrations are off; the browser offers Initialize Database if the schema is missing.",
-                );
-            });
         }
 
         return runMigrations(config.database).then((effectiveDb) => {

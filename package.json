@@ -31,7 +31,6 @@
         "start": "tsx src/server/backend.ts",
         "start-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts",
         "db:cleanup": "tsx build/db-cleanup.ts",
-        "db:migrate": "tsx build/migration.ts",
         "package": "tsx build/package.ts"
     },
     "dependencies": {

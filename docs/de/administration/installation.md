@@ -107,7 +107,7 @@ JWT_SECRET="<long random value>" node server.js
 
 ## Die Datenbank vorbereiten
 
-Lege die Datenbank und einen Benutzer dafür vor dem ersten Start an. Das Backend legt das Schema in dieser Datenbank an, entweder wenn der Dialog im Browser es initialisiert oder, mit `"autoMigrate": true`, beim Start; die Datenbank selbst legt es nicht an. Das Konto braucht das Recht, Tabellen, Indizes und Fremdschlüssel in dieser Datenbank anzulegen.
+Lege die Datenbank und einen Benutzer dafür vor dem ersten Start an. Das Backend legt beim Start die Tabellen in dieser Datenbank an; die Datenbank selbst legt es nicht an. Das Konto braucht das Recht, Tabellen, Indizes und Fremdschlüssel in dieser Datenbank anzulegen.
 
 MySQL oder MariaDB:
 
@@ -131,7 +131,7 @@ GRANT ALL PRIVILEGES ON DATABASE animada TO animada;
 JWT_SECRET="<long random value>" node server.js
 ```
 
-Der Prozess verbindet sich mit der Datenbank und lauscht danach; `Backend connected: <engine> @ <host>:<port>/<database>` bestätigt die Verbindung. Mit `"autoMigrate": true` wendet der Start zusätzlich die Migrationen an und importiert `build/seed.sql` in eine leere Datenbank. Ein erfolgreicher Start protokolliert eine Zeile wie:
+Der Prozess verbindet sich mit der Datenbank, wendet die ausstehenden Migrationen an, importiert `build/seed.sql` in eine leere Datenbank und lauscht danach. Sobald das Schema bereit ist, protokolliert er `Backend initialised: <engine> @ <host>:<port>/<database>`; ein erfolgreicher Start endet mit einer Zeile wie:
 
 ```
 Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)
@@ -141,24 +141,24 @@ Der erste Teil der Zeile ist die Adresse, die du auf dem Server selbst verwenden
 
 ## Der Installationsassistent
 
-Öffne die Adresse in einem Browser. Solange die Datenbank keine Tabellen enthält, zeigt die Anwendung den Dialog `Backend Setup` mit Engine, Host, Port und Datenbankname aus der Konfiguration:
+Öffne die Adresse in einem Browser. Das Backend hat die Tabellen bereits angelegt und die Demodaten importiert, die Anwendung fragt also nach dem ersten Administrator:
 
-1. Prüfe die Werte und wähle `Initialize Database`. Das Backend wendet die Migrationen an, der Dialog meldet
-   `Setting up database tables …` und dann `Database setup complete.`
-2. Danach folgt der Dialog `Finish Installation`. Er fragt nach dem `Admin User` (`Username`, `Password`, `Confirm`,
-   `Display Name`) und einer `Initial Group` (`Group Name`).
+1. Der Dialog `Finish Installation` fragt nach dem `Admin User` (`Username`, `Password`, `Confirm`, `Display Name`) und
+   einer `Initial Group` (`Group Name`).
 
 ![Der Dialog Finish Installation](../../images/en/administration/first-run.png)
 
 *`Finish Installation` legt den ersten Administrator und eine Gruppe in einem Schritt an; `Finish Installation` unten übermittelt beides.*
 
-3. Anschließend erscheint der `Sign In`-Dialog. Melde dich mit dem gerade angelegten Administratorkonto an.
+2. Anschließend erscheint der `Sign In`-Dialog. Melde dich mit dem gerade angelegten Administratorkonto an.
+
+Stattdessen erscheint `Backend Setup`, wenn keine brauchbare Konfiguration existiert oder das Backend die Datenbank nicht erreicht. Der Dialog zeigt Engine, Host, Port und Datenbankname aus der Konfiguration und bietet `Initialize Database`, was die ausstehenden Migrationen anwendet, sowie `Reset Database`, was jede Tabelle löscht und das Schema neu aufbaut.
 
 ![Der Dialog Backend Setup mit Engine, Host, Port und Datenbank](../../images/en/administration/backend-setup.png)
 
-*Der Dialog `Backend Setup` zeigt die konfigurierte Verbindung und bietet an, das Schema anzulegen. Die Datenbank selbst muss bereits existieren.*
+*Der Dialog `Backend Setup` zeigt die konfigurierte Verbindung und bietet an, die Tabellen anzulegen. Die Datenbank selbst muss bereits existieren.*
 
-`Reset Database` im selben Dialog löscht jede Tabelle und baut das Schema neu auf. Verwende es nur bei einer frischen Installation oder mit einem Backup zur Hand; siehe [Backup, Restore und Upgrades](backup-restore-upgrades.md).
+`Reset Database` ist für eine frische Installation gedacht oder für den Fall, dass ein Backup zur Hand ist; siehe [Backup, Restore und Upgrades](backup-restore-upgrades.md).
 
 Meldet der Dialog `Backend configuration is missing or invalid.`, konnte das Backend `backend-config.json` nicht lesen. Die Meldung nennt, was fehlt; korrigiere die Datei und starte den Prozess neu.
 
@@ -167,8 +167,7 @@ Meldet der Dialog `Backend configuration is missing or invalid.`, konnte das Bac
 1. Stoppe das Backend.
 2. Entpacke die neue Version in ein neues Verzeichnis.
 3. Kopiere deine `backend-config.json` und das Verzeichnis `public/uploads` aus der alten Installation.
-4. Starte das Backend mit `node server.js`. `"autoMigrate": true` wendet beim Start die ausstehenden Migrationen an;
-   andernfalls fragt der Browser einmal, und `Initialize Database` wendet sie an.
+4. Starte das Backend mit `node server.js`. Die ausstehenden Migrationen laufen beim Start, bevor der Prozess zu lauschen beginnt.
 
 Eine Migrationsdatei, die nach ihrem Lauf bearbeitet wurde, scheitert an der Prüfung der Checksumme und blockiert den Start; die Datenbank muss dann aus einem Backup neu aufgebaut werden. [Backup, Restore und Upgrades](backup-restore-upgrades.md) erklärt den Weg zurück.
 

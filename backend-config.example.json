@@ -11,6 +11,5 @@
     },
     "soundLibPath": "public/sounds",
     "allowedOrigins": [],
-    "trustProxy": false,
-    "autoMigrate": false
+    "trustProxy": false
 }

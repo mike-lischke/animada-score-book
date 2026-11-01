@@ -17,7 +17,6 @@ The backend reads one file, `backend-config.json`, from the directory it is star
 | `soundLibPath`      | `public/sounds` | Directory served as the sound library, relative to the working directory           |
 | `allowedOrigins`    | none            | Origins that receive CORS headers                                                  |
 | `trustProxy`        | `false`         | Whether forwarded headers from a proxy are trusted                                 |
-| `autoMigrate`       | `false`         | Whether the start applies pending migrations instead of leaving them to the dialog |
 The example file `backend-config.example.json` in the package lists all of them with these defaults. Copy it and adjust the database block; the [installation chapter](installation.md) shows a minimal configuration.
 
 The installation dialog in the browser only displays these values. Changing them means editing the file and restarting the process.
@@ -39,7 +38,6 @@ All values except `soundLibPath` can be overridden from the environment. The env
 | `DB_USER`         | `database.user`     |                                                       |
 | `DB_PASSWORD`     | `database.password` |                                                       |
 | `JWT_SECRET`      | —                   | Required; see below                                   |
-| `AUTO_MIGRATE`    | `autoMigrate`       | `true` applies migrations on start                    |
 
 ## The JWT Secret
 
@@ -51,8 +49,8 @@ Replacing the secret invalidates all tokens that were issued with the old one, s
 
 - `engine` selects the adapter. `mysql` and `mariadb` share one adapter; `postgres` uses the other.
 - `host`, `port`, `database`, `user`, and `password` are passed to that adapter unchanged, so the database must already exist, together with an account that may create tables, indexes, and foreign keys in it.
-- On start the backend tests the connection. When it succeeds, it logs `Backend connected: <engine> @ <host>:<port>/<database>`; with `"autoMigrate": true` it applies the pending migrations and logs `Backend initialised: …` instead. When the connection fails, it logs `Could not auto-connect: …` and `Waiting for setup from frontend…`, keeps listening, and the browser reports that the database is unreachable.
-- Without `autoMigrate` a database without the application tables stays empty until someone chooses `Initialize Database` in the browser, which applies the migrations and seeds the demo data.
+- On start the backend tests the connection. When it succeeds, it applies the pending migrations from `migrations/`, seeds an empty database, and logs `Backend initialised: <engine> @ <host>:<port>/<database>`. When the connection fails, it logs `Could not auto-connect: …` and `Waiting for setup from frontend…`, keeps listening, and the browser reports that the database is unreachable.
+- The account therefore needs the right to create tables, indexes, and foreign keys. Without that right the migrations fail and the schema stays as it is, which is how an administrator holds back an upgrade.
 
 The database can be rebuilt from the schema at any time; [Backup, Restore and Upgrades](backup-restore-upgrades.md) covers that.
 

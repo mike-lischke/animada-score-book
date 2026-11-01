@@ -85,8 +85,6 @@ test.describe.serial("Setup: real database integration", () => {
                 DB_NAME: testDbName,
                 DB_USER: dbUser,
                 DB_PASSWORD: dbPassword,
-                // The backend keeps the schema untouched unless migrations are switched on.
-                AUTO_MIGRATE: "true",
                 VITEST: "true",
             },
             stdio: "pipe",

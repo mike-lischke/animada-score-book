@@ -64,9 +64,8 @@ Das Backend wendet das Schema selbst an:
 - Jede angewendete Datei wird mit ihrer SHA-256-Checksumme gespeichert.
 - Eine Migrationsdatei kann Abschnitte mit `-- @mysql` und `-- @postgres` tragen; der Runner führt nur die Abschnitte für
   die konfigurierte Engine aus, plus alles außerhalb solcher Markierungen.
-- Ausstehende Migrationen laufen direkt nach dem Start des Prozesses, wenn `"autoMigrate": true` gesetzt ist; andernfalls
-  warten sie auf `Initialize Database` im Browser. Das Protokoll listet sie, und `Backend initialised: …` erscheint,
-  sobald das Schema bereit ist.
+- Ausstehende Migrationen laufen direkt nach dem Start des Prozesses, bevor er Anfragen annimmt. Das Protokoll listet
+  sie, und `Backend initialised: …` erscheint, sobald das Schema bereit ist.
 
 ## Eine geänderte Migrationsdatei
 
@@ -84,8 +83,7 @@ Es gibt keine Down-Migrationen und keinen Reparaturschritt. Die einzigen Wege vo
 1. Stoppe das Backend.
 2. Entpacke das neue Paket in ein neues Verzeichnis.
 3. Kopiere `backend-config.json` und `public/uploads` aus der alten Installation.
-4. Starte das Backend mit `node server.js`. Mit `"autoMigrate": true` laufen die ausstehenden Migrationen sofort;
-   andernfalls bietet der Browser einmal `Initialize Database` an und wendet sie an.
+4. Starte das Backend mit `node server.js`. Die ausstehenden Migrationen laufen sofort, bevor der Prozess zu lauschen beginnt.
 
 Nach dem Upgrade:
 
@@ -96,11 +94,10 @@ Nach dem Upgrade:
 
 ## Branch-Datenbanken in der Entwicklung
 
-In einem Checkout hängt das Backend den aktuellen Branch an den Datenbanknamen an, wie in [Das Backend konfigurieren](configuration.md) beschrieben. Zwei Werkzeuge helfen dort:
+In einem Checkout hängt das Backend den aktuellen Branch an den Datenbanknamen an, wie in [Das Backend konfigurieren](configuration.md) beschrieben.
 
 - `npm run db:cleanup` listet Datenbanken, deren Branch nicht mehr existiert, und gibt die `DROP DATABASE`-Befehle zum
   manuellen Ausführen aus.
-- `npm run db:migrate` wendet Migrationen an, ohne den Server zu starten.
 
 Eine Abweichung der Checksumme in der Entwicklung bedeutet meist, dass der Branch rebased wurde; das Löschen der Branch-Datenbank ist die vorgesehene Abhilfe.
 

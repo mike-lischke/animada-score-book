@@ -24,9 +24,6 @@ export interface IServerConfig {
 
     /** When true, trust x-forwarded-* proxy headers. Default false. */
     trustProxy?: boolean;
-
-    /** When true, the startup applies pending migrations. Default false: the browser offers `Initialize Database`. */
-    autoMigrate: boolean;
 }
 
 /** Whether the loaded configuration holds a usable database connection. */
@@ -83,9 +80,6 @@ export const loadConfig = (): IServerConfig => {
         trustProxy: process.env.TRUST_PROXY !== undefined
             ? process.env.TRUST_PROXY === "true"
             : (raw.trustProxy ?? false),
-        autoMigrate: process.env.AUTO_MIGRATE !== undefined
-            ? process.env.AUTO_MIGRATE === "true"
-            : (raw.autoMigrate ?? false),
         database: {
             engine: process.env.DB_ENGINE && isValidDatabaseEngine(process.env.DB_ENGINE)
                 ? process.env.DB_ENGINE

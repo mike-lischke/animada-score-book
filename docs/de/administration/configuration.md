@@ -17,7 +17,6 @@ Das Backend liest eine Datei, `backend-config.json`, aus dem Verzeichnis, in dem
 | `soundLibPath`      | `public/sounds` | Verzeichnis, das als Klangbibliothek ausgeliefert wird, relativ zum Arbeitsverzeichnis |
 | `allowedOrigins`    | keiner          | Origins, die CORS-Header erhalten                                                      |
 | `trustProxy`        | `false`         | Ob weitergeleiteten Headern eines Proxys getraut wird                                  |
-| `autoMigrate`       | `false`         | Ob der Start ausstehende Migrationen anwendet, statt sie dem Dialog zu überlassen      |
 
 Die Beispieldatei `backend-config.example.json` im Paket listet alle mit diesen Standardwerten. Kopiere sie und passe den Datenbankblock an; das [Installationskapitel](installation.md) zeigt eine minimale Konfiguration.
 
@@ -40,7 +39,6 @@ Alle Werte außer `soundLibPath` lassen sich aus der Umgebung überschreiben. Di
 | `DB_USER`         | `database.user`     |                                                             |
 | `DB_PASSWORD`     | `database.password` |                                                             |
 | `JWT_SECRET`      | —                   | Erforderlich; siehe unten                                   |
-| `AUTO_MIGRATE`    | `autoMigrate`       | `true` wendet beim Start Migrationen an                     |
 
 ## Das JWT-Secret
 
@@ -53,13 +51,13 @@ Wird das Secret ersetzt, werden alle Token ungültig, die mit dem alten ausgeste
 - `engine` wählt den Adapter. `mysql` und `mariadb` teilen einen Adapter; `postgres` nutzt den anderen.
 - `host`, `port`, `database`, `user` und `password` werden unverändert an diesen Adapter übergeben, die Datenbank muss
   also bereits existieren, zusammen mit einem Konto, das Tabellen, Indizes und Fremdschlüssel darin anlegen darf.
-- Beim Start prüft das Backend die Verbindung. Gelingt sie, protokolliert es
-  `Backend connected: <engine> @ <host>:<port>/<database>`; mit `"autoMigrate": true` wendet es stattdessen die
-  ausstehenden Migrationen an und protokolliert `Backend initialised: …`. Scheitert die Verbindung, protokolliert es
+- Beim Start prüft das Backend die Verbindung. Gelingt sie, wendet es die ausstehenden Migrationen aus `migrations/` an,
+  spielt eine leere Datenbank mit den Demodaten und protokolliert
+  `Backend initialised: <engine> @ <host>:<port>/<database>`. Scheitert die Verbindung, protokolliert es
   `Could not auto-connect: …` und `Waiting for setup from frontend…`, lauscht weiter, und der Browser meldet, dass die
   Datenbank nicht erreichbar ist.
-- Ohne `autoMigrate` bleibt eine Datenbank ohne die Anwendungstabellen leer, bis jemand im Browser
-  `Initialize Database` wählt, was die Migrationen anwendet und die Demodaten einspielt.
+- Das Konto braucht daher das Recht, Tabellen, Indizes und Fremdschlüssel anzulegen. Ohne dieses Recht scheitern die
+  Migrationen, und das Schema bleibt, wie es ist — so hält ein Administrator ein Upgrade zurück.
 
 Die Datenbank lässt sich jederzeit aus dem Schema neu aufbauen; [Backup, Restore und Upgrades](backup-restore-upgrades.md) behandelt das.
 

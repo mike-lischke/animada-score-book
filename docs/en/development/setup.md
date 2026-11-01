@@ -26,12 +26,12 @@ The backend refuses to start without `JWT_SECRET`. `npm run start-debug` sets it
 
 Development uses two processes:
 
-1. **Backend**: `npm run start` (or `npm run start-debug`), listening on port 3100 by default. It logs `Backend connected: …`, and with `AUTO_MIGRATE=true` also `Branch: …`, the effective database, and either the applied migrations or `All migrations already applied.`
+1. **Backend**: `npm run start` (or `npm run start-debug`), listening on port 3100 by default. It applies the pending migrations and logs `Branch: …`, the effective database, and either the applied migrations or `All migrations already applied.`, then `Backend initialised: …`.
 2. **Frontend**: `npm run dev`, serving `https://localhost:5173`. The Vite configuration terminates TLS with the local certificates and proxies `/api` and `/soundLib` to `http://127.0.0.1:3100`, so the browser only ever talks HTTPS.
 
 Open `https://localhost:5173`. The certificate is self-signed, so the browser warns once; VS Code's `Launch` configuration already passes `--allow-insecure-localhost`.
 
-The first start shows the `Backend Setup` dialog, because the database has no tables yet; the start itself applies no migrations. Choose `Initialize Database` to create the schema. [Installing Animada Score Book](../administration/installation.md) describes the wizard.
+The database named in `backend-config.json` has to exist before the first start; the start creates the tables inside it and imports the demo data, but never the database itself. [Installing Animada Score Book](../administration/installation.md) describes the wizard.
 
 ## Commands
 
@@ -48,7 +48,6 @@ The first start shows the `Backend Setup` dialog, because the database has no ta
 | `npm run test:e2e:headed` | The same, with a visible browser                                                           |
 | `npm run test:e2e:ui`     | The same, in Playwright's UI mode                                                          |
 | `npm run serve:e2e`       | Serve `dist/` on port 4173 for manual checks                                               |
-| `npm run db:migrate`      | Apply pending migrations without starting the server                                       |
 | `npm run db:cleanup`      | Report branch databases whose branch no longer exists                                      |
 | `npm run package`         | Build the deployment package (see below)                                                   |
 | `npm run watch`           | TypeScript watcher for the editor                                                          |
@@ -59,7 +58,6 @@ The first start shows the `Backend Setup` dialog, because the database has no ta
 
 The backend appends the current branch to the database name — `<name>__<branch>` — and uses the configured name unchanged on `main`, on `release*` branches, and under Vitest. A new branch therefore starts with an empty database, and the wizard runs again.
 
-- `npm run db:migrate` applies migrations for the current branch.
 - `npm run db:cleanup` lists orphaned branch databases and prints the `DROP DATABASE` statements.
 - `Reset Database` in the setup dialog rebuilds the current branch database.
 
