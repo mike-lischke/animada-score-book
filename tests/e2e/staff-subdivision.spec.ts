@@ -93,7 +93,40 @@ test("applies a length to a note beside a subdivision", async ({ page }) => {
     await expect(page.locator(".note-length-toolbar .note-dot-button.du-btn-primary")).toBeVisible();
 });
 
-test("nests a subdivision inside a slot of the subdivision around it", async ({ page }) => {
+test("nests a subdivision inside the first slot of the subdivision around it", async ({ page }) => {
+    const runsBefore = await page.locator(".staff-note-viewer-run").count();
+
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+        .click({ force: true });
+
+    // The creation leaves the first slot selected, so the selection moves aside before it is addressed again.
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").nth(1).click();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+
+    // The first slot starts exactly on the beat, so only its fraction shows that it is a slot of a tuplet.
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await page.locator(".subdivision-toolbar button").first().click();
+
+    const triplet = page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Triplet" }).locator("a");
+    await expect(triplet).toBeVisible();
+    await expect(triplet).not.toHaveAttribute("aria-disabled", "true");
+    await triplet.click({ force: true });
+
+    // The nested triplet and the two slots beside it are four runs more than the measure held before.
+    await expect.poll(() => {
+        return page.locator(".staff-note-viewer-run").count();
+    }).toBe(runsBefore + 4);
+
+    // The outer tuplet is labelled above the notes, the nested one below them.
+    await expect(page.locator(".staff-note-viewer-tuplet-above .staff-note-viewer-tuplet-text")).toHaveText("3");
+    await expect(page.locator(".staff-note-viewer-tuplet-below .staff-note-viewer-tuplet-text")).toHaveText("3");
+});
+
+test("nests a subdivision inside a later slot of the subdivision around it", async ({ page }) => {
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
