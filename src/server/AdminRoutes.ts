@@ -206,10 +206,11 @@ export class AdminRoutes {
         }
 
         const rows = await this.ctx.auth.adapter.query(
-            "SELECT id, name, description, color, admin_id AS adminId," +
-            " (password_hash IS NOT NULL) AS hasPassword," +
-            " last_login AS lastLogin, created_at AS createdAt" +
-            " FROM `groups` ORDER BY name",
+            "SELECT g.id, g.name, g.description, g.color, g.admin_id AS adminId," +
+            " COALESCE(NULLIF(u.display_name, ''), u.username) AS adminName," +
+            " (g.password_hash IS NOT NULL) AS hasPassword," +
+            " g.last_login AS lastLogin, g.created_at AS createdAt" +
+            " FROM `groups` g LEFT JOIN users u ON u.id = g.admin_id ORDER BY g.name",
         );
 
         this.ctx.sendJson(res, {
@@ -220,6 +221,7 @@ export class AdminRoutes {
                     description: g.description,
                     color: g.color,
                     adminId: g.adminId,
+                    adminName: g.adminName ?? undefined,
                     hasPassword: Boolean(g.hasPassword),
                     lastLogin: g.lastLogin,
                     createdAt: g.createdAt,

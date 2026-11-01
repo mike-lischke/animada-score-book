@@ -33,7 +33,7 @@ enum EditorMode {
 interface IUserGroupEditorProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
 
-    /** When false, only shows groups the current user admins. Hides the Users section. Default true. */
+    /** When false, only shows the groups the current user belongs to. Hides the Users section. Default true. */
     showUsers?: boolean;
 }
 
@@ -138,8 +138,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
     public render(): ComponentChild {
         const { users, groups, editorMode, errorMessage, loading } = this.state;
-        const { showUsers } = this.props;
+        const { dataModel, showUsers } = this.props;
         const isFullAdmin = showUsers !== false;
+        const currentUserId = dataModel.user?.id;
 
         const actions: ComponentChild[] = [];
         if (loading) {
@@ -230,15 +231,16 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             );
         } else {
             groupRows = groups.map((group) => {
-                const admin = group.adminId
-                    ? users.find((u) => {
-                        return u.id === group.adminId;
-                    })
-                    : undefined;
-                const isSet = admin !== undefined;
-                const badgeColor = isSet ? userBadgeColor(admin.id) : "#6b7280";
+                const adminId = group.adminId;
+                const adminName = group.adminName;
+                const isSet = adminName !== undefined && adminId !== null;
+                const badgeColor = isSet ? userBadgeColor(adminId) : "#6b7280";
                 const background = isSet ? badgeColor + "80" : "transparent";
-                const label = isSet ? (admin.displayName || admin.username) : "No admin";
+                const label = isSet ? adminName : "No admin";
+
+                // A group administrator may manage that group without being an administrator of the installation.
+                const canEdit = isFullAdmin || adminId === currentUserId;
+                const showEditButton = canEdit && group.name !== "World";
 
                 const adminBadge = (
                     <span
@@ -280,7 +282,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             )}
                             {adminBadge}
                         </Container>
-                        {group.name !== "World" && (
+                        {showEditButton && (
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
@@ -805,20 +807,20 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     }
 
     private async loadGroups(): Promise<void> {
-        const { dataModel } = this.props;
-        const { showUsers } = this.props;
+        const { dataModel, showUsers } = this.props;
 
         try {
-            let groups = await dataModel.listGroups();
+            const groups = await dataModel.listGroups();
 
-            if (showUsers === false) {
-                const userId = dataModel.user?.id;
-                groups = groups.filter((g) => {
-                    return g.adminId === userId;
-                });
-            }
+            // My Groups lists the memberships the backend reports with the session, not the administered groups.
+            const memberIds = dataModel.user?.groupIds ?? [];
+            const visibleGroups = showUsers === false
+                ? groups.filter((group) => {
+                    return memberIds.includes(group.id);
+                })
+                : groups;
 
-            this.setState({ groups });
+            this.setState({ groups: visibleGroups });
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
         }

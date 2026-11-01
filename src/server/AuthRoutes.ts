@@ -80,7 +80,10 @@ export class AuthRoutes {
 
         this.ctx.setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
-        const capabilities = await this.ctx.auth.buildCapabilities(payload);
+        const [capabilities, groupIds] = await Promise.all([
+            this.ctx.auth.buildCapabilities(payload),
+            this.groupIdsOf(user.id),
+        ]);
 
         this.ctx.sendJson(res, {
             token: accessToken,
@@ -89,6 +92,7 @@ export class AuthRoutes {
                 username: user.username,
                 displayName: user.displayName,
                 isAdmin: payload.isAdmin,
+                groupIds,
             },
             capabilities,
         });
@@ -190,6 +194,7 @@ export class AuthRoutes {
                 username: anon.username,
                 displayName: anon.displayName,
                 isAdmin: false,
+                groupIds: [group.id],
             },
             group: {
                 id: group.id,
@@ -300,7 +305,10 @@ export class AuthRoutes {
             authType: user.authType,
             groupId: user.groupId,
         };
-        const capabilities = await this.ctx.auth.buildCapabilities(payload);
+        const [capabilities, groupIds] = await Promise.all([
+            this.ctx.auth.buildCapabilities(payload),
+            this.groupIdsOf(dbUser.id, user.authType === "group" ? user.groupId : undefined),
+        ]);
 
         let group: { id: number; name: string; } | undefined;
         if (user.authType === "group" && user.groupId !== undefined) {
@@ -321,6 +329,7 @@ export class AuthRoutes {
                 username: dbUser.username,
                 displayName: dbUser.displayName,
                 isAdmin: admin,
+                groupIds,
             },
             group,
             capabilities,
@@ -467,8 +476,30 @@ export class AuthRoutes {
 
         this.ctx.sendJson(res, {
             token: accessToken,
-            user: { id: result.insertId, username, displayName, isAdmin: true },
+            user: { id: result.insertId, username, displayName, isAdmin: true, groupIds: [adminGroupResult.insertId] },
             capabilities,
         });
     };
+
+    /**
+     * @param userId The user whose memberships are collected.
+     * @param sessionGroupId The group a group-password session logged in through, if there is one.
+     *
+     * @returns The ids of the groups the session belongs to.
+     */
+    private async groupIdsOf(userId: number, sessionGroupId?: number): Promise<number[]> {
+        // A group session carries only the group it logged in through, not the memberships of its account.
+        if (sessionGroupId !== undefined) {
+            return [sessionGroupId];
+        }
+
+        const rows = await this.ctx.auth.adapter.query<{ group_id: number; }>(
+            "SELECT group_id FROM user_groups WHERE user_id = ?",
+            [userId],
+        );
+
+        return rows.map((row) => {
+            return row.group_id;
+        });
+    }
 }

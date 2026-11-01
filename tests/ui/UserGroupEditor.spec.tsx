@@ -8,7 +8,7 @@ import { createRef, type FunctionComponent } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderNotificationCenter } from "../../src/components/ui/NotificationCenter/NotificationCenter.js";
-import type { IGroupRow, IUserRow, ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
+import type { IGroupRow, IUserInfo, IUserRow, ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import * as utils from "../../src/core/utils.js";
 import { UserGroupEditor } from "../../src/ui/UserGroupEditor.js";
 import { requireCurrent } from "../unit-test-helpers.js";
@@ -25,7 +25,7 @@ interface IMockDataModel {
     deleteGroup: ReturnType<typeof vi.fn>;
     addUserToGroup: ReturnType<typeof vi.fn>;
     removeUserFromGroup: ReturnType<typeof vi.fn>;
-    user: IUserRow | undefined;
+    user: IUserInfo | undefined;
     reset: ReturnType<typeof vi.fn>;
 }
 
@@ -292,6 +292,89 @@ describe("UserGroupEditor", { concurrent: false }, () => {
             expect(dialog.textContent).toContain("Administrator");
             // "Vocals" has no admin — should show "No admin".
             expect(dialog.textContent).toContain("No admin");
+        });
+    });
+
+    it("shows the group administrator name the listGroups row carries", async () => {
+        // No users are loaded, so the badge cannot take the name from the users list.
+        const groupsWithAdminNames: IGroupRow[] = [
+            { ...sampleGroups[0], adminName: "Administrator" },
+            { ...sampleGroups[1] },
+        ];
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue([]),
+            listGroups: vi.fn().mockResolvedValue(groupsWithAdminNames),
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        requireCurrent(ref).open();
+
+        await waitFor(() => {
+            const badges = Array.from(document.body.querySelectorAll(".user-group-admin-badge")).map((badge) => {
+                return badge.textContent;
+            });
+
+            expect(badges).toEqual(["Administrator", "No admin"]);
+        });
+    });
+
+    // ---- My Groups for non-admin users ----
+
+    it("lists the memberships of the signed-in user in My Groups", async () => {
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue([]),
+            listGroups: vi.fn().mockResolvedValue(sampleGroups),
+            user: { id: 5, username: "agent", displayName: "Agent", isAdmin: false, groupIds: [2] },
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} showUsers={false} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        requireCurrent(ref).open();
+
+        await waitFor(() => {
+            const dialog = document.body.querySelector("#userGroupEditorDialog")!;
+
+            expect(dialog.textContent).toContain("My Groups");
+            // "Vocals" is the only membership of the user; "Percussion" belongs to somebody else.
+            expect(dialog.textContent).toContain("Vocals");
+            expect(dialog.textContent).not.toContain("Percussion");
+        });
+
+        // The Users section stays hidden, and a membership without a group admin cannot be edited.
+        expect(document.body.querySelector("#ug-add-user")).toBeNull();
+        expect(document.body.querySelector('button[title="Edit Group"]')).toBeNull();
+    });
+
+    it("offers the group editor for a group the non-admin user administers", async () => {
+        // Both groups are memberships, but only "Percussion" (adminId=1) is administered by user 1.
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue([]),
+            listGroups: vi.fn().mockResolvedValue(sampleGroups),
+            user: { id: 1, username: "agent", displayName: "Agent", isAdmin: false, groupIds: [1, 2] },
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} showUsers={false} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        requireCurrent(ref).open();
+
+        await waitFor(() => {
+            const dialog = document.body.querySelector("#userGroupEditorDialog")!;
+            const editButtons = document.body.querySelectorAll('button[title="Edit Group"]');
+
+            expect(dialog.textContent).toContain("Percussion");
+            expect(dialog.textContent).toContain("Vocals");
+            expect(editButtons.length).toBe(1);
+            expect(editButtons[0].closest(".form-row")?.textContent).toContain("Percussion");
         });
     });
 

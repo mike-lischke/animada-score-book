@@ -649,6 +649,9 @@ export interface IUserInfo {
     username: string;
     displayName: string;
     isAdmin: boolean;
+
+    /** The groups the session belongs to; a group session carries only the group it logged in through. */
+    groupIds?: number[];
 }
 
 /** The group a session logs in through, which is all a session needs to know about it. */
@@ -675,6 +678,10 @@ export interface IGroupRow {
     description: string;
     color: string;
     adminId: number | null;
+
+    /** The display name of the group's administrator, if it has one. */
+    adminName?: string;
+
     hasPassword: boolean;
     lastLogin: string | null;
     createdAt: string;
@@ -3071,7 +3078,7 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Lists all groups. Admin-only.
+     * Lists all groups. Requires an authenticated session.
      *
      * @returns The list of group rows.
      */
