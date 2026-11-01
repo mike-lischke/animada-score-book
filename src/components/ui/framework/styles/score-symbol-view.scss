@@ -59,7 +59,7 @@
     /* The ink is scaled so its larger side spans that side. */
     --icon-ink-scale: calc(var(--icon-ink-spaces) / max(var(--ink-width), calc(var(--ink-top) - var(--ink-bottom))));
 
-    text {
+    &:not(.score-symbol-icon-barline) text {
         text-anchor: start;
 
         /* The scale is the glyph's font size and not a transform: WebKit resolves the `transform-origin` of an SVG
