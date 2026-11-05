@@ -8,7 +8,7 @@
 import { lookup as lookupMimeType } from "mime-types";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse } from "node:http";
-import { extname, join, resolve } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 
 import { type RequestContext } from "./RequestContext.js";
 import { uploadsPath } from "./config.js";
@@ -29,6 +29,12 @@ export class StaticRoutes {
         ["jpeg", [0xFF, 0xD8, 0xFF]],
         ["webp", [0x52, 0x49, 0x46, 0x46]],
     ]);
+
+    /** Cache header for the files of a build, whose names change with their content. */
+    private static readonly assetCache = "public, max-age=3600";
+
+    /** Cache header for documents, so a new build is picked up immediately. */
+    private static readonly documentCache = "no-cache";
 
     public constructor(private readonly ctx: RequestContext) { }
 
@@ -170,56 +176,51 @@ export class StaticRoutes {
     };
 
     public serveStaticFile(req: IncomingMessage, res: ServerResponse, pathname: string): void {
-        const distPath = resolve(process.cwd(), "dist");
         const decodedPath = decodeURIComponent(pathname);
+        const distRoot = resolve(process.cwd(), "dist");
+        const publicRoot = resolve(process.cwd(), "public");
 
-        const candidates = [
-            resolve(process.cwd(), "public", `.${decodedPath}`),
-            resolve(distPath, `.${decodedPath}`),
-        ];
-
-        for (const filePath of candidates) {
-            if (!filePath.startsWith(distPath) && !filePath.startsWith(resolve(process.cwd(), "public"))) {
-                continue;
+        // Uploaded instrument images are written at runtime, so they are never part of a build directory.
+        if (decodedPath === "/uploads" || decodedPath.startsWith("/uploads/")) {
+            if (!this.sendFileFromRoot(res, publicRoot, decodedPath, StaticRoutes.assetCache)) {
+                StaticRoutes.sendNotFound(res);
             }
-
-            if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
-                const ext = extname(filePath);
-                const mimeType = lookupMimeType(ext) || "application/octet-stream";
-                const data = readFileSync(filePath);
-
-                res.writeHead(200, {
-                    "Content-Type": mimeType,
-                    "Content-Length": data.length,
-                    "Cache-Control": "public, max-age=3600",
-                    "X-Content-Type-Options": "nosniff",
-                });
-
-                res.end(data);
-
-                return;
-            }
-        }
-
-        const indexPath = resolve(distPath, "index.html");
-
-        if (existsSync(indexPath)) {
-            const data = readFileSync(indexPath);
-
-            res.writeHead(200, {
-                "Content-Type": "text/html; charset=utf-8",
-                "Content-Length": data.length,
-                "X-Content-Type-Options": "nosniff",
-            });
-
-            res.end(data);
 
             return;
         }
 
-        res.writeHead(404);
+        if (this.sendFileFromRoot(res, publicRoot, decodedPath, StaticRoutes.assetCache)) {
+            return;
+        }
 
-        res.end("Not found");
+        if (this.sendFileFromRoot(res, distRoot, decodedPath, StaticRoutes.assetCache)) {
+            return;
+        }
+
+        // A missing file is an error, not a document.
+        if (StaticRoutes.isFileRequest(decodedPath)) {
+            StaticRoutes.sendNotFound(res);
+
+            return;
+        }
+
+        // A document route resolves to the document of the closest directory that holds one.
+        const segments = decodedPath.split("/").filter(Boolean);
+        while (segments.length > 0) {
+            const directoryIndex = `/${segments.join("/")}/index.html`;
+
+            if (this.sendFileFromRoot(res, distRoot, directoryIndex, StaticRoutes.documentCache)) {
+                return;
+            }
+
+            segments.pop();
+        }
+
+        if (this.sendFileFromRoot(res, distRoot, "/index.html", StaticRoutes.documentCache)) {
+            return;
+        }
+
+        StaticRoutes.sendNotFound(res);
     };
 
     public serveSoundLibFile(req: IncomingMessage, res: ServerResponse): void {
@@ -257,6 +258,63 @@ export class StaticRoutes {
 
         res.end(data);
     };
+
+    /**
+     * @param relativePath A request path, relative to the root that serves it.
+     *
+     * @returns Whether the request names a file rather than a document route.
+     */
+    private static isFileRequest(relativePath: string): boolean {
+        return extname(relativePath) !== "";
+    }
+
+    /**
+     * @param res The response to write the error to.
+     */
+    private static sendNotFound(res: ServerResponse): void {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+
+        res.end("Not found");
+    }
+
+    /**
+     * Sends one file, and never a file outside the given root.
+     *
+     * @param res The response to write to.
+     * @param root The directory the request is resolved against.
+     * @param relativePath The request path, starting with a slash.
+     * @param cacheControl The cache header the response carries.
+     *
+     * @returns Whether a file was sent.
+     */
+    private sendFileFromRoot(
+        res: ServerResponse, root: string, relativePath: string, cacheControl: string,
+    ): boolean {
+        const rootPath = resolve(root);
+        const filePath = resolve(rootPath, `.${relativePath}`);
+
+        if (filePath !== rootPath && !filePath.startsWith(`${rootPath}${sep}`)) {
+            return false;
+        }
+
+        if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
+            return false;
+        }
+
+        const data = readFileSync(filePath);
+        const mimeType = lookupMimeType(extname(filePath)) || "application/octet-stream";
+
+        res.writeHead(200, {
+            "Content-Type": mimeType,
+            "Content-Length": data.length,
+            "Cache-Control": cacheControl,
+            "X-Content-Type-Options": "nosniff",
+        });
+
+        res.end(data);
+
+        return true;
+    }
 
     private scanDirectory(dir: string, root: string): Array<{
         name: string; path: string; isDir: boolean;

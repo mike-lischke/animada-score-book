@@ -19,6 +19,9 @@ export interface IServerConfig {
     database: IDatabaseConfig;
     soundLibPath: string;
 
+    /** Whether visitors may create an account themselves. Default false. */
+    registrationEnabled: boolean;
+
     /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
     allowedOrigins?: string[];
 
@@ -91,6 +94,9 @@ export const loadConfig = (): IServerConfig => {
             password: process.env.DB_PASSWORD ?? raw.database?.password ?? "",
         },
         soundLibPath: raw.soundLibPath ?? "public/sounds",
+        registrationEnabled: process.env.REGISTRATION_ENABLED !== undefined
+            ? process.env.REGISTRATION_ENABLED === "true"
+            : (raw.registrationEnabled ?? false),
     };
 
     currentStatus = statusOf(merged, fileError);

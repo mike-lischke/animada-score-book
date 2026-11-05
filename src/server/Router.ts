@@ -174,6 +174,11 @@ export class Router {
 
                         break;
 
+                    case "register":
+                        await this.authRoutes.handleRegister(req, res);
+
+                        break;
+
                     case "groupLogin":
                         await this.authRoutes.handleGroupLogin(req, res);
 

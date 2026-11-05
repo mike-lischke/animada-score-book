@@ -98,6 +98,107 @@ export class AuthRoutes {
         });
     };
 
+    /**
+     * Creates an account for a visitor. The account starts without group membership and therefore without
+     * capabilities; the backend decides that, never the client.
+     *
+     * @param req The incoming HTTP request.
+     * @param res The response to write to.
+     */
+    public async handleRegister(req: IncomingMessage, res: ServerResponse) {
+        if (!this.ctx.config.registrationEnabled) {
+            this.ctx.sendError(res, "Registration is disabled on this installation.", 403);
+
+            return;
+        }
+
+        const rlKey = this.ctx.rateLimitKey(req, "#register");
+
+        if (this.ctx.checkRateLimit(rlKey)) {
+            this.ctx.sendError(res, "Too many attempts. Try again later.", 429);
+
+            return;
+        }
+
+        // Every attempt counts, so one client cannot create accounts in a loop.
+        this.ctx.recordFailedAttempt(rlKey);
+
+        const body = await this.ctx.readJsonBody(req);
+        const username = String(body.username ?? "").trim();
+        const password = String(body.password ?? "");
+        const displayName = String(body.displayName ?? "").trim() || username;
+
+        if (username.length < 3) {
+            this.ctx.sendError(res, "The username needs at least 3 characters.");
+
+            return;
+        }
+
+        if (password.length < 6) {
+            this.ctx.sendError(res, "The password needs at least 6 characters.");
+
+            return;
+        }
+
+        const users = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username],
+        );
+
+        if (users.length > 0) {
+            this.ctx.sendError(res, "That username is already taken.", 409);
+
+            return;
+        }
+
+        // A user and a group cannot share a name, because both are addressable by it.
+        const groups = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM `groups` WHERE name = ?",
+            [username],
+        );
+
+        if (groups.length > 0) {
+            this.ctx.sendError(res, "A group with this name already exists", 409);
+
+            return;
+        }
+
+        const passwordHash = await Auth.hashPassword(password);
+        const created = await this.ctx.auth.adapter.insertReturningId(
+            "INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)",
+            [username, passwordHash, displayName],
+        );
+
+        const payload: ITokenPayload = { userId: created.insertId, username, isAdmin: false };
+        const accessToken = Auth.createAccessToken(payload);
+        const refreshToken = Auth.createRefreshToken();
+
+        await this.ctx.auth.adapter.execute(
+            "UPDATE users SET refresh_token_hash = ? WHERE id = ?",
+            [refreshToken.hash, created.insertId],
+        );
+
+        await this.ctx.auth.recordLoginAudit(
+            created.insertId, LoginAuditEvent.Login, undefined, this.ctx.getClientIp(req),
+        );
+
+        this.ctx.setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
+
+        const capabilities = await this.ctx.auth.buildCapabilities(payload);
+
+        this.ctx.sendJson(res, {
+            token: accessToken,
+            user: {
+                id: created.insertId,
+                username,
+                displayName,
+                isAdmin: false,
+                groupIds: [],
+            },
+            capabilities,
+        });
+    };
+
     public async handleGroupLogin(req: IncomingMessage, res: ServerResponse) {
         const body = await this.ctx.readJsonBody(req);
         const groupName = String(body.groupName ?? "").trim();
@@ -261,6 +362,12 @@ export class AuthRoutes {
         const user = this.ctx.getAuthUser(req);
 
         if (user) {
+            // Clearing the stored hash ends the session even if the cookie was captured before.
+            await this.ctx.auth.adapter.execute(
+                "UPDATE users SET refresh_token_hash = NULL WHERE id = ?",
+                [user.userId],
+            );
+
             await this.ctx.auth.recordLoginAudit(
                 user.userId, LoginAuditEvent.Logout, undefined, this.ctx.getClientIp(req),
             );

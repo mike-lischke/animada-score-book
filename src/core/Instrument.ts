@@ -35,8 +35,8 @@ export class Instrument implements ISbDmInstrument {
 
     public readonly noteStyles: Record<string, IAudioData> = {};
 
-    /** Base folder for audio files under the public assets. */
-    private static readonly soundBasePath = "sounds";
+    /** Base folder for audio files under the public assets, independent of the document's own location. */
+    private static readonly soundBasePath = `${import.meta.env.BASE_URL}sounds`;
 
     /** Shared audio context used to decode instrument audio buffers. */
     private static readonly audioCtx = getSharedAudioContext();

@@ -116,7 +116,7 @@ export class ErrorBoundary extends Component<{}, IErrorBoundaryState> {
     private renderBrand(): ComponentChild {
         return (
             <div className="error-boundary-brand">
-                <img className="error-boundary-logo" src="/logo.svg" alt="" />
+                <img className="error-boundary-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
                 <div className="error-boundary-identity">
                     <span className="error-boundary-app-name">Animada Score Book</span>
                     <span className="error-boundary-app-tagline">Scores and arrangements for bateria groups</span>

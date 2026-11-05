@@ -499,7 +499,7 @@ export class App extends UIComponent<{}, IAppState> {
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
-                <img id="titleLogo" src="/logo.svg" />
+                <img id="titleLogo" src={`${import.meta.env.BASE_URL}logo.svg`} />
                 <Button
                     className="du-btn-ghost displayOptionsButton"
                     title="Settings"
@@ -1043,39 +1043,9 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        // No active session. If a score URL parameter is present, try anonymous access first.
-        const params = new URL(window.location.href).searchParams;
-        const scoreIdStr = params.get("score");
-
-        if (scoreIdStr) {
-            const scoreId = Number(scoreIdStr);
-            if (!isNaN(scoreId)) {
-                const [score, status] = await this.dataModel.fetchScoreById(scoreId);
-                if (score) {
-                    await this.initializeApp();
-
-                    return;
-                }
-
-                if (status === 403) {
-                    await this.confirmDialogRef.current?.show(
-                        "This score is not publicly accessible. Please sign in to continue.",
-                        { accept: "Sign In" },
-                        "Access Restricted",
-                    );
-                } else if (status === 404) {
-                    await this.confirmDialogRef.current?.show(
-                        "This score no longer exists. It may have been deleted.",
-                        { accept: "OK" },
-                        "Score Not Found",
-                    );
-                }
-            }
-        }
-
-        this.setState({ phase: AppPhase.Login }, () => {
-            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
-        });
+        // Without a session the application continues anonymously and picks up the last cached score. A score link
+        // is tried on the way there; the loader reports itself when that score is not publicly accessible.
+        await this.initializeApp();
     }
 
     /**
@@ -1318,7 +1288,8 @@ export class App extends UIComponent<{}, IAppState> {
     private handleSignInClick = () => {
         this.signInFromRunning = true;
         this.setState({ phase: AppPhase.Login }, () => {
-            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+            // Signing in is optional, so the dialog can be cancelled and the visitor stays anonymous.
+            void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);
         });
     };
 
@@ -1336,7 +1307,8 @@ export class App extends UIComponent<{}, IAppState> {
         this.undoManager = undefined;
 
         this.setState({ phase: AppPhase.Login }, () => {
-            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+            // After a logout the visitor continues anonymously instead of being forced back in.
+            void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);
         });
     };
 

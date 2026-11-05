@@ -38,6 +38,15 @@ const forbiddenContent = [
     "package-lock.json",
 ];
 
+/** The command line the packager was started with. */
+interface IPackageOptions {
+    /** The URL path the frontend is built for. */
+    basePath: string;
+
+    /** Reuse the build outputs that are already on disk. */
+    skipBuild: boolean;
+}
+
 /** The manifest the package carries, which describes how to start the bundled server. */
 interface IPackageManifest {
     name: string;
@@ -61,11 +70,33 @@ const readManifest = (): { version: string; engines: Record<string, string>; } =
 };
 
 /**
- * Builds the frontend so the package ships a current `dist` directory.
+ * Reads the command line.
+ *
+ * @returns The base path the frontend is built for and whether the build is skipped.
  */
-const buildFrontend = (): void => {
-    console.log("Building the frontend …");
-    execFileSync("npm", ["run", "build"], { cwd: projectRoot, stdio: "inherit" });
+const parseOptions = (): IPackageOptions => {
+    const baseIndex = argv.indexOf("--base");
+    const baseArgument: string | undefined = baseIndex >= 0 ? argv[baseIndex + 1] : undefined;
+    const basePath = baseArgument ?? "/";
+
+    if (!basePath.startsWith("/") || !basePath.endsWith("/")) {
+        throw new Error("The base path must start and end with a slash, for example /app/ or /.");
+    }
+
+    return {
+        basePath,
+        skipBuild: argv.includes("--skip-build"),
+    };
+};
+
+/**
+ * Builds the frontend so the package ships a current `dist` directory.
+ *
+ * @param basePath The URL path the frontend is served under.
+ */
+const buildFrontend = (basePath: string): void => {
+    console.log(`Building the frontend for ${basePath} …`);
+    execFileSync("npm", ["run", "build", "--", "--base", basePath], { cwd: projectRoot, stdio: "inherit" });
 };
 
 /**
@@ -156,8 +187,10 @@ const createArchive = (stagingDirectory: string, archivePath: string): void => {
     });
 };
 
-if (!argv.includes("--skip-build")) {
-    buildFrontend();
+const options = parseOptions();
+
+if (!options.skipBuild) {
+    buildFrontend(options.basePath);
     await bundleServer();
 }
 

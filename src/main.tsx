@@ -98,7 +98,7 @@ try {
                 crossAlignment={ChildAlignment.Center}
             >
                 <Icon
-                    src="/logo.svg"
+                    src={`${import.meta.env.BASE_URL}logo.svg`}
                     alt="App Icon"
                     style={{ width: "300px", height: "300px", marginBottom: "20px" }}
                 />
