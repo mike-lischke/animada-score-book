@@ -120,7 +120,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             actions.push(
                 <Button
                     id="login-button-anonymous"
-                    caption="Continue Anonymously"
+                    caption="Demo"
                     onClick={this.handleAnonymousClick}
                 />,
             );

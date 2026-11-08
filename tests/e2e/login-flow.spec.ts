@@ -47,7 +47,7 @@ test.describe("Login Flow", () => {
         await expect(loginDialog.locator("#login-password")).toBeVisible();
         await expect(loginDialog.locator("#login-button-anonymous")).toBeVisible();
         await expect(loginDialog.locator("#login-button-login")).toBeVisible();
-        await expect(loginDialog.locator("#login-button-anonymous")).toHaveText("Continue Anonymously");
+        await expect(loginDialog.locator("#login-button-anonymous")).toHaveText("Demo");
         await expect(loginDialog.locator("#login-button-login")).toHaveText("Log In");
     });
 

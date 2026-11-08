@@ -124,7 +124,7 @@ export class ScoreRoutes {
         }
 
         const score = rows[0];
-        const isDemoScore = this.ctx.config.demoScoreIds.includes(score.id as number);
+        const isDemoScore = this.ctx.config.demo.scoreIds.includes(score.id as number);
         const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, score.id as number);
 
         // A curated demo score is readable without a session, whatever the permission rows say.
@@ -157,24 +157,29 @@ export class ScoreRoutes {
      * @param res The response to write to.
      */
     public async handleListDemoScores(req: IncomingMessage, res: ServerResponse) {
-        const { demoScoreIds } = this.ctx.config;
+        const { scoreIds } = this.ctx.config.demo;
 
-        if (demoScoreIds.length === 0) {
+        if (scoreIds.length === 0) {
             this.ctx.sendJson(res, { scores: [] });
 
             return;
         }
 
-        const placeholders = demoScoreIds.map(() => {
+        const placeholders = scoreIds.map(() => {
             return "?";
         }).join(", ");
 
         const rows = await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
-            `SELECT id, name FROM scores WHERE id IN (${placeholders}) ORDER BY name`,
-            demoScoreIds,
+            `SELECT id, name FROM scores WHERE id IN (${placeholders})`,
+            scoreIds,
         );
 
-        this.ctx.sendJson(res, { scores: rows });
+        // The configuration decides the order, because its first entry is the score a demo opens.
+        const scores = rows.sort((left, right) => {
+            return scoreIds.indexOf(left.id) - scoreIds.indexOf(right.id);
+        });
+
+        this.ctx.sendJson(res, { scores });
     };
 
     public async handleResetChildPermissions(req: IncomingMessage, res: ServerResponse) {

@@ -19,17 +19,29 @@ export interface IServerConfig {
     database: IDatabaseConfig;
     soundLibPath: string;
 
-    /** Whether visitors may create an account themselves. Default false. */
-    registrationEnabled: boolean;
+    /** Public account creation. */
+    registration: IRegistrationConfig;
 
-    /** Scores a demo may offer without a session, by id. An empty list disables the catalog. */
-    demoScoreIds: number[];
+    /** The curated scores a demo may offer without a session. */
+    demo: IDemoConfig;
 
     /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
     allowedOrigins?: string[];
 
     /** When true, trust x-forwarded-* proxy headers. Default false. */
     trustProxy?: boolean;
+}
+
+/** Whether visitors may create an account themselves. */
+export interface IRegistrationConfig {
+    /** Default false: an installation that is not asked to stays closed. */
+    enabled: boolean;
+}
+
+/** The curated demo catalog. */
+export interface IDemoConfig {
+    /** The scores a demo may offer, by id. An empty list disables the catalog. */
+    scoreIds: number[];
 }
 
 /** Whether the loaded configuration holds a usable database connection. */
@@ -107,10 +119,14 @@ export const loadConfig = (): IServerConfig => {
             password: process.env.DB_PASSWORD ?? raw.database?.password ?? "",
         },
         soundLibPath: raw.soundLibPath ?? "public/sounds",
-        registrationEnabled: process.env.REGISTRATION_ENABLED !== undefined
-            ? process.env.REGISTRATION_ENABLED === "true"
-            : (raw.registrationEnabled ?? false),
-        demoScoreIds: demoScoreIdsEnv ?? raw.demoScoreIds ?? [],
+        registration: {
+            enabled: process.env.REGISTRATION_ENABLED !== undefined
+                ? process.env.REGISTRATION_ENABLED === "true"
+                : (raw.registration?.enabled ?? false),
+        },
+        demo: {
+            scoreIds: demoScoreIdsEnv ?? raw.demo?.scoreIds ?? [],
+        },
     };
 
     currentStatus = statusOf(merged, fileError);

@@ -106,7 +106,7 @@ export class AuthRoutes {
      * @param res The response to write to.
      */
     public async handleRegister(req: IncomingMessage, res: ServerResponse) {
-        if (!this.ctx.config.registrationEnabled) {
+        if (!this.ctx.config.registration.enabled) {
             this.ctx.sendError(res, "Registration is disabled on this installation.", 403);
 
             return;

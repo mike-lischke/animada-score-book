@@ -29,30 +29,30 @@ let router: Router;
  * @param adapter The database adapter, after the schema is ready.
  */
 const reportDemoCatalog = async (adapter: IDatabaseAdapter): Promise<void> => {
-    const { demoScoreIds } = config;
+    const { scoreIds } = config.demo;
 
-    if (demoScoreIds.length === 0) {
+    if (scoreIds.length === 0) {
         console.log(
-            "No demo catalog configured. Add \"demoScoreIds\" to backend-config.json "
+            "No demo catalog configured. Add \"demo\": { \"scoreIds\": [...] } to backend-config.json "
             + "to offer curated scores to visitors without an account.",
         );
 
         return;
     }
 
-    const placeholders = demoScoreIds.map(() => {
+    const placeholders = scoreIds.map(() => {
         return "?";
     }).join(", ");
 
     const rows = await adapter.query<{ id: number; }>(
         `SELECT id FROM scores WHERE id IN (${placeholders})`,
-        demoScoreIds,
+        scoreIds,
     );
 
     const existing = new Set(rows.map((row) => {
         return row.id;
     }));
-    const missing = demoScoreIds.filter((id) => {
+    const missing = scoreIds.filter((id) => {
         return !existing.has(id);
     });
 

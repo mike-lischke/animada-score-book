@@ -1336,16 +1336,43 @@ export class App extends UIComponent<{}, IAppState> {
         const hasStoredScore = AppStorage.loadCurrentScore() !== undefined;
         const hasScoreLink = params.get("score") !== null;
 
-        if (!hasStoredScore && !hasScoreLink && this.demoScores.length > 0) {
-            await this.loadScorebookById(this.demoScores[0].id);
-            this.setState({ phase: AppPhase.Running }, () => {
-                this.warnAboutBlockedStorage();
-            });
+        if (!hasStoredScore && !hasScoreLink) {
+            if (this.demoScores.length > 0) {
+                await this.loadScorebookById(this.demoScores[0].id);
+                this.setState({ phase: AppPhase.Running }, () => {
+                    this.warnAboutBlockedStorage();
+                });
+
+                return;
+            }
+
+            // An installation that curates no catalog still needs something to show, so the demo opens a blank sheet.
+            this.startEmptyDemoSheet();
 
             return;
         }
 
         await this.loadInitialScore(params);
+    }
+
+    /** Opens the demo's fallback content: one bar with the instruments a bateria starts with. */
+    private startEmptyDemoSheet(): void {
+        const names = ["Agogô 2-Bell", "Tamborim", "Caixa", "Surdo Terceira", "Surdo Segunda", "Surdo Primeira"];
+        const instruments = names
+            .map((name) => {
+                return this.dataModel.instruments.find((instrument) => {
+                    return instrument.displayName === name;
+                });
+            })
+            .filter((instrument): instrument is ISbDmInstrument => {
+                return instrument !== undefined;
+            });
+
+        this.startNewSong(instruments, { timeSignature: "4/4", tempo: 110, length: 1 });
+
+        this.setState({ phase: AppPhase.Running }, () => {
+            this.warnAboutBlockedStorage();
+        });
     }
 
     /**
