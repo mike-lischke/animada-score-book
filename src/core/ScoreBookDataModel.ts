@@ -847,6 +847,12 @@ export interface IDatabaseResetResult {
     error?: string;
 }
 
+/** A score the backend offers to a demo, as the curated catalog lists it. */
+export interface IDemoScoreEntry {
+    id: number;
+    name: string;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
@@ -2934,24 +2940,50 @@ export class ScoreBookDataModel {
         // then calls whoami with it to populate user + capabilities.
         const restored = await this.refreshAccessToken();
 
-        if (!restored) {
-            // No valid session — fetch anonymous capabilities.
-            const res = await this.fetchApi("/api?action=whoami", {
-                headers: { Accept: "application/json" },
-                credentials: "include",
-            }, false);
+        if (restored) {
+            void requisitions.execute("authChanged", undefined);
+        } else {
+            await this.loadAnonymousState();
+        }
 
-            if (res) {
-                const data = await res.json() as IWhoamiResponse;
+        return restored;
+    }
 
-                this.currentGroup = undefined;
-                this.currentCapabilities = data.capabilities;
-            }
+    /**
+     * Reads the capabilities the backend grants a visitor without a session. A demo runs on exactly these and
+     * never asks for the session stored in the browser.
+     */
+    public async loadAnonymousState(): Promise<void> {
+        const res = await this.fetchApi("/api?action=whoami", {
+            headers: { Accept: "application/json" },
+            credentials: "include",
+        }, false);
+
+        if (res) {
+            const data = await res.json() as IWhoamiResponse;
+
+            this.currentGroup = undefined;
+            this.currentCapabilities = data.capabilities;
         }
 
         void requisitions.execute("authChanged", undefined);
+    }
 
-        return restored;
+    /**
+     * @returns The curated scores a demo may offer, as the backend lists them.
+     */
+    public async listDemoScores(): Promise<IDemoScoreEntry[]> {
+        const res = await this.fetchApi("/api?action=listDemoScores", {
+            headers: { Accept: "application/json" },
+        }, false);
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { scores?: IDemoScoreEntry[]; };
+
+        return data.scores ?? [];
     }
 
     public async listUsers(): Promise<IUserRow[]> {
@@ -3349,8 +3381,7 @@ export class ScoreBookDataModel {
             return;
         }
 
-        AppStorage.saveSetting("currentScore",
-            stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
+        AppStorage.saveCurrentScore(stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
     }
 
     /**

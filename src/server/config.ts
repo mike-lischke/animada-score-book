@@ -22,6 +22,9 @@ export interface IServerConfig {
     /** Whether visitors may create an account themselves. Default false. */
     registrationEnabled: boolean;
 
+    /** Scores a demo may offer without a session, by id. An empty list disables the catalog. */
+    demoScoreIds: number[];
+
     /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
     allowedOrigins?: string[];
 
@@ -75,6 +78,16 @@ export const loadConfig = (): IServerConfig => {
         }).filter(Boolean)
         : undefined;
 
+    const demoScoreIdsEnv = process.env.DEMO_SCORE_IDS
+        ? process.env.DEMO_SCORE_IDS.split(",")
+            .map((value) => {
+                return Number.parseInt(value.trim(), 10);
+            })
+            .filter((value) => {
+                return Number.isInteger(value) && value > 0;
+            })
+        : undefined;
+
     // Environment variables take precedence over saved config.
     const merged: IServerConfig = {
         host: process.env.HOST ?? raw.host ?? "0.0.0.0",
@@ -97,6 +110,7 @@ export const loadConfig = (): IServerConfig => {
         registrationEnabled: process.env.REGISTRATION_ENABLED !== undefined
             ? process.env.REGISTRATION_ENABLED === "true"
             : (raw.registrationEnabled ?? false),
+        demoScoreIds: demoScoreIdsEnv ?? raw.demoScoreIds ?? [],
     };
 
     currentStatus = statusOf(merged, fileError);

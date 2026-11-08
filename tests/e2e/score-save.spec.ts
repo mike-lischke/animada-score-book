@@ -9,7 +9,7 @@ import { stringifyPackedArrangement } from "../../src/core/serialisation/snapsho
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
 import {
-    routeApi, scrollClearOfToolsBar, setupAnonymousSession, setupAuthenticatedSession,
+    routeApi, scrollClearOfToolsBar, setupAnonymousSession, setupAuthenticatedSession, showTrackView,
 } from "./e2e-test-helpers.js";
 
 /** Four quarter notes, which give an edit something to remove. */
@@ -61,7 +61,7 @@ const answerAt = (answer: IApiAnswer | IApiAnswer[], call: number): IApiAnswer =
  * @param page The page under test.
  * @param answers The action the backend answers how, keyed by the action name. A sequence answers call by call,
  *                which a test uses for a session that ends while the app runs.
- * @param anonymous Boots the app without a session, as the `Continue Anonymously` path does.
+ * @param anonymous Boots the app without a session, which runs it as a demo.
  */
 const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAnswer[]>,
     anonymous = false): Promise<void> => {
@@ -91,9 +91,17 @@ const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAn
         });
     }
 
-    await page.addInitScript((data: { packed: string; entryMode: number; sessionId: string; }) => {
+    await page.addInitScript((data: { packed: string; entryMode: number; sessionId: string; anonymous: boolean; }) => {
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId: data.sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", data.sessionId);
+
+        if (data.anonymous) {
+            // A demo reads no settings, so only the score it keeps is seeded.
+            window.localStorage.setItem("asb-demo-score", JSON.stringify({ version: 1, score: data.packed }));
+
+            return;
+        }
+
         window.localStorage.setItem(`asb-ui-settings-session-${data.sessionId}`, JSON.stringify({
             currentScore: data.packed,
             entryMode: data.entryMode,
@@ -103,13 +111,14 @@ const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAn
         packed: stringifyPackedArrangement(snapshot),
         entryMode: EditEntryMode.Overwrite,
         sessionId: "e2e-score-save",
+        anonymous,
     });
 
     await page.goto("/");
 
     if (anonymous) {
-        // Without a session the app waits for the dialog, and the cached score opens behind it.
-        await page.getByRole("button", { name: "Continue Anonymously" }).click();
+        // A demo starts in the grid view, which the test leaves for the staff view it edits in.
+        await showTrackView(page, "staff");
     }
 
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();

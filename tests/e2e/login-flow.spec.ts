@@ -9,12 +9,22 @@ import { routeApi, setupAnonymousSession } from "./e2e-test-helpers.js";
 test.describe("Login Flow", () => {
     test.beforeEach(async ({ page }) => {
         await routeApi(page);
-        // Override with anonymous session so the login dialog appears.
+        // Override with an anonymous session, which starts the app as a demo.
         await setupAnonymousSession(page);
     });
 
-    test("login dialog appears on first visit with splash screen visible", async ({ page }) => {
+    test("opens a demo on the first visit instead of asking for a login", async ({ page }) => {
         await page.goto("/");
+
+        await expect(page.locator("#appRoot")).toBeVisible();
+        await expect(page.locator("#demoScoresButton")).toBeVisible();
+        await expect(page.locator("#signInButton")).toBeVisible();
+        await expect(page.locator("#loginDialog")).not.toBeVisible();
+    });
+
+    test("signing in opens the login dialog over the splash screen", async ({ page }) => {
+        await page.goto("/");
+        await page.locator("#signInButton").click();
 
         const splash = page.locator("#splashScreen");
         await expect(splash).toBeVisible();
@@ -41,18 +51,14 @@ test.describe("Login Flow", () => {
         await expect(loginDialog.locator("#login-button-login")).toHaveText("Log In");
     });
 
-    test("splash screen fades out after continuing anonymously", async ({ page }) => {
+    test("cancelling the login keeps the demo running", async ({ page }) => {
         await page.goto("/");
-
-        const splash = page.locator("#splashScreen");
-        await expect(splash).toBeVisible();
-        await expect(splash).toHaveClass(/splash-visible/);
-
+        await page.locator("#signInButton").click();
         await page.locator("#login-button-anonymous").click();
 
-        // Splash should fade out — class removed, opacity animating to 0.
-        await expect(splash).not.toHaveClass(/splash-visible/);
-        await expect(page.locator("#appRoot")).toBeVisible();
+        await expect(page.locator("#loginDialog")).not.toBeVisible();
+        await expect(page.locator("#splashScreen")).not.toHaveClass(/splash-visible/);
+        await expect(page.locator("#demoScoresButton")).toBeVisible();
     });
 
     test("successful login closes dialog and shows app", async ({ page }) => {
@@ -72,6 +78,7 @@ test.describe("Login Flow", () => {
         });
 
         await page.goto("/");
+        await page.locator("#signInButton").click();
 
         const loginDialog = page.locator("#loginDialog");
         await expect(loginDialog).toBeVisible();
@@ -81,6 +88,8 @@ test.describe("Login Flow", () => {
 
         await expect(page.locator("#loginDialog")).not.toBeVisible();
         await expect(page.locator("#appRoot")).toBeVisible();
+        await expect(page.locator("#userMenu")).toBeVisible();
+        await expect(page.locator("#signInButton")).toHaveCount(0);
     });
 
     test("failed login shows error message", async ({ page }) => {
@@ -93,6 +102,7 @@ test.describe("Login Flow", () => {
         });
 
         await page.goto("/");
+        await page.locator("#signInButton").click();
 
         const loginDialog = page.locator("#loginDialog");
         await expect(loginDialog).toBeVisible();

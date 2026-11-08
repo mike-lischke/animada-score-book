@@ -11,6 +11,10 @@
     },
     "soundLibPath": "public/sounds",
     "registrationEnabled": false,
+    "demoScoreIds": [
+        10005,
+        10004
+    ],
     "allowedOrigins": [],
     "trustProxy": false
 }

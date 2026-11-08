@@ -514,8 +514,6 @@ export class AuthRoutes {
             defaultGroupId = agResult.insertId;
         }
 
-        const worldId = await this.ctx.auth.getWorldGroupId();
-
         const orphanFolders = await this.ctx.auth.adapter.query<{ id: number; }>(
             `SELECT f.id FROM folders f
          WHERE NOT EXISTS (
@@ -526,10 +524,6 @@ export class AuthRoutes {
 
         for (const f of orphanFolders) {
             await this.ctx.auth.setOwner(EntityType.Folder, f.id, result.insertId);
-
-            if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, worldId, false);
-            }
 
             if (defaultGroupId) {
                 await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, defaultGroupId, false);
@@ -546,10 +540,6 @@ export class AuthRoutes {
 
         for (const s of orphanScores) {
             await this.ctx.auth.setOwner(EntityType.Score, s.id, result.insertId);
-
-            if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup(EntityType.Score, s.id, worldId, false);
-            }
 
             if (defaultGroupId) {
                 await this.ctx.auth.addEntityGroup(EntityType.Score, s.id, defaultGroupId, false);

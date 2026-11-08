@@ -177,6 +177,12 @@ export class AppStorage {
         "viewSettings",
     ]);
 
+    /** Local storage key for the record a demo keeps: the score it edits, and nothing else. */
+    static #demoScoreKey = "asb-demo-score";
+
+    /** Whether the page runs as a demo, which neither reads nor writes any settings. */
+    static #demoActive = false;
+
     /** Active session identifier used for session-scoped storage keys. */
     static #sessionId = "";
 
@@ -219,6 +225,128 @@ export class AppStorage {
     }
 
     /**
+     * Switches storage to demo behaviour: no setting is read or written any more, and the current score lives in a
+     * record of its own. Call it once, before the first read.
+     */
+    public static useDemoStorage(): void {
+        this.#demoActive = true;
+    }
+
+    /**
+     * Switches storage to session behaviour again, after a demo established a session.
+     */
+    public static useSessionStorage(): void {
+        this.#demoActive = false;
+    }
+
+    /**
+     * @returns Whether the page runs as a demo.
+     */
+    public static get isDemoMode(): boolean {
+        return this.#demoActive;
+    }
+
+    /**
+     * Stores the current score where the running mode keeps it: in the session record normally, in the demo record
+     * during a demo.
+     *
+     * @param packed The packed arrangement snapshot.
+     */
+    public static saveCurrentScore(packed: string): void {
+        if (!this.#demoActive) {
+            this.saveSetting("currentScore", packed);
+
+            return;
+        }
+
+        if (!this.#hasLocalStorage) {
+            return;
+        }
+
+        localStorage.setItem(this.#demoScoreKey, JSON.stringify({ version: 1, score: packed }));
+    }
+
+    /**
+     * @returns The packed snapshot of the score the running mode kept, if one was stored.
+     */
+    public static loadCurrentScore(): string | undefined {
+        if (!this.#demoActive) {
+            return this.loadUISettings()?.currentScore;
+        }
+
+        if (!this.#hasLocalStorage) {
+            return undefined;
+        }
+
+        const raw = localStorage.getItem(this.#demoScoreKey);
+        if (raw === null) {
+            return undefined;
+        }
+
+        try {
+            return AppStorage.#parseDemoScoreRecord(raw);
+        } catch (error) {
+            // A record that cannot be read is dropped, so the next start begins with a fresh demo.
+            console.error("The stored demo score is not readable and is dropped.", error);
+            localStorage.removeItem(this.#demoScoreKey);
+
+            return undefined;
+        }
+    }
+
+    /**
+     * Hands the demo score over and removes its record, so a login carries it over exactly once.
+     *
+     * @returns The packed snapshot of the demo score, if a record was stored.
+     */
+    public static takeDemoScore(): string | undefined {
+        if (!this.#hasLocalStorage) {
+            return undefined;
+        }
+
+        const raw = localStorage.getItem(this.#demoScoreKey);
+        if (raw === null) {
+            return undefined;
+        }
+
+        localStorage.removeItem(this.#demoScoreKey);
+
+        try {
+            return AppStorage.#parseDemoScoreRecord(raw);
+        } catch (error) {
+            console.error("The stored demo score is not readable and is dropped.", error);
+
+            return undefined;
+        }
+    }
+
+    /**
+     * @param raw The stored demo record.
+     *
+     * @returns The packed snapshot the record holds, if it holds one.
+     */
+    static #parseDemoScoreRecord(raw: string): string | undefined {
+        const record = JSON.parse(raw) as { score?: unknown; };
+
+        return typeof record.score === "string" ? record.score : undefined;
+    }
+
+    /**
+     * Drops the stored score of the running mode.
+     */
+    public static clearCurrentScore(): void {
+        if (!this.#demoActive) {
+            this.saveSetting("currentScore", undefined);
+
+            return;
+        }
+
+        if (this.#hasLocalStorage) {
+            localStorage.removeItem(this.#demoScoreKey);
+        }
+    }
+
+    /**
      * Starts a new storage session or switches to a desired existing session id.
      *
      * @param desiredSessionId Optional explicit session id to activate.
@@ -243,6 +371,11 @@ export class AppStorage {
      * @param settings The UI settings object to persist.
      */
     public static saveUISettings(settings: IUISettings): void {
+        if (this.#demoActive) {
+            // A demo keeps no settings, so every write path ends here.
+            return;
+        }
+
         if (!this.#hasLocalStorage) {
             console.warn("LocalStorage is not available. UI settings cannot be saved.");
 
@@ -265,6 +398,11 @@ export class AppStorage {
      * @returns The merged settings object, or null if nothing is stored.
      */
     public static loadUISettings(): IUISettings | null {
+        if (this.#demoActive) {
+            // A demo runs on fixed defaults and reads nothing that a session stored.
+            return null;
+        }
+
         if (!this.#hasLocalStorage) {
             console.warn("LocalStorage is not available. UI settings cannot be loaded.");
 
@@ -288,7 +426,7 @@ export class AppStorage {
      * Clears persisted UI settings for both global and active session scopes.
      */
     public static clearUISettings(): void {
-        if (!this.#hasLocalStorage) {
+        if (this.#demoActive || !this.#hasLocalStorage) {
             return;
         }
 
@@ -304,6 +442,10 @@ export class AppStorage {
      * @param value The new value. Use undefined to remove the key.
      */
     public static saveSetting<T extends keyof IUISettings>(key: T, value: IUISettings[T]): void {
+        if (this.#demoActive) {
+            return;
+        }
+
         const settings = this.loadUISettings() ?? {};
         if (value === undefined) {
             delete settings[key];

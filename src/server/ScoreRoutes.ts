@@ -124,9 +124,11 @@ export class ScoreRoutes {
         }
 
         const score = rows[0];
+        const isDemoScore = this.ctx.config.demoScoreIds.includes(score.id as number);
         const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, score.id as number);
 
-        if (!summary.canRead) {
+        // A curated demo score is readable without a session, whatever the permission rows say.
+        if (!summary.canRead && !isDemoScore) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
@@ -145,6 +147,34 @@ export class ScoreRoutes {
                 groupIds: summary.groupIds,
             },
         });
+    };
+
+    /**
+     * Lists the scores a demo may offer without a session. The answer is the same for every caller, so no session
+     * can widen or narrow the catalog.
+     *
+     * @param req The incoming HTTP request.
+     * @param res The response to write to.
+     */
+    public async handleListDemoScores(req: IncomingMessage, res: ServerResponse) {
+        const { demoScoreIds } = this.ctx.config;
+
+        if (demoScoreIds.length === 0) {
+            this.ctx.sendJson(res, { scores: [] });
+
+            return;
+        }
+
+        const placeholders = demoScoreIds.map(() => {
+            return "?";
+        }).join(", ");
+
+        const rows = await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
+            `SELECT id, name FROM scores WHERE id IN (${placeholders}) ORDER BY name`,
+            demoScoreIds,
+        );
+
+        this.ctx.sendJson(res, { scores: rows });
     };
 
     public async handleResetChildPermissions(req: IncomingMessage, res: ServerResponse) {
@@ -249,13 +279,8 @@ export class ScoreRoutes {
         );
 
         if (user && (parentId === null || parentId === -1)) {
+            // A new entry is private: sharing it is a deliberate act, so nothing is granted to World here.
             await this.ctx.auth.setOwner(EntityType.Folder, result.insertId, user.userId);
-
-            const worldId = await this.ctx.auth.getWorldGroupId();
-
-            if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup(EntityType.Folder, result.insertId, worldId, false);
-            }
         }
 
         this.ctx.sendJson(res, { success: true, id: result.insertId });
@@ -294,13 +319,8 @@ export class ScoreRoutes {
         );
 
         if (user && (folderId === null || folderId === -1)) {
+            // A new entry is private: sharing it is a deliberate act, so nothing is granted to World here.
             await this.ctx.auth.setOwner(EntityType.Score, result.insertId, user.userId);
-
-            const worldId = await this.ctx.auth.getWorldGroupId();
-
-            if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup(EntityType.Score, result.insertId, worldId, false);
-            }
         }
 
         this.ctx.sendJson(res, { success: true, id: result.insertId });
