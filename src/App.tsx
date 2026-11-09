@@ -256,6 +256,9 @@ export class App extends UIComponent<{}, IAppState> {
     /** True while a sign-out hands the visitor over to the website, so no dialog of this installation opens. */
     private leavingForWebsite = false;
 
+    /** True while an explicit sign-out runs, whose own dialog must not be opened a second time. */
+    private signingOut = false;
+
     /** The curated scores a demo offers instead of the score library. */
     private demoScores: IDemoScoreEntry[] = [];
 
@@ -1138,18 +1141,27 @@ export class App extends UIComponent<{}, IAppState> {
     private handleAuthChanged = (): Promise<boolean> => {
         const { phase } = this.state;
 
-        if (this.leavingForWebsite) {
-            // The visitor is on the way to the website's sign-in, so no dialog of this installation may appear.
+        if (this.leavingForWebsite || this.signingOut) {
+            // The visitor is on the way to a sign-in, so no dialog of this installation may appear.
             return Promise.resolve(true);
         }
 
-        if (!this.dataModel.authenticated && phase === AppPhase.Running) {
+        if (!this.dataModel.authenticated && phase === AppPhase.Running && this.mode === AppMode.Normal) {
+            if (this.siteOrigin !== undefined) {
+                // The website owns the account, so a session that ended continues as a demo instead of asking again.
+                void this.continueInDemoMode();
+
+                return Promise.resolve(true);
+            }
+
             this.setState({ phase: AppPhase.Login }, () => {
-                void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+                void this.loginDialogRef.current?.show(true).then(this.handleLoginDialogResult);
             });
-        } else {
-            this.forceUpdate();
+
+            return Promise.resolve(true);
         }
+
+        this.forceUpdate();
 
         return Promise.resolve(true);
     };
@@ -1238,6 +1250,24 @@ export class App extends UIComponent<{}, IAppState> {
 
         void this.initializeApp();
     };
+
+    /**
+     * Continues a session that has ended as a demo: the score stays on screen, its storage moves to the demo
+     * record and nothing is written to the session records any more.
+     */
+    private async continueInDemoMode(): Promise<void> {
+        this.mode = AppMode.Demo;
+        AppStorage.useDemoStorage();
+
+        const [, catalog] = await Promise.all([
+            this.dataModel.loadAnonymousState(),
+            this.dataModel.listDemoScores(),
+        ]);
+
+        this.demoScores = catalog;
+        this.forceUpdate();
+        void requisitions.execute("showInfo", "Your session has ended. You continue in demo mode.");
+    }
 
     /**
      * Moves an edited demo score into the session that was just established, so the work survives the login. The
@@ -1514,6 +1544,7 @@ export class App extends UIComponent<{}, IAppState> {
     private handleLogoutClick = async () => {
         // Signing out of an installation that was entered from the website returns to its login page.
         this.leavingForWebsite = this.siteOrigin !== undefined;
+        this.signingOut = true;
 
         await this.dataModel.logout();
         this.dataModel.reset();
@@ -1533,6 +1564,7 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
+        this.signingOut = false;
         this.setState({ phase: AppPhase.Login }, () => {
             // After a logout the visitor continues anonymously instead of being forced back in.
             void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);

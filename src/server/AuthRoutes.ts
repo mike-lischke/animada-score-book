@@ -120,8 +120,13 @@ export class AuthRoutes {
             return;
         }
 
-        // Every attempt counts, so one client cannot create accounts in a loop.
-        this.ctx.recordFailedAttempt(rlKey);
+        // Every attempt counts, so one client cannot create accounts in a loop. The attempt that reaches the
+        // threshold is answered as blocked.
+        if (this.ctx.recordFailedAttempt(rlKey)) {
+            this.ctx.sendError(res, "Too many attempts. Try again later.", 429);
+
+            return;
+        }
 
         const body = await this.ctx.readJsonBody(req);
         const username = String(body.username ?? "").trim();

@@ -9,7 +9,13 @@ import { Auth, type ITokenPayload } from "./Auth.js";
 import { type IServerConfig } from "./config.js";
 
 interface IRateLimitEntry {
+    /** Attempts counted since the window opened. */
     failures: number;
+
+    /** When the counting window opened, which is when its first attempt was recorded. */
+    since: number;
+
+    /** When the block ends, or zero while the key is not blocked. */
     blockedUntil: number;
 }
 
@@ -299,37 +305,48 @@ export class RequestContext {
         const now = Date.now();
         const entry = RequestContext.rateLimitMap.get(key);
 
-        if (entry) {
-            if (now < entry.blockedUntil) {
-                return true;
-            }
+        if (!entry) {
+            return false;
+        }
 
-            if (now >= entry.blockedUntil + RequestContext.blockDuration) {
-                RequestContext.rateLimitMap.delete(key);
-            }
+        if (now < entry.blockedUntil) {
+            return true;
+        }
+
+        // Attempts older than the block duration no longer count, and a block set inside that window has run out.
+        if (now >= entry.since + RequestContext.blockDuration) {
+            RequestContext.rateLimitMap.delete(key);
         }
 
         return false;
     };
 
     /**
-     * Records a failed attempt for a key. Blocks the key if the threshold is reached.
+     * Records an attempt for a key. The attempt that reaches the threshold starts the block.
      *
      * @param key The rate-limit key.
+     *
+     * @returns Whether this attempt started a block.
      */
-    public recordFailedAttempt(key: string): void {
+    public recordFailedAttempt(key: string): boolean {
         const now = Date.now();
         const entry = RequestContext.rateLimitMap.get(key);
 
-        if (entry) {
-            entry.failures += 1;
+        if (!entry) {
+            RequestContext.rateLimitMap.set(key, { failures: 1, since: now, blockedUntil: 0 });
 
-            if (entry.failures >= RequestContext.maxFailures) {
-                entry.blockedUntil = now + RequestContext.blockDuration;
-            }
-        } else {
-            RequestContext.rateLimitMap.set(key, { failures: 1, blockedUntil: 0 });
+            return false;
         }
+
+        entry.failures += 1;
+
+        if (entry.failures < RequestContext.maxFailures) {
+            return false;
+        }
+
+        entry.blockedUntil = now + RequestContext.blockDuration;
+
+        return true;
     };
 
     /**
@@ -361,7 +378,8 @@ export class RequestContext {
             const now = Date.now();
 
             for (const [key, entry] of RequestContext.rateLimitMap) {
-                if (now >= entry.blockedUntil + RequestContext.blockDuration) {
+                // An entry is dropped once it neither blocks nor counts any more.
+                if (now >= entry.blockedUntil && now >= entry.since + RequestContext.blockDuration) {
                     RequestContext.rateLimitMap.delete(key);
                 }
             }
