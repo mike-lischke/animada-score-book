@@ -647,6 +647,19 @@ export class BananaDrumMigrator {
         };
     }
 
+    private static getNoteGridPosition(note: BananaDrumNote, stepsPerBar: number, afterNote = false): number {
+        const polyrhythm = note.polyrhythm;
+        if (!polyrhythm) {
+            return ((note.timing.bar - 1) * stepsPerBar) + note.timing.step + Number(afterNote);
+        }
+
+        const start = BananaDrumMigrator.getNoteGridPosition(polyrhythm.start, stepsPerBar);
+        const end = BananaDrumMigrator.getNoteGridPosition(polyrhythm.end, stepsPerBar, true);
+        const slot = note.timing.step + Number(afterNote);
+
+        return start + (slot * (end - start) / polyrhythm.length);
+    }
+
     private static collectMeasureSubdivisions(visibleNotes: BananaDrumNote[], noteCursor: number,
         measureNumber: number, stepsPerBar: number): IBananaDrumSubdivision[] {
         const subdivisions: IBananaDrumSubdivision[] = [];
@@ -688,8 +701,8 @@ export class BananaDrumMigrator {
                 notesInMeasure = pr.length;
                 hasMore = false;
             } else {
-                const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
-                const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
+                const prStartStep = BananaDrumMigrator.getNoteGridPosition(pr.start, stepsPerBar);
+                const prEndStep = BananaDrumMigrator.getNoteGridPosition(pr.end, stepsPerBar, true) - 1;
 
                 const overlapStart = Math.max(prStartStep, measureBaseStart);
                 const overlapEnd = Math.min(prEndStep, measureBaseEnd);
@@ -802,12 +815,7 @@ export class BananaDrumMigrator {
                     continue;
                 }
 
-                const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
-                const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
-                const totalNormal = prEndStep - prStartStep + 1;
-
-                const noteIndex = pr.notes.indexOf(note);
-                const pos = prStartStep + (noteIndex * totalNormal / pr.length);
+                const pos = BananaDrumMigrator.getNoteGridPosition(note, stepsPerBar);
 
                 if (pos >= barEnd) {
                     break;

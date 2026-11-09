@@ -189,6 +189,72 @@ describe("BananaDrumMigrator - migration to the current schema", () => {
         expect(events[3].duration).toEqual({ numerator: 1, denominator: 8 });
     });
 
+    it.each([
+        {
+            actual: 3,
+            normal: 4,
+            previousEnd: 19,
+            replacementEnd: 19,
+            starts: [
+                { numerator: 0, denominator: 1 },
+                { numerator: 1, denominator: 12 },
+                { numerator: 1, denominator: 6 },
+            ],
+        },
+        {
+            actual: 6,
+            normal: 8,
+            previousEnd: 23,
+            replacementEnd: 22,
+            starts: [
+                { numerator: 0, denominator: 1 },
+                { numerator: 1, denominator: 12 },
+                { numerator: 1, denominator: 6 },
+                { numerator: 1, denominator: 4 },
+                { numerator: 1, denominator: 3 },
+                { numerator: 5, denominator: 12 },
+            ],
+        },
+    ])("imports a $actual:$normal tuplet ending inside a previously inserted tuplet", (testCase) => {
+        const { actual, normal, previousEnd, replacementEnd, starts } = testCase;
+        const notes = Array.from({ length: 32 - normal + actual }, () => {
+            return "x";
+        });
+        const snapshot = shareLink("4/4", 16, notes, [
+            { id: 1, start: 17, end: previousEnd, length: actual },
+            { id: 2, start: 16, end: replacementEnd, length: actual },
+        ]);
+        snapshot.timeParams.length = 2;
+
+        const migrated = BananaDrumMigrator.toSnapshot(snapshot, []);
+        const measures = migrated.tracks[0].measures;
+        expect(measures).toHaveLength(2);
+        expect(measures[0].subdivisions).toEqual([]);
+        expect(measures[0].events).toHaveLength(16);
+        measures[0].events.forEach((event, index) => {
+            expect(event.start.numerator * 16).toBe(index * event.start.denominator);
+            expect(event.duration).toEqual({ numerator: 1, denominator: 16 });
+            expect(event.noteStyleId).toBe("x");
+        });
+
+        const measure = measures[1];
+        expect(measure.subdivisions).toEqual([{ startIndex: 0, actual, normal, isTuplet: true }]);
+        expect(measure.events).toHaveLength(16 - normal + actual);
+        starts.forEach((start, index) => {
+            expect(measure.events[index]).toMatchObject({
+                start,
+                duration: { numerator: 1, denominator: 12 },
+                noteStyleId: "x",
+            });
+        });
+
+        measure.events.slice(actual).forEach((event, index) => {
+            expect(event.start.numerator * 16).toBe((normal + index) * event.start.denominator);
+            expect(event.duration).toEqual({ numerator: 1, denominator: 16 });
+            expect(event.noteStyleId).toBe("x");
+        });
+    });
+
     it("keeps a rest inside a subdivision as an independent event", () => {
         const notes = Array.from({ length: 9 }, () => {
             return "x";
