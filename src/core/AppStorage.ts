@@ -186,6 +186,9 @@ export class AppStorage {
     /** Active session identifier used for session-scoped storage keys. */
     static #sessionId = "";
 
+    /** Whether the tab's session has been resolved and recorded. */
+    static #sessionReady = false;
+
     /**
      * Whether localStorage is available and writable in the current environment.
      * This check is done once at class initialization time.
@@ -193,19 +196,6 @@ export class AppStorage {
     static #hasLocalStorage: boolean = AppStorage.#openStorage(() => {
         return window.localStorage;
     }) !== undefined;
-
-    static {
-        if (this.#hasLocalStorage) {
-            // Remove legacy global session id key from old implementations.
-            localStorage.removeItem(this.#sessionStorageKey);
-            this.#sessionId = this.#resolveInitialSessionId();
-            this.#persistSessionId();
-            this.#touchSession(this.#sessionId);
-            this.#cleanupSessions();
-        } else {
-            this.#sessionId = uuid();
-        }
-    }
 
     /**
      * @returns Whether the browser stores settings for this page. A denied storage leaves the app working, but
@@ -216,11 +206,14 @@ export class AppStorage {
     }
 
     /**
-     * The current storage session identifier.
+     * The current storage session identifier. Reading it resolves the tab's session on first use, because a page
+     * that turns out to be a demo never asks for it and therefore leaves no record behind.
      *
      * @returns The active session id used for session-scoped settings.
      */
     public static get sessionId(): string {
+        this.#ensureSession();
+
         return this.#sessionId;
     }
 
@@ -352,6 +345,8 @@ export class AppStorage {
      * @param desiredSessionId Optional explicit session id to activate.
      */
     public static resetSession(desiredSessionId?: string): void {
+        this.#ensureSession();
+
         if (!this.#hasLocalStorage) {
             // Without storage there is no stored id to collide with, so a plain one is enough.
             this.#sessionId = desiredSessionId ?? uuid();
@@ -382,6 +377,8 @@ export class AppStorage {
             return;
         }
 
+        this.#ensureSession();
+
         const globalSettings = this.#pickSettings(settings, false);
         const sessionSettings = this.#pickSettings(settings, true);
 
@@ -409,6 +406,8 @@ export class AppStorage {
             return null;
         }
 
+        this.#ensureSession();
+
         const globalSettings = this.#loadSettingsByKey(this.#settingsKey);
         const sessionSettings = this.#loadSessionSettings(globalSettings);
 
@@ -429,6 +428,8 @@ export class AppStorage {
         if (this.#demoActive || !this.#hasLocalStorage) {
             return;
         }
+
+        this.#ensureSession();
 
         localStorage.removeItem(this.#settingsKey);
         localStorage.removeItem(this.#getSessionSettingsKey());
@@ -454,6 +455,31 @@ export class AppStorage {
         }
 
         this.saveUISettings(settings);
+    }
+
+    /**
+     * Resolves the tab's session once: the legacy key is dropped, the session id is taken over or cloned from the
+     * latest one, and the session is recorded. Only session-mode access calls this, so a demo writes nothing.
+     */
+    static #ensureSession(): void {
+        if (this.#sessionReady) {
+            return;
+        }
+
+        this.#sessionReady = true;
+
+        if (!this.#hasLocalStorage) {
+            this.#sessionId = uuid();
+
+            return;
+        }
+
+        // Remove legacy global session id key from old implementations.
+        localStorage.removeItem(this.#sessionStorageKey);
+        this.#sessionId = this.#resolveInitialSessionId();
+        this.#persistSessionId();
+        this.#touchSession(this.#sessionId);
+        this.#cleanupSessions();
     }
 
     /**

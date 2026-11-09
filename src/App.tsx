@@ -273,13 +273,12 @@ export class App extends UIComponent<{}, IAppState> {
             editMode: false,
             zenMode: false,
             sidebarOpen: false,
-            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
-                ?? TrackViewMode.Grid,
-            preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
+            trackViewMode: TrackViewMode.Grid,
+            preferredEntryMode: EditEntryMode.Insert,
             printing: false,
             printPreviewOpen: false,
             notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
-            zoom: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100,
+            zoom: 100,
             compactHeader: this.compactHeaderQuery.matches,
             compactLayout: this.compactLayoutQuery.matches,
             scoreSaved: false,
@@ -293,7 +292,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentDidMount() {
-        this.selectedThemePreference = AppStorage.loadUISettings()?.theme ?? "Light+";
+        // The document starts with the default theme; what a session stored follows once its mode is known.
         this.applyThemePreference(this.selectedThemePreference);
         this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
         for (const query of this.compactQueries) {
@@ -1112,6 +1111,8 @@ export class App extends UIComponent<{}, IAppState> {
 
         if (sessionRestored) {
             this.mode = AppMode.Normal;
+            AppStorage.useSessionStorage();
+            this.applyStoredSettings();
             this.adoptDemoScore();
             await this.initializeApp();
 
@@ -1213,6 +1214,7 @@ export class App extends UIComponent<{}, IAppState> {
         // The session keeps its settings and its score in the session records again, whether a demo score came
         // along or not.
         AppStorage.useSessionStorage();
+        this.applyStoredSettings();
         this.adoptDemoScore();
 
         void this.initializeApp().then(() => {
@@ -1320,6 +1322,9 @@ export class App extends UIComponent<{}, IAppState> {
                 const sessionRestored = await this.dataModel.restoreSession();
 
                 if (sessionRestored) {
+                    this.mode = AppMode.Normal;
+                    AppStorage.useSessionStorage();
+                    this.applyStoredSettings();
                     await this.initializeApp();
 
                     return;
@@ -1335,6 +1340,25 @@ export class App extends UIComponent<{}, IAppState> {
             // Still not ready.
         }
     };
+
+    /**
+     * Applies what a session stored, once its mode is known. A demo keeps the fixed defaults instead, so nothing
+     * a session kept reaches it.
+     */
+    private applyStoredSettings(): void {
+        const settings = this.mode === AppMode.Demo ? null : AppStorage.loadUISettings();
+        const viewSettings = settings?.viewSettings?.arrangementViewSettings;
+        const trackViewMode = viewSettings?.displayMode ?? TrackViewMode.Grid;
+        const preferredEntryMode = settings?.entryMode ?? EditEntryMode.Insert;
+
+        this.applyThemePreference(settings?.theme);
+        this.selectionManager.applyPersistedModes(preferredEntryMode, trackViewMode);
+        this.setState({
+            trackViewMode,
+            preferredEntryMode,
+            zoom: viewSettings?.zoomLevel ?? 100,
+        });
+    }
 
     private async initializeApp(): Promise<void> {
         // The score is drawn with the music font from its first paint on, so the font loads next to the data.
@@ -1363,7 +1387,13 @@ export class App extends UIComponent<{}, IAppState> {
     private async loadDemoCatalog(params: URLSearchParams): Promise<void> {
         this.demoScores = await this.dataModel.listDemoScores();
 
-        const hasStoredScore = AppStorage.loadCurrentScore() !== undefined;
+        const stored = AppStorage.loadCurrentScore();
+        const hasStoredScore = stored !== undefined && tryParsePackedArrangement(stored) !== undefined;
+        if (stored !== undefined && !hasStoredScore) {
+            // A snapshot this build cannot read is dropped, and the demo starts with its catalog as on a first start.
+            AppStorage.clearCurrentScore();
+        }
+
         const hasScoreLink = params.get("score") !== null;
 
         if (!hasStoredScore && !hasScoreLink) {
@@ -1421,7 +1451,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     /**
-     * @returns The menu entries of the curated demo scores.
+     * @returns The menu entries of the curated demo scores, followed by the one import a demo offers.
      */
     private buildDemoMenuItems(): IDropdownItem[] {
         const items: IDropdownItem[] = this.demoScores.map((entry) => {
@@ -1438,7 +1468,67 @@ export class App extends UIComponent<{}, IAppState> {
             items.push({ label: "No demo scores available" });
         }
 
+        items.push({
+            label: "Import BananaDrum Song…",
+            icon: <Icon src={UIIcon.CloudDownload} />,
+            onClick: () => {
+                void this.importBananaDrumSong();
+            },
+        });
+
         return items;
+    }
+
+    /**
+     * Loads a BananaDrum song from a pasted link. It is the only import a demo offers, and it replaces the demo's
+     * score without touching the library.
+     */
+    private async importBananaDrumSong(): Promise<void> {
+        const result = await this.valueDialogRef.current?.show(
+            "bananaDrumImportDialog",
+            "Import BananaDrum Song",
+            UIIcon.CloudDownload,
+            [{
+                type: ValueEditorEntryType.Title,
+                id: "bananaDrumImportDescription",
+                content: "Score URL:",
+                displayWidth: 2,
+            },
+            {
+                type: ValueEditorEntryType.Value,
+                id: "bananaDrumImportUrl",
+                content: "",
+                placeholder: "https://<host-name>/?a2=...",
+                displayWidth: 6,
+            }],
+        );
+
+        if (result?.closure !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        const entered = (result.data.bananaDrumImportUrl as IValueEditorValueEntry).content;
+        const link = typeof entered === "string" ? entered.trim() : "";
+        if (link === "") {
+            return;
+        }
+
+        let params: URLSearchParams;
+        try {
+            params = new URL(link).searchParams;
+        } catch {
+            void requisitions.execute("showError", "This is not a valid link.");
+
+            return;
+        }
+
+        if (!params.has("a") && !params.has("a2")) {
+            void requisitions.execute("showError", "The link holds no BananaDrum song.");
+
+            return;
+        }
+
+        this.loadScorebook(params);
     }
 
     private async loadInitialScore(params: URLSearchParams): Promise<void> {
