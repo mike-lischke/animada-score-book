@@ -1,6 +1,6 @@
 # Handbook Images
 
-Shared visual assets for the English handbook, the README, and the published website. Screenshots are captured from the running application, never drawn or mocked.
+Shared visual assets for the English handbook, the README, and the published edition. Screenshots are captured from the running application, never drawn or mocked.
 
 ## Directory Layout
 

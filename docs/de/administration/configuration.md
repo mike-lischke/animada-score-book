@@ -4,19 +4,21 @@ Das Backend liest eine Datei, `backend-config.json`, aus dem Verzeichnis, in dem
 
 ## Die Konfigurationsdatei
 
-| Schlüssel           | Standard        | Wirkung                                                                                |
-| ------------------- | --------------- | -------------------------------------------------------------------------------------- |
-| `host`              | `0.0.0.0`       | Interface, an dem der Prozess lauscht                                                  |
-| `port`              | `3100`          | Port, an dem er lauscht                                                                |
-| `database.engine`   | `mysql`         | Eines von `mysql`, `mariadb`, `postgres`                                               |
-| `database.host`     | leer            | Datenbankserver                                                                        |
-| `database.port`     | `0`             | Datenbankport; ausdrücklich setzen (`3306` für MySQL/MariaDB, `5432` für PostgreSQL)   |
-| `database.database` | leer            | Datenbankname                                                                          |
-| `database.user`     | leer            | Datenbankkonto                                                                         |
-| `database.password` | leer            | Passwort dieses Kontos                                                                 |
-| `soundLibPath`      | `public/sounds` | Verzeichnis, das als Klangbibliothek ausgeliefert wird, relativ zum Arbeitsverzeichnis |
-| `allowedOrigins`    | keiner          | Origins, die CORS-Header erhalten                                                      |
-| `trustProxy`        | `false`         | Ob weitergeleiteten Headern eines Proxys getraut wird                                  |
+| Schlüssel              | Standard        | Wirkung                                                                                |
+| ---------------------- | --------------- | -------------------------------------------------------------------------------------- |
+| `host`                 | `0.0.0.0`       | Interface, an dem der Prozess lauscht                                                  |
+| `port`                 | `3100`          | Port, an dem er lauscht                                                                |
+| `database.engine`      | `mysql`         | Eines von `mysql`, `mariadb`, `postgres`                                               |
+| `database.host`        | leer            | Datenbankserver                                                                        |
+| `database.port`        | `0`             | Datenbankport; ausdrücklich setzen (`3306` für MySQL/MariaDB, `5432` für PostgreSQL)   |
+| `database.database`    | leer            | Datenbankname                                                                          |
+| `database.user`        | leer            | Datenbankkonto                                                                         |
+| `database.password`    | leer            | Passwort dieses Kontos                                                                 |
+| `soundLibPath`         | `public/sounds` | Verzeichnis, das als Klangbibliothek ausgeliefert wird, relativ zum Arbeitsverzeichnis |
+| `allowedOrigins`       | keiner          | Origins, die CORS-Header erhalten                                                      |
+| `trustProxy`           | `false`         | Ob weitergeleiteten Headern eines Proxys getraut wird                                  |
+| `registration.enabled` | `false`         | Ob `?action=register` Konten anlegen darf                                              |
+| `demo.scoreIds`        | leer            | Partituren, die eine Demo ohne Sitzung öffnen darf, in der Reihenfolge des Headers     |
 
 Die Beispieldatei `backend-config.example.json` im Paket listet alle mit diesen Standardwerten. Kopiere sie und passe den Datenbankblock an; das [Installationskapitel](installation.md) zeigt eine minimale Konfiguration.
 
@@ -26,19 +28,32 @@ Der Installationsdialog im Browser zeigt diese Werte nur an. Sie zu ändern bede
 
 Alle Werte außer `soundLibPath` lassen sich aus der Umgebung überschreiben. Die Umgebung gewinnt gegen die Datei, und nicht gesetzte Variablen fallen auf die Datei und dann auf den Standard zurück.
 
-| Variable          | Überschreibt        | Hinweise                                                    |
-| ----------------- | ------------------- | ----------------------------------------------------------- |
-| `HOST`            | `host`              | Zu bindendes Interface                                      |
-| `PORT`            | `port`              | Port, als Zahl                                              |
-| `ALLOWED_ORIGINS` | `allowedOrigins`    | Kommagetrennte Liste, umgebende Leerzeichen werden entfernt |
-| `TRUST_PROXY`     | `trustProxy`        | Nur der Wert `true` aktiviert es                            |
-| `DB_ENGINE`       | `database.engine`   | Ignoriert, wenn es keiner der drei bekannten Engines ist    |
-| `DB_HOST`         | `database.host`     |                                                             |
-| `DB_PORT`         | `database.port`     | Als Zahl                                                    |
-| `DB_NAME`         | `database.database` |                                                             |
-| `DB_USER`         | `database.user`     |                                                             |
-| `DB_PASSWORD`     | `database.password` |                                                             |
-| `JWT_SECRET`      | —                   | Erforderlich; siehe unten                                   |
+| Variable               | Überschreibt           | Hinweise                                                         |
+| ---------------------- | ---------------------- | ---------------------------------------------------------------- |
+| `HOST`                 | `host`                 | Zu bindendes Interface                                           |
+| `PORT`                 | `port`                 | Port, als Zahl                                                   |
+| `ALLOWED_ORIGINS`      | `allowedOrigins`       | Kommagetrennte Liste, umgebende Leerzeichen werden entfernt      |
+| `TRUST_PROXY`          | `trustProxy`           | Nur der Wert `true` aktiviert es                                 |
+| `DB_ENGINE`            | `database.engine`      | Ignoriert, wenn es keiner der drei bekannten Engines ist         |
+| `DB_HOST`              | `database.host`        |                                                                  |
+| `DB_PORT`              | `database.port`        | Als Zahl                                                         |
+| `DB_NAME`              | `database.database`    |                                                                  |
+| `DB_USER`              | `database.user`        |                                                                  |
+| `DB_PASSWORD`          | `database.password`    |                                                                  |
+| `REGISTRATION_ENABLED` | `registration.enabled` | Nur der Wert `true` öffnet die Registrierung                     |
+| `DEMO_SCORE_IDS`       | `demo.scoreIds`        | Kommagetrennte Partitur-IDs; ungültige Einträge werden verworfen |
+| `JWT_SECRET`           | —                      | Erforderlich; siehe unten                                        |
+
+## Registrierung und der Demo-Katalog
+
+Zwei optionale Einstellungen entscheiden, was ein Besucher ohne Sitzung tun darf:
+
+- `registration.enabled` öffnet die öffentliche Aktion `register`, die aus Benutzername und Passwort ein Konto anlegt. Standard ist `false`, und nur der Wert `true` aktiviert sie. Das Beispiel einer kombinierten Auslieferung schaltet sie ein; eine Installation nur der Anwendung bleibt geschlossen, bis ihr Betreiber sie freigibt.
+- `demo.scoreIds` listet die Partituren, die eine Demo öffnen darf, in der Reihenfolge der Auswahlliste im Header. Der erste Eintrag ist das, was ein erster Demo-Start öffnet. Eine leere Liste schaltet den Katalog ab, und eine Demo beginnt dann mit einem leeren Takt.
+
+Eine Demo bietet nur diese Partituren an: `listDemoScores` veröffentlicht ihre IDs und Namen, und `getScore` gewährt ohne Sitzung Lesezugriff auf eine ID aus der Liste, unabhängig von den Berechtigungszeilen. Jede andere Partitur bleibt dort, wohin die Berechtigungen sie stellen, für einen Aufrufer ohne Sitzung also bei den `World`-Freigaben.
+
+Einen Katalog, den es nicht ausliefern kann, benennt der Server: Eine leere Liste erzeugt einen Hinweis beim Start, und konfigurierte IDs ohne passende Partitur werden als fehlend gemeldet.
 
 ## Das JWT-Secret
 

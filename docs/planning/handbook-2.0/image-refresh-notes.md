@@ -17,3 +17,5 @@ Text places are found with a grep for the previous version number across `readme
 The nine captures were re-shot for 2.0.0 on 2026-10-29; the storyboard records the capture status.
 
 **Narrowed to major and minor releases (2026-10-29).** A patch release does not re-capture them: the version digits are the only difference, which does not justify the work. 2.0.1 therefore ships the 2.0.0 captures, and the next re-capture happens with 2.1.0.
+
+**Re-captured for 2.1.0 (2026-11-11).** Footer and release notes carry the new version and its notes; the login and group-login dialogs were re-shot as well, because the second action is now `Demo` instead of `Continue Anonymously`.

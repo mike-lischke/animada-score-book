@@ -121,7 +121,7 @@ Das Backend entscheidet, nicht der Browser:
   Ordners anzulegen.
 - **Eigentum** ergänzt den Editor `Group Access`.
 - **Administratoren** dürfen jeden Eintrag und jede Berechtigung verwalten und entfernen.
-- **Anonyme Besucher** sehen jeden Eintrag der Gruppe `World` und sonst nichts.
+- **Aufrufer ohne Sitzung** sehen jeden Eintrag der Gruppe `World` und sonst nichts. Eine Bibliothek haben sie nicht: Der Header einer Demo bietet stattdessen den kuratierten Katalog an, und nur ein direkter Link `?score=<id>` erreicht eine Partitur, die `World` gewährt.
 
 Bearbeiten braucht keinen Schreibzugriff: Ohne angemeldetes Konto kannst du bei jeder Partitur, die du lesen kannst, den edit mode öffnen, und die Änderungen bleiben in diesem Browser. `Save Score` meldet dann `Sign in to save this score.` Ein angemeldetes Konto ohne Schreibzugriff wird abgewiesen, wenn es den edit mode betreten will, mit `You do not have permission to edit this score.`
 

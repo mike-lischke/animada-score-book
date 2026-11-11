@@ -1,6 +1,6 @@
 # Deine erste Sitzung
 
-Dieses Kapitel führt dich vom `Sign In`-Dialog bis zu einer Partitur (englisch: score), die abgespielt und gespeichert wird.
+Dieses Kapitel führt dich vom ersten Start bis zu einer Partitur (englisch: score), die abgespielt und gespeichert wird.
 
 ## Die Anwendung erreichen
 
@@ -8,18 +8,22 @@ Dieses Kapitel führt dich vom `Sign In`-Dialog bis zu einer Partitur (englisch:
 
 Während der Entwicklung läuft das Frontend separat unter `https://localhost:5173`; [Entwicklungs-Setup](../development/setup.md) beschreibt dieses Setup.
 
-Bei einer frischen Installation fragt die Anwendung zuerst die Datenbankverbindung und danach das erste Administratorkonto ab, bevor der `Sign In`-Dialog erscheint. [Animada Score Book installieren](../administration/installation.md) führt durch beide Schritte.
+Bei einer frischen Installation fragt die Anwendung zuerst die Datenbankverbindung und danach das erste Administratorkonto ab, bevor die Anwendung aufgeht. [Animada Score Book installieren](../administration/installation.md) führt durch beide Schritte.
+
+Ohne Sitzung geht die Anwendung im Demo-Modus auf: Zwischen dem Laden und der Partitur steht kein Dialog. Der Header bietet statt der Score Library den kuratierten Katalog an, und jede Änderung bleibt in diesem Browser. [Demo-Modus](overview.md#demo-modus) beschreibt, was eine Demo kann und was nicht.
 
 Ist das Backend nicht erreichbar, zeigt die Anwendung anstelle der Partitur einen Verbindungsdialog mit einem Zähler für die Verbindungsversuche. [Fehlerbehebung und bekannte Einschränkungen](../troubleshooting.md) erklärt, was zu prüfen ist.
 
 ## Anmelden
 
-Der `Sign In`-Dialog hat zwei Tabs und bis zu zwei Aktionen:
+`Sign In` im Header führt zur `login`-Seite der Seite, die die Anwendung übergeben hat, und das Abmelden führt dorthin zurück. Eine Installation ohne eine solche Seite behält stattdessen den eingebauten Dialog.
+
+Dieser Dialog hat zwei Tabs und zwei Aktionen:
 
 - **User** erwartet einen `Username` und ein `Password` für ein persönliches Konto.
 - **Group** erwartet eine Gruppe aus einer Auswahlliste und das Passwort dieser Gruppe. Nutze diesen Weg, wenn sich mehrere Personen ein Login teilen.
 - **`Log In`** bestätigt beide Formulare.
-- **`Continue Anonymously`** wird angeboten, solange kein Benutzer erforderlich ist. Anonyme Besucher können alle öffentlich lesbaren Partituren durchsuchen und abspielen.
+- **`Demo`** schließt den Dialog und setzt die Demo ohne eigene Sitzung fort. Ein Pflichtdialog, den eine Installation ohne eine solche Seite nach dem Ende einer Sitzung zeigt, bietet nur `Log In` an.
 
 Deine Sitzung bleibt während der Arbeit offen, und das Backend erneuert sie im Hintergrund. Diese Erneuerung nutzt ein sicheres Cookie, weshalb die Installation über HTTPS erreichbar sein muss; siehe [Sicherheitshinweise](../administration/security.md).
 
@@ -27,7 +31,7 @@ Um die Sitzung zu beenden, öffne das Benutzermenü im Header und wähle `Sign O
 
 ![Der Sign In-Dialog im Tab User](../../images/en/getting-started/login.png)
 
-*Der `Sign In`-Dialog: die Tabs `User` und `Group`, die beiden Felder und `Continue Anonymously` neben `Log In`.*
+*Der `Sign In`-Dialog: die Tabs `User` und `Group`, die beiden Felder und `Demo` neben `Log In`.*
 
 ## Eine Partitur öffnen
 
@@ -36,6 +40,8 @@ Um die Sitzung zu beenden, öffne das Benutzermenü im Header und wähle `Sign O
    `Group Access`.
 3. Der Header zeigt den Pfad (`Score Library › <title>`) zusammen mit dem Namen der Partitur und deren
    Aufführungsstatistik.
+
+Eine Demo hat keine Bibliothek. Dieselbe Stelle im Header hält die Auswahlliste `Demo Scores` mit dem kuratierten Katalog, und ein Lied daraus ersetzt die aktuelle Demo-Partitur.
 
 Ein geteilter Link öffnet dieselbe Partitur direkt. Solche Links sehen so aus: `https://<host>/?score=<id>`, und sowohl der direkte Link als auch die Bibliothek brauchen Lesezugriff auf die Partitur.
 

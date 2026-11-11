@@ -66,7 +66,7 @@ Behind the scenes three rules matter:
 Both groups always exist and behave differently from ordinary ones:
 
 - `Admins` members bypass every permission check. The group's members can be edited, but the group cannot be deleted, cannot receive a password, and the last remaining admin cannot be removed.
-- `World` is the public group. Every user and every anonymous visitor is a member of it automatically, so a score shared with `World` is publicly readable. The group itself cannot be edited or deleted, and a grant for it is always read-only: the backend stores a write grant as read.
+- `World` is the public group. Every user and every visitor without a session is a member of it automatically, so a score shared with `World` is publicly readable. The group itself cannot be edited or deleted, and a grant for it is always read-only: the backend stores a write grant as read. New scores and folders receive no `World` grant, and the first administrator no longer adds orphaned entries to the group, so the library is private by default.
 
 ## Ownership and Inherited Access
 
@@ -77,7 +77,7 @@ Every folder and score has an owner — the account that created it — and a se
 3. Group grants are collected for the entry and then for every folder above it, up to the top level. A grant on a parent folder therefore applies to everything inside it.
 4. Along that chain a child can upgrade `read` to `write`, but a `write` grant from a parent is never downgraded to `read` further down.
 
-`Write` always includes `read`. Anonymous visitors only hold what `World` grants them.
+`Write` always includes `read`. A caller without a session holds only what `World` grants, and a registered account starts without group membership, so it sees nothing beyond what `World` opens.
 
 ## The Group Access Editor
 
@@ -97,6 +97,7 @@ That deletes every user, group, grant, and score. Export the scores you need and
 
 - Neither list is paginated; large installations need a database query for an overview.
 - There is no self-service password change and no session or device management, so a forgotten password always goes through `Reset Password` by an administrator.
+- Public registration is open or closed for the whole installation; there is no invitation, approval, or e-mail verification step, and a registered account starts without group membership and without capabilities.
 - The `login_audit` table records logins and group logins, but no view in the application reads it.
 
 ## Related Chapters

@@ -134,7 +134,7 @@ All P2 motives are captured.
 | S-50 | `en/troubleshooting/connection-lost.png`  | Backend Connection Lost dialog with the database error line                                                 |
 | S-51 | `en/troubleshooting/error-page.png`       | Error page of the error boundary: warning title, retry and reload, GitHub link, collapsed technical details |
 | S-52 | `en/administration/backend-setup.png`     | Backend Setup dialog with engine, host, port and database, offering `Initialize Database`                   |
-| S-53 | `en/presentation/release-notes.png`       | Release notes dialog; shows 1.5.0 and needs a re-capture once 2.0.0 is in                                   |
+| S-53 | `en/presentation/release-notes.png`       | Release notes dialog, newest entry 2.1.0                                                                    |
 
 Notes on this batch:
 
@@ -160,9 +160,9 @@ Notes on this batch:
 
 All P3 motives are captured.
 
-- `S-41` (footer) and `S-53` (release notes) still show the version `v1.5.0` and the 1.5.0 notes; both are re-captured
-  once 2.0.0 exists. Neither file name carries a version, so a re-capture replaces the image in place. Both are linked
-  from `en/using/presentation.md` already.
+- `S-41` (footer) and `S-53` (release notes) were re-captured for 2.0.0 and again for 2.1.0 on 2026-11-11, together
+  with `S-11` (login dialog) and `S-12` (group login), whose dialog now offers `Demo` instead of `Continue Anonymously`.
+  None of the four file names carries a version, so a re-capture replaces the image in place.
 
 ## Storyboard
 

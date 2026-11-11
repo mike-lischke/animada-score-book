@@ -6,39 +6,40 @@ Instrumentnamen bleiben so, wie die Instrumente in einer bateria heißen; [Instr
 
 ## Begriffe der Anwendung
 
-| Begriff                                   | Bedeutung                                                                                                             |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Score Library**                         | Der Drawer, der jede Partitur (englisch: score) enthält, die ein Benutzer erreichen kann, in Ordnern organisiert      |
-| **Partitur** (`score`)                    | Ein Musikstück mit seinem Titel, seiner Taktart, seinem Tempo, seinen Takten (englisch: bar) und tracks               |
-| **track**                                 | Eine Zeile der Partitur, gespielt von einem einzigen Instrument                                                       |
-| **Takt** (`bar`)                          | Eine Spalte der Partitur; Takte werden ab 1 gezählt                                                                   |
-| **grid view**                             | Die Darstellung als Matrix aus Takten und tracks, ein Symbol pro Schritt                                              |
-| **staff view**                            | Die Darstellung als Perkussionsnotation                                                                               |
-| **edit mode**                             | Der Zustand, in dem die Partitur geändert werden kann; der Umschalter im Header liest `Editing`, solange er aktiv ist |
-| **note style**                            | Eine spielbare Variante eines Instruments, etwa `Center`, `Ghost` oder `Slap`; sie legt Klang und Symbol fest         |
-| **playing technique**                     | Wie das Instrument angeschlagen wird, zum Beispiel mit einem Stick, einer Hand oder dem Handballen                    |
-| **articulation**                          | Eine an einer Note ergänzte Markierung — `Accent`, `Ghost` oder `Damped` —, die ihren note style nicht ändert         |
-| **dynamics**                              | Lautstärkemarken über einen Abschnitt von Takten: `Crescendo`, `Decrescendo`, `Forte`                                 |
-| **subdivision**                           | Ein Teil eines Taktes, der in ein tuplet unterteilt ist                                                               |
-| **tuplet**                                | Eine Gruppe von Noten, die eine Dauer in eine andere Anzahl teilt als ihre natürliche                                 |
-| **one-bar repeat (simile)**               | Eine Markierung, die für den vorherigen Takt desselben track steht                                                    |
-| **Play Focus**                            | Die Takte, auf die die Wiedergabe beschränkt ist; ohne fokussierten Takt gilt die ganze Partitur                      |
-| **mixer**                                 | Die Lautstärkespalte neben den Namen der tracks                                                                       |
-| **focus**                                 | Ein Pegel eines track über 100 %, der einen track verstärkt und die anderen absenkt                                   |
-| **mute**                                  | Ein Pegel eines track von 0 %                                                                                         |
-| **Zen mode**                              | Das reduzierte Layout, das Header und mode bar um die Partitur herum ausblendet                                       |
-| **Settings**                              | Der Dialog mit Musikfont, Farbschema, Zoom und den weiteren Anzeigeoptionen                                           |
-| **music font**                            | Der SMuFL-Font, der Noten, Pausen, Schlüssel und Taktstriche zeichnet                                                 |
-| **color theme**                           | Die Farbpalette der Oberfläche                                                                                        |
-| **Partiturnavigator** (`score navigator`) | Der Streifen im Footer, der den sichtbaren Bereich zeigt und verschiebt                                               |
-| **notification center**                   | Die Nachrichtenhistorie hinter der Glocke im Footer                                                                   |
-| **Group Access**                          | Der Editor, der Lese- und Schreibzugriff auf einen Ordner oder eine Partitur vergibt                                  |
-| **read** / **write**                      | Die beiden Berechtigungsstufen; `write` schließt `read` immer ein                                                     |
-| **Admins**                                | Die Gruppe, deren Mitglieder die Installation administrieren dürfen                                                   |
-| **World**                                 | Die Gruppe, zu der jeder Benutzer und jeder anonyme Besucher gehört                                                   |
-| **backend**                               | Der Node.js-Prozess mit der Datenbank, der die Anwendung ausliefert                                                   |
-| **database**                              | MySQL/MariaDB oder PostgreSQL mit Bibliothek, Konten und Berechtigungen                                               |
-| **deployment package**                    | Das Archiv, das ein Administrator entpackt und mit `node server.js` startet                                           |
+| Begriff                                   | Bedeutung                                                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Score Library**                         | Der Drawer, der jede Partitur (englisch: score) enthält, die ein Benutzer erreichen kann, in Ordnern organisiert       |
+| **Partitur** (`score`)                    | Ein Musikstück mit seinem Titel, seiner Taktart, seinem Tempo, seinen Takten (englisch: bar) und tracks                |
+| **track**                                 | Eine Zeile der Partitur, gespielt von einem einzigen Instrument                                                        |
+| **Takt** (`bar`)                          | Eine Spalte der Partitur; Takte werden ab 1 gezählt                                                                    |
+| **grid view**                             | Die Darstellung als Matrix aus Takten und tracks, ein Symbol pro Schritt                                               |
+| **staff view**                            | Die Darstellung als Perkussionsnotation                                                                                |
+| **edit mode**                             | Der Zustand, in dem die Partitur geändert werden kann; der Umschalter im Header liest `Editing`, solange er aktiv ist  |
+| **note style**                            | Eine spielbare Variante eines Instruments, etwa `Center`, `Ghost` oder `Slap`; sie legt Klang und Symbol fest          |
+| **playing technique**                     | Wie das Instrument angeschlagen wird, zum Beispiel mit einem Stick, einer Hand oder dem Handballen                     |
+| **articulation**                          | Eine an einer Note ergänzte Markierung — `Accent`, `Ghost` oder `Damped` —, die ihren note style nicht ändert          |
+| **dynamics**                              | Lautstärkemarken über einen Abschnitt von Takten: `Crescendo`, `Decrescendo`, `Forte`                                  |
+| **subdivision**                           | Ein Teil eines Taktes, der in ein tuplet unterteilt ist                                                                |
+| **tuplet**                                | Eine Gruppe von Noten, die eine Dauer in eine andere Anzahl teilt als ihre natürliche                                  |
+| **one-bar repeat (simile)**               | Eine Markierung, die für den vorherigen Takt desselben track steht                                                     |
+| **Play Focus**                            | Die Takte, auf die die Wiedergabe beschränkt ist; ohne fokussierten Takt gilt die ganze Partitur                       |
+| **mixer**                                 | Die Lautstärkespalte neben den Namen der tracks                                                                        |
+| **focus**                                 | Ein Pegel eines track über 100 %, der einen track verstärkt und die anderen absenkt                                    |
+| **mute**                                  | Ein Pegel eines track von 0 %                                                                                          |
+| **Zen mode**                              | Das reduzierte Layout, das Header und mode bar um die Partitur herum ausblendet                                        |
+| **Settings**                              | Der Dialog mit Musikfont, Farbschema, Zoom und den weiteren Anzeigeoptionen                                            |
+| **music font**                            | Der SMuFL-Font, der Noten, Pausen, Schlüssel und Taktstriche zeichnet                                                  |
+| **color theme**                           | Die Farbpalette der Oberfläche                                                                                         |
+| **Partiturnavigator** (`score navigator`) | Der Streifen im Footer, der den sichtbaren Bereich zeigt und verschiebt                                                |
+| **notification center**                   | Die Nachrichtenhistorie hinter der Glocke im Footer                                                                    |
+| **Group Access**                          | Der Editor, der Lese- und Schreibzugriff auf einen Ordner oder eine Partitur vergibt                                   |
+| **read** / **write**                      | Die beiden Berechtigungsstufen; `write` schließt `read` immer ein                                                      |
+| **Admins**                                | Die Gruppe, deren Mitglieder die Installation administrieren dürfen                                                    |
+| **World**                                 | Die Gruppe, zu der jeder Benutzer und jeder Besucher ohne Sitzung gehört; ihre Freigabe ist nur lesend                 |
+| **Demo-Modus**                            | Der Zustand, in dem die Anwendung ohne Sitzung startet: kuratierter Katalog, eine lokale Partitur, keine Einstellungen |
+| **backend**                               | Der Node.js-Prozess mit der Datenbank, der die Anwendung ausliefert                                                    |
+| **database**                              | MySQL/MariaDB oder PostgreSQL mit Bibliothek, Konten und Berechtigungen                                                |
+| **deployment package**                    | Das Archiv, das ein Administrator entpackt und mit `node server.js` startet                                            |
 
 ## Musikbegriffe
 

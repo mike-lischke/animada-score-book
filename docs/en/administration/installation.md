@@ -66,6 +66,12 @@ The backend serves the whole application itself: `dist/index.html`, the built as
 
 The package has no `index.html` in its root, and `dist/` is not a document root; both are intentional, because the backend delivers the interface. Check a new deployment with `https://<host>/api?action=health`: it answers `"status":"ok"` together with `"configLoaded":true`, `"database":"…"`, and `"initialized":true`. A `404 Not found` for every address, or `"configLoaded":false`, means the process runs in another directory; a `Server Unreachable` dialog in the browser means the domain is served statically instead of through the backend. [Troubleshooting and Known Limitations](../troubleshooting.md#the-page-shows-not-found) walks through the first symptom.
 
+## Serving the Application from a Subpath
+
+The frontend takes a build-time base path (`--base <path>`). A deployment that serves other documents from the origin root builds the application with `--base /app/`, so its assets, fonts, and samples are requested below `/app/`, while `/api`, `/soundLib/`, and `/uploads/` stay origin-absolute server routes.
+
+The application itself knows nothing about that layout: `--base` only changes the URLs it emits, a build without it keeps `/`, and both deployments share one `backend-config.json`, one database, and one process. Registration and the demo catalog are configured there as well, see [Configuring the Backend](configuration.md).
+
 ## Configuring the Backend
 
 The backend reads `backend-config.json` from the directory it is started in. The file is not optional: it carries the database connection, and without a usable database block the browser only reports that the configuration is missing. In a hosting environment the database account and its credentials are supplied by the hoster, which cannot be reached from the application, so these values are always entered by hand.

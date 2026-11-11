@@ -75,9 +75,13 @@ Das Hosting folgt aus dieser Trennung: Ein Administrator installiert das Backend
 | Netzwerk   | Der Browser muss das Backend erreichen. HTTPS ist nötig, damit Sitzungen erneuert werden, siehe [Sicherheitshinweise](../administration/security.md). |
 | Server     | Node.js und MySQL/MariaDB oder PostgreSQL, installiert wie in [Animada Score Book installieren](../administration/installation.md) beschrieben.       |
 
-## Anonymer Zugriff
+## Demo-Modus
 
-Der `Sign In`-Dialog bietet `Continue Anonymously` neben `Log In`. Anonyme Besucher können jede öffentlich lesbare Partitur durchsuchen und abspielen, und die Anwendung hält ihre lokalen Änderungen im Browser. Änderungen an Partituren, die ihnen nicht gehören, können sie nicht veröffentlichen.
+Ein Besucher ohne Sitzung arbeitet im Demo-Modus. Die Anwendung startet ohne Anmeldedialog, bietet im Header statt der Score Library den kuratierten Katalog der Lieder an und hält genau eine lokale Partitur: das Lied, mit dem die Demo geöffnet wurde, samt allen Änderungen daran. Einstellungen werden nicht gespeichert, die nächste Demo beginnt also wieder mit den Standardwerten.
+
+Eine Demo hat keine Benutzer-, Gruppen- oder Berechtigungsoberfläche. Sie nutzt keine Sitzung, die dieser Browser bereits hält, beendet sie aber auch nicht, und sie kann nichts auf dem Server veröffentlichen. `Import BananaDrum Song…` ist der einzige Import einer Demo; die dabei entstehende Partitur bleibt lokal.
+
+Drucken und MP3-Export funktionieren in einer Demo wie in einer normalen Sitzung. Beim Anmelden übernimmt die Sitzung die bearbeitete Demo-Partitur, die Arbeit läuft also als neue Partitur weiter und geht nicht verloren.
 
 ## Wie es weitergeht
 

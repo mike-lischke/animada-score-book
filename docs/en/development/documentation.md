@@ -24,7 +24,7 @@ Sibling directories such as `docs/de/` or `docs/pt/` are reserved for translatio
 ## Page Conventions
 
 - One H1 per page, taken from the page's title in `docs/en/index.md`.
-- Heading levels start at H2 inside the page body; the instrument sections in `docs/en/instruments.md` keep their fixed names because other pages and the website link to them.
+- Heading levels start at H2 inside the page body; the instrument sections in `docs/en/instruments.md` keep their fixed names because other pages and the published edition link to them.
 - Links are relative and never start with a slash; images are referenced the same way. Absolute repository URLs break forks and static-site builds.
 - Terms follow the UI: **Score Library**, `score`, `track`, `bar`, `grid view`, `staff view`, `Zen mode`, `note style`. The [Glossary](../reference/glossary.md) defines all of them, and the instrument names stay as a bateria uses them.
 - UI labels appear in backticks exactly as the application spells them, for example `Save Score` or `Group Access`.
@@ -38,14 +38,14 @@ Sibling directories such as `docs/de/` or `docs/pt/` are reserved for translatio
 - File names carry no dates or versions, so a re-capture replaces the file.
 - An image is added together with the text that uses it, and re-captured when the interface it shows changes.
 
-## The Published Website
+## The Published Edition
 
-A separate project publishes the handbook; this repository stays the single source. The requirements for consuming a version — pinned tag or commit, navigation from `docs/en/index.md`, language selection, search scope, base paths, and link validation — are recorded in `docs/planning/handbook-2.0/website-handoff.md`, which is not published itself.
+A separate project publishes the handbook; this repository stays the single source. The requirements for consuming a version — pinned tag or commit, navigation from `docs/en/index.md`, language selection, search scope, base paths, and link validation — are recorded in `docs/planning/handbook-2.0/handbook-handoff.md`, which is not published itself.
 
 Two rules follow from that split:
 
-- Corrections go into this repository, never into a copy in the website project.
-- The website consumes a released version, so documentation changes reach it with the next release, not in between.
+- Corrections go into this repository, never into a copy in the publishing project.
+- The published edition consumes a released version, so documentation changes reach it with the next release, not in between.
 
 ## Updating the Documentation for a Release
 
@@ -58,7 +58,7 @@ Two rules follow from that split:
 7. Link new decision records from [Architecture and Decisions](architecture.md) when a change introduced one.
 8. Write the release notes in `release-notes.md`, separate from the handbook.
 9. Verify the links and image references of `docs/en/` and `readme.md` before tagging the release.
-10. Hand the release tag to the website project.
+10. Hand the release tag to the publishing project.
 
 ## Related Chapters
 

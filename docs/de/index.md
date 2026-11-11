@@ -1,6 +1,6 @@
 # Handbuch zu Animada Score Book
 
-Animada Score Book ist eine browserbasierte Partiturbibliothek und Wiedergabe-Anwendung für Samba-Gruppen. Sie speichert dein Repertoire, zeigt jede Partitur (englisch: score) als Notenraster oder als Notenschrift, spielt sie mit einem mixer pro track ab und druckt oder exportiert sie. Dieses Handbuch dokumentiert Version 2.0.1.
+Animada Score Book ist eine browserbasierte Partiturbibliothek und Wiedergabe-Anwendung für Samba-Gruppen. Sie speichert dein Repertoire, zeigt jede Partitur (englisch: score) als Notenraster oder als Notenschrift, spielt sie mit einem mixer pro track ab und druckt oder exportiert sie. Dieses Handbuch dokumentiert Version 2.1.0.
 
 Dies ist die deutsche Ausgabe. Maßgeblich bleibt das [englische Handbuch](../en/index.md): Es wird zuerst aktualisiert, und die Anwendung selbst ist durchgehend englisch, sodass Fachbegriffe wie score, track, grid view, staff view und note style auch hier englisch bleiben; übersetzt sind nur die beiden Wörter Takt (englisch: bar) und Partitur. Alle Beschriftungen, Tooltips und Meldungen der Oberfläche werden unverändert zitiert.
 
@@ -14,10 +14,10 @@ Wähle den Weg, der zu deiner Rolle passt:
 
 ## Erste Schritte
 
-| Kapitel                                                   | Inhalt                                                                                                                             |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [Was Animada Score Book ist](getting-started/overview.md) | Die Produktidee, die im Handbuch verwendeten Begriffe, Anforderungen an Browser und Gerät und wie der anonyme Zugriff funktioniert |
-| [Deine erste Sitzung](getting-started/first-steps.md)     | Anmelden, eine Partitur öffnen, Wiedergabe, Ansichten wechseln, Zoom, Zen mode, Speichern und wo die Settings liegen               |
+| Kapitel                                                   | Inhalt                                                                                                                        |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| [Was Animada Score Book ist](getting-started/overview.md) | Die Produktidee, die im Handbuch verwendeten Begriffe, Anforderungen an Browser und Gerät und wie der Demo-Modus funktioniert |
+| [Deine erste Sitzung](getting-started/first-steps.md)     | Anmelden, eine Partitur öffnen, Wiedergabe, Ansichten wechseln, Zoom, Zen mode, Speichern und wo die Settings liegen          |
 
 ## Die Anwendung benutzen
 
@@ -52,15 +52,15 @@ Wähle den Weg, der zu deiner Rolle passt:
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [Tastaturkürzel](reference/keyboard-shortcuts.md)                 | Globale Kürzel, Tasten der Noteneingabe, Modifikatoren der Auswahl und Tasten in Dialogen |
 | [Glossar](reference/glossary.md)                                  | Begriffe der Anwendung, Musikbegriffe und die Instrumente einer bateria                   |
-| [Fehlerbehebung und bekannte Einschränkungen](troubleshooting.md) | Häufige Probleme mit ihrer Ursache und die für 2.0.1 dokumentierten Einschränkungen       |
+| [Fehlerbehebung und bekannte Einschränkungen](troubleshooting.md) | Häufige Probleme mit ihrer Ursache und die für 2.1.0 dokumentierten Einschränkungen       |
 
 ## Entwicklung
 
-| Kapitel                                                       | Inhalt                                                                                                     |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [Entwicklungs-Setup](development/setup.md)                    | Anforderungen, Konfiguration, Dev-Server, Start des Backends, Testbefehle und Debugging                    |
-| [Architektur und Entscheidungen](development/architecture.md) | Eine kurze Karte des Codes mit Verweisen auf die Architecture Decisions und Design Contracts               |
-| [Diese Dokumentation pflegen](development/documentation.md)   | Konventionen für Seiten und Bilder, die Übergabe an die Website und was sich mit jedem Release ändern muss |
+| Kapitel                                                       | Inhalt                                                                                                    |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [Entwicklungs-Setup](development/setup.md)                    | Anforderungen, Konfiguration, Dev-Server, Start des Backends, Testbefehle und Debugging                   |
+| [Architektur und Entscheidungen](development/architecture.md) | Eine kurze Karte des Codes mit Verweisen auf die Architecture Decisions und Design Contracts              |
+| [Diese Dokumentation pflegen](development/documentation.md)   | Konventionen für Seiten und Bilder, die Übergabe des Handbuchs und was sich mit jedem Release ändern muss |
 
 ## Verwandte Dokumente
 
@@ -71,4 +71,4 @@ Wähle den Weg, der zu deiner Rolle passt:
 
 ## Ausgaben und Sprachen
 
-Die englische Ausgabe in `docs/en/` ist maßgeblich. Diese deutsche Ausgabe in `docs/de/` spiegelt sie mit derselben Kapitelstruktur und Lesereihenfolge; übersetzt ist die erklärende Prosa, während Fachbegriffe und alle Strings der Anwendung englisch bleiben. Ändert sich die englische Quelle, werden nur die betroffenen deutschen Kapitel nachgezogen. Das deployment package enthält ausschließlich die englische Ausgabe; weitere Sprachen werden nicht mit ausgeliefert, sondern nur von der Website aus diesem Repository geladen. Eine veröffentlichte HTML-Ausgabe ist in einem separaten Website-Projekt geplant; bis dahin sind diese Markdown-Seiten die Referenz.
+Die englische Ausgabe in `docs/en/` ist maßgeblich. Diese deutsche Ausgabe in `docs/de/` spiegelt sie mit derselben Kapitelstruktur und Lesereihenfolge; übersetzt ist die erklärende Prosa, während Fachbegriffe und alle Strings der Anwendung englisch bleiben. Ändert sich die englische Quelle, werden nur die betroffenen deutschen Kapitel nachgezogen. Das deployment package enthält ausschließlich die englische Ausgabe; weitere Sprachen werden nicht mit ausgeliefert, sondern nur von der veröffentlichten Ausgabe aus diesem Repository geladen. Eine veröffentlichte HTML-Ausgabe ist in einem separaten Projekt geplant; bis dahin sind diese Markdown-Seiten die Referenz.

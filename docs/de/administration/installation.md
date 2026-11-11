@@ -70,6 +70,12 @@ Das Backend liefert die ganze Anwendung selbst aus: `dist/index.html`, die gebau
 
 Das Paket hat keine `index.html` im Wurzelverzeichnis, und `dist/` ist kein Document Root; beides ist Absicht, weil das Backend die Oberfläche ausliefert. Prüfe ein neues Deployment mit `https://<host>/api?action=health`: Es antwortet mit `"status":"ok"` zusammen mit `"configLoaded":true`, `"database":"…"` und `"initialized":true`. Ein `404 Not found` für jede Adresse oder `"configLoaded":false` bedeutet, dass der Prozess in einem anderen Verzeichnis läuft; ein `Server Unreachable`-Dialog im Browser bedeutet, dass die Domain statisch statt über das Backend ausgeliefert wird. [Fehlerbehebung und bekannte Einschränkungen](../troubleshooting.md#die-seite-zeigt-not-found) führt das erste Symptom durch.
 
+## Die Anwendung unter einem Unterpfad ausliefern
+
+Das Frontend nimmt einen Basis-Pfad zur Build-Zeit (`--base <path>`). Eine Auslieferung, die weitere Dokumente aus der Wurzel des Origins bedient, baut die Anwendung mit `--base /app/`, sodass ihre Assets, Fonts und Samples unter `/app/` angefragt werden, während `/api`, `/soundLib/` und `/uploads/` absolute Serverrouten bleiben.
+
+Die Anwendung selbst weiß nichts von diesem Aufbau: `--base` ändert nur die URLs, die sie ausgibt, ein Build ohne den Schalter behält `/`, und beide Auslieferungen teilen eine `backend-config.json`, eine Datenbank und einen Prozess. Registrierung und Demo-Katalog werden ebenfalls dort konfiguriert, siehe [Das Backend konfigurieren](configuration.md).
+
 ## Das Backend konfigurieren
 
 Das Backend liest `backend-config.json` aus dem Verzeichnis, in dem es gestartet wird. Die Datei ist nicht optional: Sie enthält die Datenbankverbindung, und ohne brauchbaren Datenbankblock meldet der Browser nur, dass die Konfiguration fehlt. In einer Hosting-Umgebung werden Datenbankkonto und Zugangsdaten vom Hoster bereitgestellt, der von der Anwendung aus nicht erreichbar ist, diese Werte werden also immer von Hand eingetragen.

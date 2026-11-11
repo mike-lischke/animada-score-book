@@ -25,7 +25,7 @@ Weitere Sprachverzeichnisse wie `docs/pt/` sind für Übersetzungen reserviert u
 
 - Eine H1 pro Seite, entnommen aus dem Titel der Seite in `docs/en/index.md`.
 - Überschriftenebenen beginnen im Seitentext bei H2; die Instrumentabschnitte in `docs/en/instruments.md` behalten ihre
-  festen Namen, weil andere Seiten und die Website darauf verlinken.
+  festen Namen, weil andere Seiten und die veröffentlichte Ausgabe darauf verlinken.
 - Links sind relativ und beginnen nie mit einem Schrägstrich; Bilder werden genauso referenziert. Absolute
   Repository-URLs brechen Forks und Static-Site-Builds.
 - Begriffe folgen der Oberfläche: **Score Library**, `score`, `track`, `bar`, `grid view`, `staff view`, `Zen mode`,
@@ -47,17 +47,17 @@ Weitere Sprachverzeichnisse wie `docs/pt/` sind für Übersetzungen reserviert u
   Oberfläche ändert.
 - Die deutsche Ausgabe verwendet dieselben Bilder; übersetzt werden nur Alt-Text und Bildunterschrift.
 
-## Die veröffentlichte Website
+## Die veröffentlichte Ausgabe
 
-Ein separates Projekt veröffentlicht das Handbuch; dieses Repository bleibt die einzige Quelle. Die Anforderungen für das Konsumieren einer Version — gepinnter Tag oder Commit, Navigation aus `docs/en/index.md`, Sprachauswahl, Suchumfang, Basispfade und Link-Validierung — sind in `docs/planning/handbook-2.0/website-handoff.md` festgehalten, das selbst nicht veröffentlicht wird.
+Ein separates Projekt veröffentlicht das Handbuch; dieses Repository bleibt die einzige Quelle. Die Anforderungen für das Konsumieren einer Version — gepinnter Tag oder Commit, Navigation aus `docs/en/index.md`, Sprachauswahl, Suchumfang, Basispfade und Link-Validierung — sind in `docs/planning/handbook-2.0/handbook-handoff.md` festgehalten, das selbst nicht veröffentlicht wird.
 
 Aus dieser Trennung folgen zwei Regeln:
 
-- Korrekturen gehen in dieses Repository, nie in eine Kopie im Website-Projekt.
-- Die Website konsumiert eine veröffentlichte Version, Dokumentationsänderungen erreichen sie also mit dem nächsten
-  Release, nicht dazwischen.
+- Korrekturen gehen in dieses Repository, nie in eine Kopie im veröffentlichenden Projekt.
+- Die veröffentlichte Ausgabe bezieht eine veröffentlichte Version, Dokumentationsänderungen erreichen sie also mit dem
+  nächsten Release, nicht dazwischen.
 
-Ausgeliefert wird nur die englische Ausgabe: Das deployment package enthält `docs/en/` und `docs/images/`, weitere Sprachfassungen wie `docs/de/` lädt die Website aus dem Repository.
+Ausgeliefert wird nur die englische Ausgabe: Das deployment package enthält `docs/en/` und `docs/images/`, weitere Sprachfassungen wie `docs/de/` lädt die veröffentlichte Ausgabe aus dem Repository.
 
 ## Die Dokumentation für ein Release aktualisieren
 
@@ -79,7 +79,7 @@ Ausgeliefert wird nur die englische Ausgabe: Das deployment package enthält `do
    eingeführt hat.
 8. Schreibe die Release Notes in `release-notes.md`, getrennt vom Handbuch.
 9. Prüfe die Links und Bildreferenzen von `docs/en/` und `readme.md`, bevor du das Release taggst.
-10. Übergib den Release-Tag an das Website-Projekt.
+10. Übergib den Release-Tag an das veröffentlichende Projekt.
 
 Die deutsche Ausgabe wird nachgezogen, sobald die englische Quelle steht: Übersetzt werden nur die geänderten Kapitel, und maßgeblich bleibt der englische Text.
 

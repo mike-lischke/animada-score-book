@@ -119,7 +119,7 @@ The backend decides, not the browser:
 - **Write access** is required to save a score, to remove entries, and to create folders or imports inside a folder.
 - **Ownership** adds the `Group Access` editor.
 - **Administrators** may manage and remove every entry and every permission.
-- **Anonymous visitors** see every entry in the `World` group and nothing else.
+- **Callers without a session** see every entry in the `World` group and nothing else. They have no library at all: the header of a demo offers the curated catalog instead, and only a direct `?score=<id>` link reaches a score that `World` grants.
 
 Editing needs no write access: without a signed-in account you can open edit mode on any score you can read, and the changes stay in this browser. `Save Score` then reports `Sign in to save this score.` A signed-in account without write access is refused when it tries to enter edit mode, with `You do not have permission to edit this score.`
 

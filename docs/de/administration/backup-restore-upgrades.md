@@ -11,7 +11,7 @@ Alles, was sich nicht neu erzeugen lässt, liegt in der Datenbank oder in den Da
 | Browser            | Oberflächeneinstellungen, die aktuelle Partitur als lokale Kopie und die Auswahl                                                                                    |
 | deployment package | Anwendung, Musikfonts, Klangsamples und Migrationen — jederzeit ersetzbar                                                                                           |
 
-Die Browser-Kopie ist eine Bequemlichkeit, kein Backup: Sie gehört zu einem Browserprofil und einem Gerät, und das Löschen der Websitedaten entfernt sie.
+Die Browser-Kopie ist eine Bequemlichkeit, kein Backup: Sie gehört zu einem Browserprofil und einem Gerät, und das Löschen der Daten dieser Seite entfernt sie.
 
 ## Die Datenbank sichern
 

@@ -1,6 +1,6 @@
 # Your First Session
 
-This chapter takes you from the sign-in dialog to a score that plays and saves.
+This chapter takes you from the first start to a score that plays and saves.
 
 ## Reaching the Application
 
@@ -8,19 +8,22 @@ Open the address your administrator gave you, for example `https://scores.exampl
 
 During development the frontend runs separately at `https://localhost:5173`; [Development Setup](../development/setup.md) describes that setup.
 
-On a fresh installation the application asks for the database connection first and then for the first administrator account, before the `Sign In` dialog appears. [Installing Animada Score Book](../administration/installation.md) walks through both.
+On a fresh installation the application asks for the database connection first and then for the first administrator account, before the application opens. [Installing Animada Score Book](../administration/installation.md) walks through both.
+
+Without a session the application opens in demo mode: no dialog stands between loading and the score. The header offers the curated catalog instead of the score library, and every change stays in this browser. [Demo Mode](overview.md#demo-mode) describes what a demo can and cannot do.
 
 If the backend cannot be reached, the application shows a connection dialog with a retry counter instead of the score. [Troubleshooting and Known Limitations](../troubleshooting.md) explains what to check.
 
 ## Signing In
 
-The `Sign In` dialog has two tabs and up to two actions:
+`Sign In` in the header leaves for the `login` page of the site that handed the application over, and signing out returns there as well. An installation without such a site keeps the built-in dialog instead.
+
+That dialog has two tabs and two actions:
 
 - **User** takes a `Username` and a `Password` for a personal account.
 - **Group** takes a group from a dropdown and that group's password. Use it when several people share one login.
 - **`Log In`** confirms either form.
-- **`Continue Anonymously`** is offered while no user is required. Anonymous visitors can browse and play publicly
-  readable scores.
+- **`Demo`** closes the dialog and continues in the demo, without a session of its own. A mandatory dialog, which an installation without a site shows after a session ended, offers only `Log In`.
 
 Your session stays open while you work, and the backend renews it in the background. This renewal uses a secure cookie, which is why the installation has to be reachable over HTTPS; see [Security Notes](../administration/security.md).
 
@@ -28,7 +31,7 @@ To end the session, open the user menu in the header and choose `Sign Out`.
 
 ![The Sign In dialog on the User tab](../../images/en/getting-started/login.png)
 
-*The `Sign In` dialog: the `User` and `Group` tabs, the two fields, and `Continue Anonymously` beside `Log In`.*
+*The `Sign In` dialog: the `User` and `Group` tabs, the two fields, and `Demo` beside `Log In`.*
 
 ## Opening a Score
 
@@ -36,6 +39,8 @@ To end the session, open the user menu in the header and choose `Sign Out`.
 2. Open a folder and choose a score. The row menu offers `Load Score`, `Copy Score URL`, `Remove Score`, and `Group
    Access`.
 3. The header shows the path (`Score Library › <title>`) together with the score's name and performance statistics.
+
+A demo has no library. The same place in the header holds the `Demo Scores` dropdown with the curated catalog, and picking a song there replaces the current demo score.
 
 A shared link opens the same score directly. Such links look like `https://<host>/?score=<id>`, and both the direct link and the library need read access to the score.
 

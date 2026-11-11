@@ -4,19 +4,21 @@ The backend reads one file, `backend-config.json`, from the directory it is star
 
 ## The Configuration File
 
-| Key                 | Default         | Effect                                                                             |
-| ------------------- | --------------- | ---------------------------------------------------------------------------------- |
-| `host`              | `0.0.0.0`       | Interface the process listens on                                                   |
-| `port`              | `3100`          | Port it listens on                                                                 |
-| `database.engine`   | `mysql`         | One of `mysql`, `mariadb`, `postgres`                                              |
-| `database.host`     | empty           | Database server                                                                    |
-| `database.port`     | `0`             | Database port; set it explicitly (`3306` for MySQL/MariaDB, `5432` for PostgreSQL) |
-| `database.database` | empty           | Database name                                                                      |
-| `database.user`     | empty           | Database account                                                                   |
-| `database.password` | empty           | Password of that account                                                           |
-| `soundLibPath`      | `public/sounds` | Directory served as the sound library, relative to the working directory           |
-| `allowedOrigins`    | none            | Origins that receive CORS headers                                                  |
-| `trustProxy`        | `false`         | Whether forwarded headers from a proxy are trusted                                 |
+| Key                    | Default         | Effect                                                                             |
+| ---------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| `host`                 | `0.0.0.0`       | Interface the process listens on                                                   |
+| `port`                 | `3100`          | Port it listens on                                                                 |
+| `database.engine`      | `mysql`         | One of `mysql`, `mariadb`, `postgres`                                              |
+| `database.host`        | empty           | Database server                                                                    |
+| `database.port`        | `0`             | Database port; set it explicitly (`3306` for MySQL/MariaDB, `5432` for PostgreSQL) |
+| `database.database`    | empty           | Database name                                                                      |
+| `database.user`        | empty           | Database account                                                                   |
+| `database.password`    | empty           | Password of that account                                                           |
+| `soundLibPath`         | `public/sounds` | Directory served as the sound library, relative to the working directory           |
+| `allowedOrigins`       | none            | Origins that receive CORS headers                                                  |
+| `trustProxy`           | `false`         | Whether forwarded headers from a proxy are trusted                                 |
+| `registration.enabled` | `false`         | Whether `?action=register` may create accounts                                     |
+| `demo.scoreIds`        | empty           | Scores a demo may open without a session, in the order the header lists them       |
 The example file `backend-config.example.json` in the package lists all of them with these defaults. Copy it and adjust the database block; the [installation chapter](installation.md) shows a minimal configuration.
 
 The installation dialog in the browser only displays these values. Changing them means editing the file and restarting the process.
@@ -25,19 +27,32 @@ The installation dialog in the browser only displays these values. Changing them
 
 All values except `soundLibPath` can be overridden from the environment. The environment wins over the file, and unset variables fall back to the file and then to the default.
 
-| Variable          | Overrides           | Notes                                                 |
-| ----------------- | ------------------- | ----------------------------------------------------- |
-| `HOST`            | `host`              | Interface to bind                                     |
-| `PORT`            | `port`              | Port, as a number                                     |
-| `ALLOWED_ORIGINS` | `allowedOrigins`    | Comma-separated list, surrounding spaces are trimmed  |
-| `TRUST_PROXY`     | `trustProxy`        | Only the value `true` enables it                      |
-| `DB_ENGINE`       | `database.engine`   | Ignored when it is not one of the three known engines |
-| `DB_HOST`         | `database.host`     |                                                       |
-| `DB_PORT`         | `database.port`     | As a number                                           |
-| `DB_NAME`         | `database.database` |                                                       |
-| `DB_USER`         | `database.user`     |                                                       |
-| `DB_PASSWORD`     | `database.password` |                                                       |
-| `JWT_SECRET`      | —                   | Required; see below                                   |
+| Variable               | Overrides              | Notes                                                  |
+| ---------------------- | ---------------------- | ------------------------------------------------------ |
+| `HOST`                 | `host`                 | Interface to bind                                      |
+| `PORT`                 | `port`                 | Port, as a number                                      |
+| `ALLOWED_ORIGINS`      | `allowedOrigins`       | Comma-separated list, surrounding spaces are trimmed   |
+| `TRUST_PROXY`          | `trustProxy`           | Only the value `true` enables it                       |
+| `DB_ENGINE`            | `database.engine`      | Ignored when it is not one of the three known engines  |
+| `DB_HOST`              | `database.host`        |                                                        |
+| `DB_PORT`              | `database.port`        | As a number                                            |
+| `DB_NAME`              | `database.database`    |                                                        |
+| `DB_USER`              | `database.user`        |                                                        |
+| `DB_PASSWORD`          | `database.password`    |                                                        |
+| `REGISTRATION_ENABLED` | `registration.enabled` | Only the value `true` opens the registration           |
+| `DEMO_SCORE_IDS`       | `demo.scoreIds`        | Comma-separated score ids; invalid entries are dropped |
+| `JWT_SECRET`           | —                      | Required; see below                                    |
+
+## Registration and the Demo Catalog
+
+Two opt-in settings decide what a visitor without a session may do:
+
+- `registration.enabled` opens the public `register` action, which creates an account from a username and a password. It is `false` by default, and only the value `true` enables it. The example configuration of a combined deployment turns it on; an installation of the application alone stays closed until its operator opts in.
+- `demo.scoreIds` lists the scores a demo may open, in the order the header dropdown shows them. The first entry is what a first demo start opens. An empty list disables the catalog, and a demo then starts on a blank one-bar sheet.
+
+A demo offers only these scores: `listDemoScores` publishes their ids and names, and `getScore` grants read for an allowlisted id without a session, whatever the permission rows say. Every other score stays where the permissions put it, which for a caller without a session means the `World` grants.
+
+The server names a catalog it cannot serve: an empty list logs a startup hint, and configured ids without a matching score are reported as missing.
 
 ## The JWT Secret
 

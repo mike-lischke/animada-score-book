@@ -1,6 +1,6 @@
 # Fehlerbehebung und bekannte Einschränkungen
 
-Dieses Kapitel listet die Probleme, die in der Praxis auftreten, mit Ursache und Abhilfe, und sammelt das, was die Version 2.0.1 dokumentiert, statt es zu beheben.
+Dieses Kapitel listet die Probleme, die in der Praxis auftreten, mit Ursache und Abhilfe, und sammelt das, was die Version 2.1.0 dokumentiert, statt es zu beheben.
 
 ## Das Backend ist nicht erreichbar
 
@@ -122,7 +122,7 @@ Vergleiche diese Einstellungen:
 | MP3               | Braucht die MP3-Kodierung des Browsers; kein Loop- und kein Bereichsexport                                                           |
 | Gruppen-Login     | Gruppen-Logins teilen das Konto `anonymous`, und ein neuer Gruppen-Login beendet die vorherige Gruppensitzung                        |
 | Partitursperren   | 30 Minuten, kein Heartbeat, nur beim Speichern oder Verlassen des edit mode freigegeben                                              |
-| Anonymer Zugriff  | Anonyme Besucher sehen jede Partitur, die mit `World` geteilt ist                                                                    |
+| Demo-Modus        | Nur die Partituren aus `demo.scoreIds`; jede andere Partitur erreicht man ohne Sitzung nur über eine `World`-Freigabe                |
 | Listen            | Benutzer- und Gruppenlisten sind nicht seitenweise aufgeteilt                                                                        |
 | HTTPS             | Das Backend selbst liefert HTTP; das Cookie zur Sitzungserneuerung braucht TLS davor                                                 |
 | Migrationsdateien | Eine nach ihrem Lauf geänderte Migrationsdatei blockiert den Start; es gibt keine Down-Migrationen                                   |

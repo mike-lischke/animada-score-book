@@ -35,7 +35,8 @@ Instrument names stay as the instruments are called in a bateria; [Instrument an
 | **Group Access**            | The editor that grants read and write access to a folder or score                                      |
 | **read** / **write**        | The two permission levels; `write` always includes `read`                                              |
 | **Admins**                  | The group whose members may administer the installation                                                |
-| **World**                   | The group every user and every anonymous visitor belongs to                                            |
+| **World**                   | The group every user and every visitor without a session belongs to; a grant for it is read-only       |
+| **demo mode**               | The state the application starts in without a session: curated catalog, one local score, no settings   |
 | **backend**                 | The Node.js process with the database that serves the application                                      |
 | **database**                | MySQL/MariaDB or PostgreSQL, holding library, accounts, and permissions                                |
 | **deployment package**      | The archive an administrator unpacks and starts with `node server.js`                                  |

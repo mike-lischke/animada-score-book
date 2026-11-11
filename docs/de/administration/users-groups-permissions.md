@@ -70,9 +70,11 @@ Beide Gruppen existieren immer und verhalten sich anders als gewöhnliche Gruppe
 - Mitglieder von `Admins` umgehen jede Berechtigungsprüfung. Die Mitglieder der Gruppe lassen sich bearbeiten, aber die
   Gruppe lässt sich nicht löschen, kann kein Passwort bekommen, und der letzte verbleibende Administrator lässt sich
   nicht entfernen.
-- `World` ist die öffentliche Gruppe. Jeder Benutzer und jeder anonyme Besucher ist automatisch Mitglied, ein mit `World`
+- `World` ist die öffentliche Gruppe. Jeder Benutzer und jeder Besucher ohne Sitzung ist automatisch Mitglied, ein mit `World`
   geteilte Partitur ist also öffentlich lesbar. Die Gruppe selbst lässt sich weder bearbeiten noch löschen, und ihre Freigabe
-  ist immer nur lesend: Das Backend speichert einen Schreibzugriff als Lesezugriff.
+  ist immer nur lesend: Das Backend speichert einen Schreibzugriff als Lesezugriff. Neue Partituren und Ordner erhalten keine
+  `World`-Freigabe mehr, und der erste Administrator übernimmt verwaiste Einträge nicht mehr in die Gruppe, die Bibliothek
+  ist also standardmäßig privat.
 
 ## Eigentum und geerbter Zugriff
 
@@ -85,7 +87,7 @@ Jeder Ordner und jede Partitur hat einen Eigentümer — das Konto, das den Eint
 4. Entlang dieser Kette kann ein Kind `read` zu `write` aufwerten, aber eine `write`-Freigabe von oben wird weiter unten
    nie zu `read` herabgestuft.
 
-`Write` schließt `read` immer ein. Anonyme Besucher halten nur, was `World` ihnen gewährt.
+`Write` schließt `read` immer ein. Ein Aufrufer ohne Sitzung hält nur, was `World` gewährt, und ein registriertes Konto startet ohne Gruppenmitgliedschaft, sieht also nichts über das hinaus, was `World` öffnet.
 
 ## Der Group Access-Editor
 
@@ -106,6 +108,8 @@ Das löscht jeden Benutzer, jede Gruppe, jede Freigabe und jede Partitur. Export
 - Keine der Listen ist seitenweise aufgeteilt; große Installationen brauchen eine Datenbankabfrage für einen Überblick.
 - Es gibt keinen Self-Service-Passwortwechsel und keine Verwaltung von Sitzungen oder Geräten, ein vergessenes Passwort
   führt also immer über `Reset Password` durch einen Administrator.
+- Die öffentliche Registrierung ist für die ganze Installation offen oder geschlossen; es gibt keinen Einladungs-, Freigabe- oder
+  E-Mail-Bestätigungsschritt, und ein registriertes Konto startet ohne Gruppenmitgliedschaft und ohne Fähigkeiten.
 - Die Tabelle `login_audit` zeichnet Anmeldungen und Gruppen-Logins auf, aber keine Ansicht in der Anwendung liest sie.
 
 ## Verwandte Kapitel
