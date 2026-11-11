@@ -2943,17 +2943,17 @@ export class ScoreBookDataModel {
         if (restored) {
             void requisitions.execute("authChanged", undefined);
         } else {
-            await this.loadAnonymousState();
+            await this.loadDemoCapabilities();
         }
 
         return restored;
     }
 
     /**
-     * Reads the capabilities the backend grants a visitor without a session. A demo runs on exactly these and
+     * Reads the capabilities the backend grants a visitor without a session, which is what a demo runs on, and
      * never asks for the session stored in the browser.
      */
-    public async loadAnonymousState(): Promise<void> {
+    public async loadDemoCapabilities(): Promise<void> {
         const res = await this.fetchApi("/api?action=whoami", {
             headers: { Accept: "application/json" },
             credentials: "include",

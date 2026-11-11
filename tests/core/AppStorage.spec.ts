@@ -16,6 +16,10 @@ const importFreshAppStorage = async (prepare?: () => void) => {
     prepare?.();
 
     const module = await import("../../src/core/AppStorage.js");
+    const { AppMode, RunMode } = await import("../../src/core/RunMode.js");
+
+    // These tests address the records of a session; one that wants the demo enters it itself.
+    RunMode.enter(AppMode.Normal);
 
     return module.AppStorage;
 };
@@ -249,7 +253,8 @@ describe("AppStorage", { concurrent: false }, () => {
         });
         const priorRecord = localStorage.getItem(`${sessionSettingsPrefix}prior`);
 
-        AppStorage.useDemoStorage();
+        const { AppMode, RunMode } = await import("../../src/core/RunMode.js");
+        RunMode.enter(AppMode.Demo);
         AppStorage.loadUISettings();
         AppStorage.saveUISettings({ theme: "Dark+" });
         AppStorage.saveCurrentScore("demo-song");

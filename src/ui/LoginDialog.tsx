@@ -40,7 +40,7 @@ interface ILoginDialogState {
 
     errorMessage: string;
 
-    /** When true, the anonymous and cancel options are hidden — login is mandatory. */
+    /** When true, the demo and cancel options are hidden — login is mandatory. */
     requireLogin: boolean;
 }
 
@@ -72,9 +72,9 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
 
     /**
      * Opens the dialog and returns a promise that resolves with true when login succeeds,
-     * or false when the dialog is dismissed anonymously or cancelled.
+     * or false when the visitor chooses the demo or cancels.
      *
-     * @param requireLogin When true, the anonymous and cancel options are hidden.
+     * @param requireLogin When true, the demo and cancel options are hidden.
      *
      * @returns A promise that resolves with the login result.
      */
@@ -119,9 +119,9 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
         if (!requireLogin) {
             actions.push(
                 <Button
-                    id="login-button-anonymous"
+                    id="login-button-demo"
                     caption="Demo"
-                    onClick={this.handleAnonymousClick}
+                    onClick={this.handleDemoClick}
                 />,
             );
         }
@@ -345,7 +345,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
         void this.attemptLogin();
     };
 
-    private handleAnonymousClick = (): void => {
+    private handleDemoClick = (): void => {
         this.signal?.notify(false);
         this.dialogRef.current?.close(true);
     };

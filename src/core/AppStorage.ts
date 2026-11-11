@@ -6,6 +6,7 @@
 import { uuid } from "../string-helpers.js";
 import type { Articulation } from "./articulation.js";
 import type { INoteValue } from "./rest-notation.js";
+import { RunMode } from "./RunMode.js";
 import type { EditEntryMode, IPoint, TrackViewMode } from "./types/general.js";
 
 export interface IArrangementViewSettings {
@@ -141,7 +142,8 @@ export interface IUISettings {
 }
 
 /**
- * This class takes care for saving and loading settings and the like to and from localStorage.
+ * This class takes care for saving and loading settings and the like to and from localStorage. Which records it
+ * touches follows `RunMode`: a demo keeps one score record and no settings.
  */
 export class AppStorage {
     /**
@@ -180,9 +182,6 @@ export class AppStorage {
     /** Local storage key for the record a demo keeps: the score it edits, and nothing else. */
     static #demoScoreKey = "asb-demo-score";
 
-    /** Whether the page runs as a demo, which neither reads nor writes any settings. */
-    static #demoActive = false;
-
     /** Active session identifier used for session-scoped storage keys. */
     static #sessionId = "";
 
@@ -218,35 +217,13 @@ export class AppStorage {
     }
 
     /**
-     * Switches storage to demo behaviour: no setting is read or written any more, and the current score lives in a
-     * record of its own. Call it once, before the first read.
-     */
-    public static useDemoStorage(): void {
-        this.#demoActive = true;
-    }
-
-    /**
-     * Switches storage to session behaviour again, after a demo established a session.
-     */
-    public static useSessionStorage(): void {
-        this.#demoActive = false;
-    }
-
-    /**
-     * @returns Whether the page runs as a demo.
-     */
-    public static get isDemoMode(): boolean {
-        return this.#demoActive;
-    }
-
-    /**
      * Stores the current score where the running mode keeps it: in the session record normally, in the demo record
      * during a demo.
      *
      * @param packed The packed arrangement snapshot.
      */
     public static saveCurrentScore(packed: string): void {
-        if (!this.#demoActive) {
+        if (!RunMode.isDemo) {
             this.saveSetting("currentScore", packed);
 
             return;
@@ -263,7 +240,7 @@ export class AppStorage {
      * @returns The packed snapshot of the score the running mode kept, if one was stored.
      */
     public static loadCurrentScore(): string | undefined {
-        if (!this.#demoActive) {
+        if (!RunMode.isDemo) {
             return this.loadUISettings()?.currentScore;
         }
 
@@ -328,7 +305,7 @@ export class AppStorage {
      * Drops the stored score of the running mode.
      */
     public static clearCurrentScore(): void {
-        if (!this.#demoActive) {
+        if (!RunMode.isDemo) {
             this.saveSetting("currentScore", undefined);
 
             return;
@@ -366,7 +343,7 @@ export class AppStorage {
      * @param settings The UI settings object to persist.
      */
     public static saveUISettings(settings: IUISettings): void {
-        if (this.#demoActive) {
+        if (RunMode.isDemo) {
             // A demo keeps no settings, so every write path ends here.
             return;
         }
@@ -395,7 +372,7 @@ export class AppStorage {
      * @returns The merged settings object, or null if nothing is stored.
      */
     public static loadUISettings(): IUISettings | null {
-        if (this.#demoActive) {
+        if (RunMode.isDemo) {
             // A demo runs on fixed defaults and reads nothing that a session stored.
             return null;
         }
@@ -425,7 +402,7 @@ export class AppStorage {
      * Clears persisted UI settings for both global and active session scopes.
      */
     public static clearUISettings(): void {
-        if (this.#demoActive || !this.#hasLocalStorage) {
+        if (RunMode.isDemo || !this.#hasLocalStorage) {
             return;
         }
 
@@ -443,7 +420,7 @@ export class AppStorage {
      * @param value The new value. Use undefined to remove the key.
      */
     public static saveSetting<T extends keyof IUISettings>(key: T, value: IUISettings[T]): void {
-        if (this.#demoActive) {
+        if (RunMode.isDemo) {
             return;
         }
 

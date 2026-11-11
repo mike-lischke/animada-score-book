@@ -43,6 +43,8 @@ import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
+import { EntryHandoff, EntryMode } from "./core/EntryHandoff.js";
+import { AppMode, RunMode } from "./core/RunMode.js";
 import {
     SbDmEntityType, ScoreBookChangeReason, ScoreBookDataModel, type IDemoScoreEntry, type ISbDmInstrument,
     type ISbDmScore, type ISbDmScoreFolder
@@ -107,35 +109,6 @@ enum AppPhase {
     /** App fully loaded and running. */
     Running,
 }
-
-/** What the running app is allowed to do: a demo works locally, a normal session works against the backend. */
-enum AppMode {
-    /** No session: the app edits one local score and offers nothing that needs an account. */
-    Demo,
-
-    /** A session is established and the score library is available. */
-    Normal,
-}
-
-/**
- * @param value The `site` parameter of an entry URL.
- *
- * @returns The origin of the website the app was entered from, if it names this host over http or https.
- */
-const siteOriginFrom = (value: string | null): string | undefined => {
-    if (value === null) {
-        return undefined;
-    }
-
-    try {
-        const url = new URL(value);
-        const isWeb = url.protocol === "https:" || url.protocol === "http:";
-
-        return isWeb && url.hostname === window.location.hostname ? `${url.origin}/` : undefined;
-    } catch {
-        return undefined;
-    }
-};
 
 /**
  * The dialog components `App` has loaded so far, keyed by their class name.
@@ -247,14 +220,11 @@ export class App extends UIComponent<{}, IAppState> {
     private compactQueries = [this.compactHeaderQuery, this.compactLayoutQuery];
     private signInFromRunning = false;
 
-    /** What the running app may do. Demo until a session proves otherwise. */
-    private mode = AppMode.Demo;
-
-    /** The website this app was entered from, which owns the login while no session exists. */
+    /** The site this app was entered from, which owns the sign-in while no session exists. */
     private siteOrigin: string | undefined;
 
-    /** True while a sign-out hands the visitor over to the website, so no dialog of this installation opens. */
-    private leavingForWebsite = false;
+    /** True while a sign-out hands the visitor over to that site, so no dialog of this installation opens. */
+    private leavingForSite = false;
 
     /** True while an explicit sign-out runs, whose own dialog must not be opened a second time. */
     private signingOut = false;
@@ -537,7 +507,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         // A demo offers the curated catalog instead of the score library.
         let libraryButton: ComponentChild;
-        if (this.mode === AppMode.Demo) {
+        if (RunMode.isDemo) {
             libraryButton = <Dropdown
                 id="demoScoresButton"
                 className="du-btn-ghost"
@@ -933,7 +903,7 @@ export class App extends UIComponent<{}, IAppState> {
         const isAdmin = this.dataModel.user?.isAdmin ?? false;
 
         // A demo offers no account actions at all, so the identity menu — including signing out — stays away.
-        if (this.mode === AppMode.Normal && this.dataModel.authenticated) {
+        if (RunMode.current === AppMode.Normal && this.dataModel.authenticated) {
             // The identity accent is a fixed brand pair, so its foreground is fixed as well instead of following
             // the theme's text colour.
             const userMenuStyle = isAdmin
@@ -1094,24 +1064,31 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        const forcedDemo = new URL(window.location.href).searchParams.get("mode") === "demo";
-        this.siteOrigin = siteOriginFrom(new URL(window.location.href).searchParams.get("site"));
+        const entry = EntryHandoff.takeEntry();
+        this.siteOrigin = entry?.site ?? EntryHandoff.rememberedSiteOrigin() ?? EntryHandoff.derivedSiteOrigin();
+        if (this.siteOrigin !== undefined) {
+            EntryHandoff.rememberSiteOrigin(this.siteOrigin);
+        }
 
-        if (forcedDemo) {
-            // An explicit demo neither uses the session this browser may hold nor ends it.
-            this.mode = AppMode.Demo;
-            AppStorage.useDemoStorage();
-            await this.dataModel.loadAnonymousState();
+        // A handover decides the mode. Without one, a demo tab stays in the demo across reloads.
+        const startsInDemo = entry === undefined ? EntryHandoff.isDemoTab() : entry.mode === EntryMode.Demo;
+        if (startsInDemo) {
+            // A demo neither uses the session this browser may hold nor ends it.
+            EntryHandoff.rememberDemoTab();
+            RunMode.enter(AppMode.Demo);
+            await this.dataModel.loadDemoCapabilities();
             await this.initializeApp();
 
             return;
         }
 
+        EntryHandoff.forgetDemoTab();
+
         const sessionRestored = await this.dataModel.restoreSession();
 
         if (sessionRestored) {
-            this.mode = AppMode.Normal;
-            AppStorage.useSessionStorage();
+            RunMode.enter(AppMode.Normal);
+            EntryHandoff.forgetDemoTab();
             this.applyStoredSettings();
             this.adoptDemoScore();
             await this.initializeApp();
@@ -1119,11 +1096,10 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        // Without a session the application continues as a demo: anonymous, with the last cached score, and
-        // without reading or writing any settings. A score link is tried on the way there; the loader reports
-        // itself when that score is not publicly accessible.
-        this.mode = AppMode.Demo;
-        AppStorage.useDemoStorage();
+        // Without a session the application continues as a demo: with the last cached score and without reading or
+        // writing any settings. A score link is tried on the way there; the loader reports itself when that score
+        // is not publicly accessible.
+        RunMode.enter(AppMode.Demo);
 
         await this.initializeApp();
     }
@@ -1142,14 +1118,14 @@ export class App extends UIComponent<{}, IAppState> {
     private handleAuthChanged = (): Promise<boolean> => {
         const { phase } = this.state;
 
-        if (this.leavingForWebsite || this.signingOut) {
+        if (this.leavingForSite || this.signingOut) {
             // The visitor is on the way to a sign-in, so no dialog of this installation may appear.
             return Promise.resolve(true);
         }
 
-        if (!this.dataModel.authenticated && phase === AppPhase.Running && this.mode === AppMode.Normal) {
+        if (!this.dataModel.authenticated && phase === AppPhase.Running && !RunMode.isDemo) {
             if (this.siteOrigin !== undefined) {
-                // The website owns the account, so a session that ended continues as a demo instead of asking again.
+                // The site owns the account, so a session that ended continues as a demo instead of asking again.
                 void this.continueInDemoMode();
 
                 return Promise.resolve(true);
@@ -1203,17 +1179,17 @@ export class App extends UIComponent<{}, IAppState> {
         if (loggedIn) {
             this.handleLoginSuccess();
         } else {
-            this.handleContinueAnonymous();
+            this.handleSignInSkipped();
         }
     };
 
     private handleLoginSuccess = (): void => {
         this.signInFromRunning = false;
-        this.mode = AppMode.Normal;
+        RunMode.enter(AppMode.Normal);
 
         // The session keeps its settings and its score in the session records again, whether a demo score came
         // along or not.
-        AppStorage.useSessionStorage();
+        EntryHandoff.forgetDemoTab();
         this.applyStoredSettings();
         this.adoptDemoScore();
 
@@ -1227,10 +1203,10 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     /**
-     * Called when the user chooses to continue without logging in.
-     * Hides the login dialog. The app continues with anonymous capabilities.
+     * Called when the visitor skips the sign-in dialog, by choosing the demo or by cancelling it. The app keeps the
+     * capabilities of a caller without a session.
      */
-    private handleContinueAnonymous = (): void => {
+    private handleSignInSkipped = (): void => {
         if (this.signInFromRunning) {
             this.signInFromRunning = false;
             this.setState({ phase: AppPhase.Running });
@@ -1239,8 +1215,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         // Cancelling a login leaves the app in a demo, which keeps its own score and no settings.
-        this.mode = AppMode.Demo;
-        AppStorage.useDemoStorage();
+        RunMode.enter(AppMode.Demo);
 
         // If a score URL parameter was present, remove it — the user chose not to sign in.
         const params = new URL(window.location.href).searchParams;
@@ -1258,11 +1233,10 @@ export class App extends UIComponent<{}, IAppState> {
      * record and nothing is written to the session records any more.
      */
     private async continueInDemoMode(): Promise<void> {
-        this.mode = AppMode.Demo;
-        AppStorage.useDemoStorage();
+        RunMode.enter(AppMode.Demo);
 
         const [, catalog] = await Promise.all([
-            this.dataModel.loadAnonymousState(),
+            this.dataModel.loadDemoCapabilities(),
             this.dataModel.listDemoScores(),
         ]);
 
@@ -1322,8 +1296,8 @@ export class App extends UIComponent<{}, IAppState> {
                 const sessionRestored = await this.dataModel.restoreSession();
 
                 if (sessionRestored) {
-                    this.mode = AppMode.Normal;
-                    AppStorage.useSessionStorage();
+                    RunMode.enter(AppMode.Normal);
+                    EntryHandoff.forgetDemoTab();
                     this.applyStoredSettings();
                     await this.initializeApp();
 
@@ -1346,7 +1320,7 @@ export class App extends UIComponent<{}, IAppState> {
      * a session kept reaches it.
      */
     private applyStoredSettings(): void {
-        const settings = this.mode === AppMode.Demo ? null : AppStorage.loadUISettings();
+        const settings = AppStorage.loadUISettings();
         const viewSettings = settings?.viewSettings?.arrangementViewSettings;
         const trackViewMode = viewSettings?.displayMode ?? TrackViewMode.Grid;
         const preferredEntryMode = settings?.entryMode ?? EditEntryMode.Insert;
@@ -1370,7 +1344,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         const params = new URL(window.location.href).searchParams;
 
-        if (this.mode === AppMode.Demo) {
+        if (RunMode.isDemo) {
             await this.loadDemoCatalog(params);
 
             return;
@@ -1577,7 +1551,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     /**
-     * Tells the user that the browser denies website data, which is what keeps the app from remembering settings,
+     * Tells the user that the browser denies site data, which is what keeps the app from remembering settings,
      * the cached score and the tab's session. Safari hides that switch behind its advanced settings.
      */
     private warnAboutBlockedStorage(): void {
@@ -1585,7 +1559,7 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        void requisitions.execute("showWarning", "This browser blocks website data, so your settings and the score"
+        void requisitions.execute("showWarning", "This browser blocks site data, so your settings and the score"
             + " you had open are not remembered between reloads. In Safari, open Settings › Advanced, show the"
             + " advanced settings and turn off “Block All Cookies” in the Privacy section.");
     }
@@ -1616,8 +1590,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleSignInClick = () => {
-        // A demo that was entered from the website signs in there, where the account lives. A standalone installation
-        // has no website, so its own dialog stays the fallback.
+        // A demo that was entered from a site signs in there, where the account lives. A standalone installation
+        // has no site, so its own dialog stays the fallback.
         if (this.siteOrigin !== undefined) {
             window.location.assign(`${this.siteOrigin}login`);
 
@@ -1626,14 +1600,14 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.signInFromRunning = true;
         this.setState({ phase: AppPhase.Login }, () => {
-            // Signing in is optional, so the dialog can be cancelled and the visitor stays anonymous.
+            // Signing in is optional, so the dialog can be cancelled and the visitor stays in the demo.
             void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);
         });
     };
 
     private handleLogoutClick = async () => {
-        // Signing out of an installation that was entered from the website returns to its login page.
-        this.leavingForWebsite = this.siteOrigin !== undefined;
+        // Signing out of an installation that was entered from a site returns to its login page.
+        this.leavingForSite = this.siteOrigin !== undefined;
         this.signingOut = true;
 
         await this.dataModel.logout();
@@ -1656,7 +1630,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.signingOut = false;
         this.setState({ phase: AppPhase.Login }, () => {
-            // After a logout the visitor continues anonymously instead of being forced back in.
+            // After a logout the visitor continues in the demo instead of being forced back in.
             void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);
         });
     };

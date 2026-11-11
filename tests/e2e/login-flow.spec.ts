@@ -45,16 +45,16 @@ test.describe("Login Flow", () => {
         await expect(loginDialog).toBeVisible();
         await expect(loginDialog.locator("#login-username")).toBeVisible();
         await expect(loginDialog.locator("#login-password")).toBeVisible();
-        await expect(loginDialog.locator("#login-button-anonymous")).toBeVisible();
+        await expect(loginDialog.locator("#login-button-demo")).toBeVisible();
         await expect(loginDialog.locator("#login-button-login")).toBeVisible();
-        await expect(loginDialog.locator("#login-button-anonymous")).toHaveText("Demo");
+        await expect(loginDialog.locator("#login-button-demo")).toHaveText("Demo");
         await expect(loginDialog.locator("#login-button-login")).toHaveText("Log In");
     });
 
     test("cancelling the login keeps the demo running", async ({ page }) => {
         await page.goto("/");
         await page.locator("#signInButton").click();
-        await page.locator("#login-button-anonymous").click();
+        await page.locator("#login-button-demo").click();
 
         await expect(page.locator("#loginDialog")).not.toBeVisible();
         await expect(page.locator("#splashScreen")).not.toHaveClass(/splash-visible/);
