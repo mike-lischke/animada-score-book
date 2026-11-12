@@ -21,6 +21,7 @@ import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
+import { StepGrid } from "./StepGrid.js";
 import type {
     IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent,
     IMeterSnapshot, IArticulationSymbol, IRangeArticulationAnchor, IRangeArticulationPlacement,
@@ -28,15 +29,6 @@ import type {
 } from "./types/general.js";
 import { RangeArticulationKind, RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
-
-/**
- * Steps are usually sixteenths (2/4, 4/4).
- * For other time signatures, they can be different. For example in 6/8, steps are usually eighths.
- */
-export interface ITiming {
-    readonly bar: number,
-    readonly step: number;
-};
 
 export interface ISubdivisionSlotContent {
     noteStyleId?: string;
@@ -323,9 +315,6 @@ export interface ITimeParamsView {
     readonly tempo: number;
     readonly length: number;
     readonly pulse: string;
-    readonly stepResolution: number;
-    isValid(timing: ITiming): boolean;
-    readonly timings: ITiming[];
 }
 
 /**
@@ -489,7 +478,7 @@ export interface ISbDmTrack extends ISbDmCommon {
 
     readonly measures: ISbDmTrackPiece[];
 
-    getNoteAt(timing: ITiming): ISbDmNoteEvent | undefined;
+    getNoteAt(bar: number, start: IFraction, slot: IFraction): ISbDmNoteEvent | undefined;
     readonly notes: IterableIterator<ISbDmNoteEvent>;
     clear(): void;
 }
@@ -539,7 +528,6 @@ export interface ISbDmNoteEvent extends ISbDmCommon {
     readonly start: IFraction;
     readonly duration: IFraction;
     readonly track: ISbDmTrack;
-    readonly timing: ITiming;
 
     /** Reference to audio data and instrument. If unassigned this event represents a rest. */
     audioData?: IAudioData;
@@ -582,7 +570,6 @@ export interface ISbDmTimeParams extends ITimeParamsView {
     tempo: number;
     length: number;
     pulse: string;
-    stepResolution: number;
 }
 
 export interface ISbDmArrangement extends ISbDmCommon {
@@ -662,6 +649,9 @@ export interface IUserInfo {
     username: string;
     displayName: string;
     isAdmin: boolean;
+
+    /** The groups the session belongs to; a group session carries only the group it logged in through. */
+    groupIds?: number[];
 }
 
 /** The group a session logs in through, which is all a session needs to know about it. */
@@ -688,6 +678,10 @@ export interface IGroupRow {
     description: string;
     color: string;
     adminId: number | null;
+
+    /** The display name of the group's administrator, if it has one. */
+    adminName?: string;
+
     hasPassword: boolean;
     lastLogin: string | null;
     createdAt: string;
@@ -725,6 +719,15 @@ interface IWhoamiResponse {
     group?: IGroupInfo;
 
     capabilities: ICapabilities;
+}
+
+/** How the session logged in, as the tab remembers it so a token refresh can state it again. */
+interface IAuthHints {
+    /** Set to "group" when the session logged in through a group password. */
+    authType?: string;
+
+    /** The id of that group, as a string because that is what the request header takes. */
+    groupId?: string;
 }
 
 /** An event whose duration should change, addressed by its exact start within a measure. */
@@ -842,6 +845,12 @@ export interface IDatabaseResetResult {
 
     /** The reason the reset failed, as reported by the backend. */
     error?: string;
+}
+
+/** A score the backend offers to a demo, as the curated catalog lists it. */
+export interface IDemoScoreEntry {
+    id: number;
+    name: string;
 }
 
 export class ScoreBookDataModel {
@@ -2298,12 +2307,11 @@ export class ScoreBookDataModel {
      * Sets the time signature of the arrangement.
      *
      * @param timeSignature The new time signature string (e.g. "4/4").
-     * @param pulse         The pulse value (e.g. "1/4").
-     * @param stepResolution The step resolution.
+     * @param pulse The pulse value (e.g. "1/4").
      *
      * @returns True if the time signature was changed.
      */
-    public setTimeSignature(timeSignature: string, pulse: string, stepResolution: number): boolean {
+    public setTimeSignature(timeSignature: string, pulse: string): boolean {
         const arrangement = this.arrangement;
         if (!arrangement) {
             return false;
@@ -2316,7 +2324,6 @@ export class ScoreBookDataModel {
 
         tp.timeSignature = timeSignature;
         tp.pulse = pulse;
-        tp.stepResolution = stepResolution;
         void requisitions.execute("arrangementMutated", undefined);
 
         return true;
@@ -2933,24 +2940,50 @@ export class ScoreBookDataModel {
         // then calls whoami with it to populate user + capabilities.
         const restored = await this.refreshAccessToken();
 
-        if (!restored) {
-            // No valid session — fetch anonymous capabilities.
-            const res = await this.fetchApi("/api?action=whoami", {
-                headers: { Accept: "application/json" },
-                credentials: "include",
-            }, false);
+        if (restored) {
+            void requisitions.execute("authChanged", undefined);
+        } else {
+            await this.loadDemoCapabilities();
+        }
 
-            if (res) {
-                const data = await res.json() as IWhoamiResponse;
+        return restored;
+    }
 
-                this.currentGroup = undefined;
-                this.currentCapabilities = data.capabilities;
-            }
+    /**
+     * Reads the capabilities the backend grants a visitor without a session, which is what a demo runs on, and
+     * never asks for the session stored in the browser.
+     */
+    public async loadDemoCapabilities(): Promise<void> {
+        const res = await this.fetchApi("/api?action=whoami", {
+            headers: { Accept: "application/json" },
+            credentials: "include",
+        }, false);
+
+        if (res) {
+            const data = await res.json() as IWhoamiResponse;
+
+            this.currentGroup = undefined;
+            this.currentCapabilities = data.capabilities;
         }
 
         void requisitions.execute("authChanged", undefined);
+    }
 
-        return restored;
+    /**
+     * @returns The curated scores a demo may offer, as the backend lists them.
+     */
+    public async listDemoScores(): Promise<IDemoScoreEntry[]> {
+        const res = await this.fetchApi("/api?action=listDemoScores", {
+            headers: { Accept: "application/json" },
+        }, false);
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { scores?: IDemoScoreEntry[]; };
+
+        return data.scores ?? [];
     }
 
     public async listUsers(): Promise<IUserRow[]> {
@@ -3077,7 +3110,7 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Lists all groups. Admin-only.
+     * Lists all groups. Requires an authenticated session.
      *
      * @returns The list of group rows.
      */
@@ -3348,8 +3381,7 @@ export class ScoreBookDataModel {
             return;
         }
 
-        AppStorage.saveSetting("currentScore",
-            stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
+        AppStorage.saveCurrentScore(stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
     }
 
     /**
@@ -3467,6 +3499,38 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Remembers how the session logged in, for a refresh that has lost the in-memory token.
+     *
+     * @param group The group the session logged in through, or undefined for a plain login.
+     */
+    private static storeAuthHints(group?: IGroupInfo): void {
+        const store = AppStorage.sessionStore;
+        if (store === undefined) {
+            return;
+        }
+
+        if (group === undefined) {
+            store.removeItem("authType");
+            store.removeItem("groupId");
+        } else {
+            store.setItem("authType", "group");
+            store.setItem("groupId", String(group.id));
+        }
+    }
+
+    /**
+     * @returns How the session logged in, as far as the tab still remembers it.
+     */
+    private static readAuthHints(): IAuthHints {
+        const store = AppStorage.sessionStore;
+
+        return {
+            authType: store?.getItem("authType") ?? undefined,
+            groupId: store?.getItem("groupId") ?? undefined,
+        };
+    }
+
+    /**
      * Drops the session state and tells the app about it, so it can ask for a login again.
      */
     private clearAuthState(): void {
@@ -3480,8 +3544,7 @@ export class ScoreBookDataModel {
             canExportMP3: false,
         };
 
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
+        ScoreBookDataModel.storeAuthHints();
 
         void requisitions.execute("authChanged", undefined);
     }
@@ -3502,13 +3565,7 @@ export class ScoreBookDataModel {
         // A login ends the state a failed refresh left behind, so the next expired token is refreshed again.
         this.sessionRefreshFailed = false;
 
-        if (group === undefined) {
-            sessionStorage.removeItem("authType");
-            sessionStorage.removeItem("groupId");
-        } else {
-            sessionStorage.setItem("authType", "group");
-            sessionStorage.setItem("groupId", String(group.id));
-        }
+        ScoreBookDataModel.storeAuthHints(group);
 
         void requisitions.execute("authChanged", undefined);
     }
@@ -4167,7 +4224,7 @@ export class ScoreBookDataModel {
 
         const unit = enclosing
             ? divideFraction(enclosing.span, enclosing.actual)
-            : { numerator: 1, denominator: measure.meter.stepResolution };
+            : { numerator: 1, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) };
         const span = subtractFractions(end, start);
         const ratio = reduceFraction(span.numerator * unit.denominator, span.denominator * unit.numerator);
 
@@ -5372,15 +5429,14 @@ export class ScoreBookDataModel {
     private async refreshAccessToken(): Promise<boolean> {
         // Restore group-login context from sessionStorage (lost from in-memory token on reload).
         const headers: Record<string, string> = {};
-        const storedAuthType = sessionStorage.getItem("authType");
-        const storedGroupId = sessionStorage.getItem("groupId");
+        const { authType, groupId } = ScoreBookDataModel.readAuthHints();
 
-        if (storedAuthType) {
-            headers["X-Auth-Type"] = storedAuthType;
+        if (authType) {
+            headers["X-Auth-Type"] = authType;
         }
 
-        if (storedGroupId) {
-            headers["X-Group-Id"] = storedGroupId;
+        if (groupId) {
+            headers["X-Group-Id"] = groupId;
         }
 
         if (this.accessToken) {
@@ -5422,13 +5478,7 @@ export class ScoreBookDataModel {
                 this.currentGroup = whoami.group;
                 this.currentCapabilities = whoami.capabilities;
 
-                if (whoami.group) {
-                    sessionStorage.setItem("authType", "group");
-                    sessionStorage.setItem("groupId", String(whoami.group.id));
-                } else {
-                    sessionStorage.removeItem("authType");
-                    sessionStorage.removeItem("groupId");
-                }
+                ScoreBookDataModel.storeAuthHints(whoami.group);
             }
         }
 

@@ -14,13 +14,13 @@ import { routeApi } from "./e2e-test-helpers.js";
 const snapshot = {
     version: arrangementSnapshotVersion,
     title: "E2E Staff Deletion",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
     tracks: [{
         id: 200,
         instrumentId: "0",
         measures: [{
             number: 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            meter: { beats: 4, beatUnits: 4 },
             events: [
                 ...Array.from({ length: 4 }, (_, index) => {
                     return {

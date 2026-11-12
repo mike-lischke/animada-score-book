@@ -8,8 +8,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-    MeasureLayout, barActionStripWidth, measureStepWidthPx, minEventWidth, minRestWidth, noteHeightPx,
-    staffMeasureInsets, staffSpacePx, type IRowItem,
+    MeasureLayout, MeasureScrollPlacement, barActionStripWidth, measureStepWidthPx, minEventWidth, minRestWidth,
+    noteHeightPx, staffMeasureInsets, staffSpacePx, type IRowItem,
 } from "../../src/core/MeasureLayout.js";
 import type { ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
@@ -130,6 +130,22 @@ describe("MeasureLayout", () => {
 
         it("clamps to the scrollable range", () => {
             expect(MeasureLayout.scrollToShow(offsets, 4, 5168, 0, clientWidth, margin)).toBe(4168);
+        });
+
+        it("centres the requested position when the view asks for it", () => {
+            // Measure 2 spans 1328..2608, so its middle lies at 1968 and the viewport of 1000 puts it at 1468.
+            expect(MeasureLayout.scrollToShow(offsets, 2, 1968, 0, clientWidth, margin,
+                MeasureScrollPlacement.Position)).toBe(1468);
+        });
+
+        it("keeps the scroll position when a centred position is visible", () => {
+            expect(MeasureLayout.scrollToShow(offsets, 2, 1400, 1300, clientWidth, margin,
+                MeasureScrollPlacement.Position)).toBe(1300);
+        });
+
+        it("clamps a centred position to the scrollable range", () => {
+            expect(MeasureLayout.scrollToShow(offsets, 4, 5160, 0, clientWidth, margin,
+                MeasureScrollPlacement.Position)).toBe(4168);
         });
     });
 });

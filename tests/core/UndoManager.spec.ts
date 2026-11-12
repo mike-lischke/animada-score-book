@@ -56,7 +56,7 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         public currentState: IArrangementSnapshot = {
             version: arrangementSnapshotVersion,
             title: "Snapshot",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [],
         };
 
@@ -109,7 +109,7 @@ describe("UndoManager", () => {
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
         title: "Initial",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: []
     };
 

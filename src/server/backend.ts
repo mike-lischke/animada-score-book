@@ -9,10 +9,11 @@ import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { convertErrorToString } from "../core/utils.js";
-import { resolveDatabaseName, runMigrations } from "../../build/migration.js";
+import { runMigrations } from "../../build/migration.js";
 import { Auth } from "./Auth.js";
 
 import { loadConfig, uploadsPath } from "./config.js";
+import { type IDatabaseAdapter } from "./database.js";
 import { RequestContext } from "./RequestContext.js";
 import { Router, type IServerConfig } from "./Router.js";
 
@@ -21,33 +22,59 @@ let auth: Auth;
 
 let router: Router;
 
+/**
+ * Tells the operator when the demo catalog cannot be served, because the configuration or the database does not
+ * line up. A demo that silently offers nothing is what makes the hint necessary.
+ *
+ * @param adapter The database adapter, after the schema is ready.
+ */
+const reportDemoCatalog = async (adapter: IDatabaseAdapter): Promise<void> => {
+    const { scoreIds } = config.demo;
+
+    if (scoreIds.length === 0) {
+        console.log(
+            "No demo catalog configured. Add \"demo\": { \"scoreIds\": [...] } to backend-config.json "
+            + "to offer curated scores to visitors without an account.",
+        );
+
+        return;
+    }
+
+    const placeholders = scoreIds.map(() => {
+        return "?";
+    }).join(", ");
+
+    const rows = await adapter.query<{ id: number; }>(
+        `SELECT id FROM scores WHERE id IN (${placeholders})`,
+        scoreIds,
+    );
+
+    const existing = new Set(rows.map((row) => {
+        return row.id;
+    }));
+    const missing = scoreIds.filter((id) => {
+        return !existing.has(id);
+    });
+
+    if (missing.length > 0) {
+        console.warn(`The demo catalog lists scores that do not exist: ${missing.join(", ")}.`);
+    }
+};
+
 const main = (): void => {
     config = loadConfig();
     router = new Router(config);
     auth = new Auth(router.createAdapter());
     router.auth = auth;
 
-    // Connect with the saved or default config on startup. The schema stays untouched unless automatic
-    // migrations are switched on; otherwise an empty database waits for the setup dialog in the browser.
+    // Connect with the saved or default config on startup and bring the schema up to date. The database account
+    // needs the rights for that; a failed connection leaves the setup dialog to the browser.
     auth.adapter.testConnection(config.database).then((result) => {
         if (!result.success) {
             console.log(`Could not auto-connect: ${result.error ?? "unknown reason"}`);
             console.log("Waiting for setup from frontend…");
 
             return undefined;
-        }
-
-        if (!config.autoMigrate) {
-            // Keep the branch separation of the migration pipeline, so a checkout does not touch the main data.
-            config.database.database = resolveDatabaseName(config.database.database);
-
-            return auth.adapter.initialize(config.database).then(() => {
-                const { engine, host, port, database } = config.database;
-                console.log(`Backend connected: ${engine} @ ${host}:${port}/${database}`);
-                console.log(
-                    "Automatic migrations are off; the browser offers Initialize Database if the schema is missing.",
-                );
-            });
         }
 
         return runMigrations(config.database).then((effectiveDb) => {
@@ -64,6 +91,8 @@ const main = (): void => {
                 // database, the anonymous user only when it is missing.
                 return router.seedIfExists(auth.adapter).then(() => {
                     return router.seedAnonymousUser(auth.adapter);
+                }).then(() => {
+                    return reportDemoCatalog(auth.adapter);
                 });
             });
         });

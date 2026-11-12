@@ -1,6 +1,18 @@
 # Animada Score Book Release Notes
 
-Version history, newest first. The current release is **2.0.1**.
+Version history, newest first. The current release is **2.1.0**.
+
+## 2.1.0
+
+- Demo mode: the application starts without a login in an explicit demo mode, and `Continue Anonymously` is gone. A demo offers the curated catalog from the header, edits and autosaves exactly one local score, persists no settings, and keeps `Import BananaDrum Song…` as its only import. No user, group or permission surface appears, and the library drawer never opens.
+- Signing in: `Sign In` and signing out belong to the site that handed the application over and open its `login` page. An installation without such a site keeps the built-in dialog, whose second action is labelled `Demo` and returns to the demo. The handover travels in the short-lived `asb-entry` cookie, so no start mode and no site address appear in the URL.
+- Demo catalog: `demo.scoreIds` (`DEMO_SCORE_IDS`) lists the songs a demo may open, in order. The new `listDemoScores` action publishes their ids and names only, and `getScore` grants read for an allowlisted id without a session. An empty or unusable list opens a blank one-bar sheet instead of an empty screen.
+- Public registration: the new `register` action creates an account with a username and a password, gated by `registration.enabled` (`REGISTRATION_ENABLED`, default `false`) and rate-limited like the login. A registered account starts without group membership and without capabilities.
+- Permissions: newly created scores and folders are no longer granted to `World`, and the first administrator no longer adopts orphaned entities into it, so new content is private by default. Existing grants stay, old share links keep working, and a `World` grant remains read-only.
+- Deployment: the frontend accepts a build-time base path (`--base`), so one build serves the application from the origin root and another from `/app/` below the other documents of the same origin.
+- Session and demo: a session that ends while the application runs no longer opens a login dialog when a site handed the application over — the application continues as a demo, loads the catalog and reports the end of the session in a notification. The demo score reaches the session on the next sign-in and loses its server identity, so it becomes a new score instead of overwriting its source.
+- Fixes: the repeat dots of the bar actions, the endpoint resolution of BananaDrum tuplets, nested tuplets in the first slot of a subdivision in the staff view, the glyph placement in WebKit, a crash with blocked storage, and `My Groups` now also lists the groups a non-admin user is a member of.
+- Documentation: the German handbook is complete; the deployment package ships the English edition.
 
 ## 2.0.1
 

@@ -12,6 +12,7 @@ import {
 } from "../../../../core/MeasureProjection.js";
 import type { ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import { ScoreSymbol } from "../../../../core/ScoreSymbols.js";
+import { StepGrid } from "../../../../core/StepGrid.js";
 import { reduceFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../../../core/types/general.js";
 import { PlayerPlayState, type ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
@@ -86,13 +87,13 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
         ]);
         const usesSimile = displayedMeasure.simile === true;
         const items = usesSimile ? [] : MeasureProjection.project(displayedMeasure);
-        const baseSteps = measure.meter.stepResolution;
+        const baseSteps = StepGrid.stepsPerBarOfMeter(measure.meter);
 
-        // Beat tick markers: absolutely positioned at fractional positions derived
-        // from the meter's beatGroups, which sum to stepResolution (= baseSteps).
+        // Beat tick markers: absolutely positioned at fractional positions derived from the meter's
+        // pulse groups, which sum to the bar's step count (= baseSteps).
         const beatMarkers: ComponentChild[] = [];
         let cumulative = 0;
-        for (const groupSize of measure.meter.beatGroups) {
+        for (const groupSize of StepGrid.beatGroupsOfMeter(measure.meter)) {
             if (cumulative < baseSteps) {
                 beatMarkers.push(
                     <div
@@ -194,7 +195,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
      */
     private renderGridCells(items: IProjectedItem[]): ComponentChild[] {
         const measure = this.displayedMeasure;
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const itemsByStep = new Map<number, IProjectedEvent[]>();
         const subdivisionsByStep = new Map<number, IProjectedSubdivision>();
         const subdivisionSteps = new Set<number>();
@@ -406,7 +407,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
     private cellContentOf(step: number, item: IProjectedEvent | undefined): IGridCellContent {
         const { track } = this.props;
         const measure = this.displayedMeasure;
-        const stepStart = reduceFraction(step, measure.meter.stepResolution);
+        const stepStart = reduceFraction(step, StepGrid.stepsPerBarOfMeter(measure.meter));
 
         if (item === undefined) {
             return { step, start: stepStart, event: modelEventAt(measure, stepStart) };
@@ -430,6 +431,6 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
     private stepOf(start: IFraction): number {
         const { measure } = this.props;
 
-        return Math.floor(start.numerator * measure.meter.stepResolution / start.denominator);
+        return Math.floor(start.numerator * StepGrid.stepsPerBarOfMeter(measure.meter) / start.denominator);
     }
 }

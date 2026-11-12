@@ -59,7 +59,7 @@ const makeTrackWithNote = (
     } as unknown as ISbDmTrack;
     const measure = {
         number: 1,
-        meter: { stepResolution: 16 },
+        meter: { beats: 4, beatUnits: 4 },
         subdivisions: [],
         track,
         events: [{
@@ -355,7 +355,7 @@ describe("ArticulationToolbar", { concurrent: false }, () => {
         });
         const measure = {
             number: 1,
-            meter: { stepResolution: 16 },
+            meter: { beats: 4, beatUnits: 4 },
             subdivisions: [],
             track,
             events,

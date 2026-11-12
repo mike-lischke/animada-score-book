@@ -545,6 +545,44 @@ describe("StaffMeasureEditor input", { concurrent: false }, () => {
         expect(editor.canApplyNoteLength(noteValue(NoteLength.Half))).toBe(false);
     });
 
+    it("adds a bar when an entry runs past the last measure", () => {
+        // Four quarters fill the bar, which leaves the cursor behind it. The fifth entry is the one that needs
+        // the bar the arrangement adds.
+        const runs = [...renderRuns().querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        editor.entryMode = EditEntryMode.Insert;
+        editor.setNoteLength(noteValue(NoteLength.Quarter));
+        expect(editor.hitTest(runs[0])).toBe(true);
+
+        for (let index = 0; index < 5; index++) {
+            expect(editor.enterNote("1")).toBe(true);
+        }
+
+        const track = model.arrangement!.tracks[0];
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(track.measures).toHaveLength(2);
+        expect(styleAt(track.measures[1], { numerator: 0, denominator: 1 })).toBe("1");
+    });
+
+    it("aims the reveal at the middle of the span a rest covers", () => {
+        // Eight eighths fill the bar and leave the cursor on the whole rest of the bar the arrangement adds. A rest
+        // is drawn in the middle of its span, so that middle is what the view is asked to show.
+        const runs = [...renderRuns().querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        const execute = vi.spyOn(requisitions, "execute");
+        editor.entryMode = EditEntryMode.Insert;
+        editor.setNoteLength(noteValue(NoteLength.Eighth));
+        expect(editor.hitTest(runs[0])).toBe(true);
+
+        for (let index = 0; index < 8; index++) {
+            expect(editor.enterNote("1")).toBe(true);
+        }
+
+        expect(execute).toHaveBeenCalledWith("measureVisibilityRequested", {
+            bar: 2,
+            position: { numerator: 1, denominator: 2 },
+            centre: true,
+        });
+    });
+
     it("changes the style of the addressed note in the overwrite mode", () => {
         setEvents(model, [
             {

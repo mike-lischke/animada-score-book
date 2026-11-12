@@ -11,6 +11,7 @@ import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
+import { StepGrid } from "../../src/core/StepGrid.js";
 import type { IFraction, IMeasureEvent, IRangeArticulation, IRangeArticulationAnchor }
     from "../../src/core/types/general.js";
 import { RangeArticulationKind, RepeatMark } from "../../src/core/types/general.js";
@@ -38,7 +39,7 @@ const stepStart = (step: number): IFraction => {
  * @returns The start step of every note, in display order.
  */
 const noteSteps = (measure: ISbDmTrackPiece): number[] => {
-    const stepsPerBar = measure.meter.stepResolution;
+    const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
 
     return measure.events.filter((event) => {
         return event.noteStyleId !== undefined;

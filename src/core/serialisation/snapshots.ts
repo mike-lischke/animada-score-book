@@ -11,13 +11,13 @@ import type {
 
 /** Current internal arrangement snapshot schema version. */
 
-export const arrangementSnapshotVersion = 6;
+export const arrangementSnapshotVersion = 7;
 
 /**
  * Every snapshot version this build reads, the current one included. An older version is upgraded on load, so a
  * score a previous build wrote keeps its content. A schema change adds the version it supersedes here.
  */
-const readableSnapshotVersions: ReadonlySet<number> = new Set([5, arrangementSnapshotVersion]);
+const readableSnapshotVersions: ReadonlySet<number> = new Set([5, 6, arrangementSnapshotVersion]);
 
 /**
  * @param version The schema version of a snapshot.
@@ -42,12 +42,12 @@ export const isNaturalNumber = (value: unknown): value is number => {
 };
 
 export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangement>): IArrangementSnapshot => {
-    const { timeSignature, tempo, length, pulse, stepResolution } = arrangementView.timeParams;
+    const { timeSignature, tempo, length, pulse } = arrangementView.timeParams;
 
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
         title: arrangementView.title,
-        timeParams: { timeSignature, tempo, length, pulse, stepResolution },
+        timeParams: { timeSignature, tempo, length, pulse },
         tracks: arrangementView.tracks.map(getTrackSnapshot),
     };
 

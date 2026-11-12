@@ -25,17 +25,14 @@ const monokaiBackground = "rgb(39, 40, 34)";
  * @param sessionId The session the score is seeded into.
  */
 const openScore = async (page: Page, sessionId: string): Promise<void> => {
-    const stepResolution = 16;
     const meter = {
         beats: 4,
         beatUnits: 4,
-        stepResolution,
-        beatGroups: new Array<number>(4).fill(stepResolution / 4),
     };
     const snapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E color theme",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: [{
             id: 100,
             instrumentId: "1",

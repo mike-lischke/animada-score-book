@@ -51,7 +51,7 @@ Editing is part of the application, not a preview: notes are entered, given a no
 
 ## Handbook
 
-The English handbook in [`docs/en/`](docs/en/index.md) is the reference for everything the application does. A published HTML edition is planned in a separate website project; until then, these Markdown pages are the edition.
+The English handbook in [`docs/en/`](docs/en/index.md) is the reference for everything the application does. A published HTML edition is planned in a separate project; until then, these Markdown pages are the edition.
 
 - **Getting Started** — [What Animada Score Book Is](docs/en/getting-started/overview.md) · [Your First Session](docs/en/getting-started/first-steps.md)
 - **Using the Application** — [The Score Library](docs/en/using/score-library.md) · [Reading a Score](docs/en/using/presentation.md) · [Editing in the Staff View](docs/en/using/staff-editing.md) · [Editing in the Grid View](docs/en/using/grid-editing.md) · [Playback and Practice](docs/en/using/playback.md) · [Printing, PDF and MP3 Export](docs/en/using/printing-and-export.md)

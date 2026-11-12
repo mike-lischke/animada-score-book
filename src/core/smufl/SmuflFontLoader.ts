@@ -28,11 +28,14 @@ import { SmuflFonts, type ISmuflFontIndex, type ISmuflFontIndexEntry } from "./S
 /** The CSS variable the drawing components read their font from. */
 export const musicFontFamilyVariable = "--music-font-family";
 
-/** The catalogue's URL. Files in `public/` are served from the site root. */
-const defaultIndexUrl = "/fonts/smufl/index.json";
+/** The build's base path, so the catalogue and the font files follow the app wherever it is served. */
+const baseUrl = import.meta.env.BASE_URL;
+
+/** The catalogue's URL. Files in `public/` are served below the base path. */
+const defaultIndexUrl = `${baseUrl}fonts/smufl/index.json`;
 
 /** The folder a font file is served from. */
-const fontFolderUrl = "/fonts/smufl/";
+const fontFolderUrl = `${baseUrl}fonts/smufl/`;
 
 /**
  * The band a font draws its own barline glyphs for: the four staff spaces between the outer lines of a five-line

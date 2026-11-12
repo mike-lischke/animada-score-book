@@ -24,12 +24,9 @@ const shippedFontCount = 7;
  * @param barCount The number of bars the score has.
  */
 const openScore = async (page: Page, sessionId: string, barCount = 1): Promise<void> => {
-    const stepResolution = 16;
     const meter = {
         beats: 4,
         beatUnits: 4,
-        stepResolution,
-        beatGroups: new Array<number>(4).fill(stepResolution / 4),
     };
     const bars = Array.from({ length: barCount }, (_, index) => {
         return {
@@ -48,7 +45,7 @@ const openScore = async (page: Page, sessionId: string, barCount = 1): Promise<v
     const snapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E music font",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4" },
         tracks: [{ id: 100, instrumentId: "1", measures: bars }],
     };
 

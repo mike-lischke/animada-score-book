@@ -25,8 +25,7 @@ export class Metronome implements IEventSource {
             return events;
         }
 
-        const { secondsPerBar, stepsPerBar, stepsPerPulse, beatsPerBar, } = this.timeCoordinator.metrics;
-        const pulsesPerBar = stepsPerBar / stepsPerPulse;
+        const { secondsPerBar, pulsesPerBar, beatsPerBar, } = this.timeCoordinator.metrics;
         const secondsPerPulse = secondsPerBar / pulsesPerBar;
         const { start, end } = interval;
         const tolerance = Math.max(secondsPerPulse * 1e-9, Number.EPSILON);

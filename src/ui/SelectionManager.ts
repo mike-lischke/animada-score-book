@@ -89,12 +89,11 @@ export class SelectionManager {
     private anchorBeforeZen?: ISelectionPoint;
 
     /**
-     * Entry mode as last published on `editEntryModeChanged`, used to initialise new selection views. The
-     * persisted value is the start value, because the app only announces a mode the user switched to.
+     * Entry mode as last published on `editEntryModeChanged`, used to initialise new selection views. Starts at the
+     * demo default, and the app hands the stored mode over once it knows the session runs.
      */
-    private entryMode = AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert;
-    private viewMode = AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
-        ?? TrackViewMode.Grid;
+    private entryMode = EditEntryMode.Insert;
+    private viewMode = TrackViewMode.Grid;
     private cursorEntry?: ISelectionEntry;
 
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
@@ -124,6 +123,17 @@ export class SelectionManager {
 
             // TODO: update the selection toolbar UI to reflect the new mode.
         }
+    }
+
+    /**
+     * Takes the modes the app runs with, so a selection view created later starts in them.
+     *
+     * @param entryMode The entry mode to start with.
+     * @param viewMode The track view the app shows.
+     */
+    public applyPersistedModes(entryMode: EditEntryMode, viewMode: TrackViewMode): void {
+        this.entryMode = entryMode;
+        this.viewMode = viewMode;
     }
 
     public dispose(): void {

@@ -57,7 +57,7 @@ const openScore = async (page: Page): Promise<void> => {
     const measures = Array.from({ length: barCount }, (_, index) => {
         return {
             number: index + 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            meter: { beats: 4, beatUnits: 4 },
             events: Array.from({ length: 4 }, (_, beat) => {
                 return {
                     start: { numerator: beat, denominator: 4 },
@@ -72,7 +72,7 @@ const openScore = async (page: Page): Promise<void> => {
     const snapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E Staff Window Navigation",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4" },
         tracks: [{ id: 210, instrumentId: "0", measures }],
     };
 

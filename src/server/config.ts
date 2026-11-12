@@ -19,14 +19,29 @@ export interface IServerConfig {
     database: IDatabaseConfig;
     soundLibPath: string;
 
+    /** Public account creation. */
+    registration: IRegistrationConfig;
+
+    /** The curated scores a demo may offer without a session. */
+    demo: IDemoConfig;
+
     /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
     allowedOrigins?: string[];
 
     /** When true, trust x-forwarded-* proxy headers. Default false. */
     trustProxy?: boolean;
+}
 
-    /** When true, the startup applies pending migrations. Default false: the browser offers `Initialize Database`. */
-    autoMigrate: boolean;
+/** Whether visitors may create an account themselves. */
+export interface IRegistrationConfig {
+    /** Default false: an installation that is not asked to stays closed. */
+    enabled: boolean;
+}
+
+/** The curated demo catalog. */
+export interface IDemoConfig {
+    /** The scores a demo may offer, by id. An empty list disables the catalog. */
+    scoreIds: number[];
 }
 
 /** Whether the loaded configuration holds a usable database connection. */
@@ -75,6 +90,16 @@ export const loadConfig = (): IServerConfig => {
         }).filter(Boolean)
         : undefined;
 
+    const demoScoreIdsEnv = process.env.DEMO_SCORE_IDS
+        ? process.env.DEMO_SCORE_IDS.split(",")
+            .map((value) => {
+                return Number.parseInt(value.trim(), 10);
+            })
+            .filter((value) => {
+                return Number.isInteger(value) && value > 0;
+            })
+        : undefined;
+
     // Environment variables take precedence over saved config.
     const merged: IServerConfig = {
         host: process.env.HOST ?? raw.host ?? "0.0.0.0",
@@ -83,9 +108,6 @@ export const loadConfig = (): IServerConfig => {
         trustProxy: process.env.TRUST_PROXY !== undefined
             ? process.env.TRUST_PROXY === "true"
             : (raw.trustProxy ?? false),
-        autoMigrate: process.env.AUTO_MIGRATE !== undefined
-            ? process.env.AUTO_MIGRATE === "true"
-            : (raw.autoMigrate ?? false),
         database: {
             engine: process.env.DB_ENGINE && isValidDatabaseEngine(process.env.DB_ENGINE)
                 ? process.env.DB_ENGINE
@@ -97,6 +119,14 @@ export const loadConfig = (): IServerConfig => {
             password: process.env.DB_PASSWORD ?? raw.database?.password ?? "",
         },
         soundLibPath: raw.soundLibPath ?? "public/sounds",
+        registration: {
+            enabled: process.env.REGISTRATION_ENABLED !== undefined
+                ? process.env.REGISTRATION_ENABLED === "true"
+                : (raw.registration?.enabled ?? false),
+        },
+        demo: {
+            scoreIds: demoScoreIdsEnv ?? raw.demo?.scoreIds ?? [],
+        },
     };
 
     currentStatus = statusOf(merged, fileError);

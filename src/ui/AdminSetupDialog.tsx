@@ -14,7 +14,7 @@ import { Input } from "../components/ui/framework/Input.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
-import { type ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import { type ICapabilities, type IUserInfo, type ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 
 interface IAdminSetupDialogProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -364,11 +364,7 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
         }
 
         const data = await res.json() as {
-            token: string; user: { id: number; username: string; displayName: string; isAdmin: boolean; };
-            capabilities: {
-                canEditScores: boolean; canManageUsers: boolean; canManageInstruments: boolean;
-                canExportMP3: boolean;
-            };
+            token: string; user: IUserInfo; capabilities: ICapabilities;
         };
 
         dataModel.setSession(data.token, data.user, data.capabilities);

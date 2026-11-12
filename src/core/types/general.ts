@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISoundStyleMeta, ISbDmInstrument, ITiming, INoteArticulation } from "../ScoreBookDataModel.js";
+import type { ISoundStyleMeta, ISbDmInstrument, INoteArticulation } from "../ScoreBookDataModel.js";
 
 export interface IRect {
     x: number;
@@ -40,12 +40,6 @@ export interface IArticulationSymbol {
     description?: string;
 }
 
-export interface ITimeParams extends ITimeParamsBase {
-    timings: ITiming[];
-
-    isValid(timing: ITiming): boolean;
-}
-
 export interface IFraction {
     numerator: number;
     denominator: number;
@@ -61,7 +55,6 @@ export interface ITimeParamsBase {
     tempo: number;
     length: number;
     pulse: string;
-    stepResolution: number;
 }
 
 /** The repeat mark a barline carries: one opens a repeated section, the other closes it. */
@@ -200,11 +193,10 @@ export interface ITrackPieceSnapshot {
     simile?: boolean;
 }
 
+/** The meter of one measure. The step grid it is written on derives from these two numbers. */
 export interface IMeterSnapshot {
     beats: number;
     beatUnits: number;
-    stepResolution: number;
-    beatGroups: number[];
 }
 
 /**

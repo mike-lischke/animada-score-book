@@ -7,7 +7,7 @@ import { createRef, type ComponentChild, type JSX } from "preact";
 
 import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
 import {
-    MeasureLayout, barActionStripWidth, staffPrefixWidth, type IMeasureRange,
+    MeasureLayout, MeasureScrollPlacement, barActionStripWidth, staffPrefixWidth, type IMeasureRange,
 } from "../../../core/MeasureLayout.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import {
@@ -125,6 +125,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     /** Offset the auto-follow scrolled to last, to tell its own scrolling from the user's. */
     private autoScrollLeft = -1;
 
+    /**
+     * Work that the change which scheduled it could not do yet, because the measures it needs are not in the document
+     * at that moment: a scroll the content was too narrow for, the position a loaded score is shown at. The jobs run
+     * at the end of the next update, when those measures are mounted.
+     */
+    private readonly deferredJobs: Array<() => void> = [];
+
     /** Column widths and offsets of the measures in layout px at 100% zoom, as used by the staff window. */
     private staffColumns: number[] = [];
     private staffOffsets: number[] = [];
@@ -135,25 +142,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private staffGeometryArrangement?: ISbDmArrangement;
 
     /**
-     * Scroll position a loaded score is to be shown at, applied once its own measures are laid out: a scroll
-     * offset set before them is read against the extent of the score that is gone and clamped.
-     */
-    private pendingViewportTarget?: IPoint;
-
-    /**
      * Row geometry of the staff tracks, keyed by track id, so the height of a row is measured once and stays
      * the same while the score scrolls. Entries are dropped when a track's content changes.
      */
     private staffRowGeometries = new Map<number, IStaffRowGeometry>();
     private musicFont = AppStorage.loadUISettings()?.musicFont;
-
-    // Used in auto follow mode to indicate the last pulse we were on, so that we can determine when to scroll.
-    private lastPulse = 0;
-
-    // This is the scroll target pulse. If the current pulse is more than 2 pulses ahead of this, or lower which
-    // indicates we looped back, we scroll to catch up.
-    // Initialize to -2 so that the first update happens at pulse 0.
-    private targetPulse = -2;
 
     /** Real time the play head was last placed at, so it can be placed again while playback is paused. */
     private lastRealTime: RealTime = 0;
@@ -247,7 +240,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const stored = AppStorage.loadUISettings()?.currentScoreScroll;
         const arrangement = dataModel.arrangement;
         if (arrangement !== undefined && stored?.scoreId === arrangement.id) {
-            this.pendingViewportTarget = { x: stored.x, y: stored.y };
+            this.stageViewport({ x: stored.x, y: stored.y });
         }
 
         this.updateStaffWindow();
@@ -302,9 +295,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
         this.actionBarRef.current?.layout();
 
-        // A loaded score states the position it is to be shown at, which needs the measures of that score to be in
-        // the document: the scroll right after them is the one that counts.
-        this.applyStagedViewport();
+        // Deferred work first: a position or a scroll that the latest change could not set yet is applied while the
+        // measures it addresses are in the document, so the window below is the one that position shows.
+        this.runDeferredJobs();
         this.updateStaffWindow();
         this.updateContentCenterShift();
         this.handleTrackViewerScroll();
@@ -356,6 +349,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             cancelAnimationFrame(this.contentShiftFrame);
             this.contentShiftFrame = 0;
         }
+
+        // No update follows an unmount, so work that waits for one would never run.
+        this.deferredJobs.length = 0;
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
@@ -587,6 +583,31 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     /**
+     * Resolves how far the auto-follow scrolls at once: a whole measure when the viewport holds one, otherwise
+     * half of it and, when that does not fit either, a quarter. A quarter is kept even when it is wider than the
+     * viewport, because a finer chunk would make the beam jump without ever showing a whole measure.
+     *
+     * @param measureWidth The width of the measure column in layout px at 100% zoom.
+     * @param viewportWidth The width of the viewport in layout px at 100% zoom.
+     *
+     * @returns The scroll distance in layout px at 100% zoom.
+     */
+    private static scrollChunkOf(measureWidth: number, viewportWidth: number): number {
+        if (measureWidth <= 0) {
+            return 1;
+        }
+
+        if (measureWidth <= viewportWidth) {
+            return measureWidth;
+        }
+
+        const half = measureWidth / 2;
+        const chunk = half <= viewportWidth ? half : measureWidth / 4;
+
+        return Math.max(1, chunk);
+    }
+
+    /**
      * Renders the focus switch of a measure. Playback performs the span the focused bars cover; without a focus the
      * whole score is played.
      *
@@ -783,15 +804,19 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * @returns A promise that resolves when the measure is inside the viewport.
      */
     private handleMeasureVisibilityRequested = (request: IMeasureVisibilityRequest): Promise<boolean> => {
-        const { bar, position } = request;
-        const { arrangementPlayer } = this.props;
+        const { bar, position, centre } = request;
+        const { dataModel, arrangementPlayer } = this.props;
         const { trackViewMode } = this.state;
         const host = this.viewerRef.current;
         if (trackViewMode !== TrackViewMode.Staff || !host) {
             return Promise.resolve(false);
         }
 
-        this.updateStaffGeometry(arrangementPlayer.scoreMetrics.bars);
+        // The measure count comes from the arrangement: an entry that grew the score asks for the new measure in
+        // the same task, while the player beside it still holds the previous count. It is only used to rebuild the
+        // geometry, so the player is still what the caller's own bar range is read against.
+        const barCount = dataModel.arrangement?.timeParams.length ?? arrangementPlayer.scoreMetrics.bars;
+        this.updateStaffGeometry(barCount);
         if (bar < 1 || bar > this.staffColumns.length) {
             return Promise.resolve(false);
         }
@@ -800,16 +825,57 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const fraction = position === undefined ? 0 : position.numerator / position.denominator;
         const point = this.staffOffsets[bar - 1] + (fraction * column);
         const scrollLeft = host.scrollLeft;
+        const placement = centre === true ? MeasureScrollPlacement.Position : MeasureScrollPlacement.Measure;
         const target = MeasureLayout.scrollToShow(this.staffOffsets, bar, point, scrollLeft, host.clientWidth,
-            staffVisibilityMargin);
+            staffVisibilityMargin, placement);
         if (target !== scrollLeft) {
-            this.autoScrollLeft = target;
-            host.scrollLeft = target;
-            this.updateStaffWindow();
+            this.scrollViewerTo(target);
+
+            // The measure the request is about may be one an entry just added, which is not in the document yet —
+            // the browser then clamps the scroll to the measures that are there. The next update, which mounts the
+            // measure, repeats the scroll.
+            if (host.scrollLeft !== target) {
+                this.deferAfterRender(() => {
+                    this.scrollViewerTo(target);
+                });
+            }
         }
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Queues work for the end of the next update, where the measures the latest change added are mounted.
+     *
+     * @param job The work to run then.
+     */
+    private deferAfterRender(job: () => void): void {
+        this.deferredJobs.push(job);
+    }
+
+    /** Runs what the latest change could not do yet, in the order it was deferred in. */
+    private runDeferredJobs(): void {
+        const jobs = this.deferredJobs.splice(0);
+        for (const job of jobs) {
+            job();
+        }
+    }
+
+    /**
+     * Sets the horizontal scroll position, remembers it as the viewer's own and mounts the measures it shows.
+     *
+     * @param target The scroll position to show.
+     */
+    private scrollViewerTo(target: number): void {
+        const host = this.viewerRef.current;
+        if (!host) {
+            return;
+        }
+
+        this.autoScrollLeft = target;
+        host.scrollLeft = target;
+        this.updateStaffWindow();
+    }
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         // Time params changed — internal layout may need recalculation. The staff measures may now be a
@@ -886,35 +952,29 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { dataModel } = this.props;
         const arrangement = dataModel.arrangement;
         const stored = AppStorage.loadUISettings()?.currentScoreScroll;
-
-        this.pendingViewportTarget = arrangement !== undefined && stored?.scoreId === arrangement.id
+        const target = arrangement !== undefined && stored?.scoreId === arrangement.id
             ? { x: stored.x, y: stored.y }
             : { x: 0, y: 0 };
+
+        this.stageViewport(target);
     }
 
-    /** Applies the staged position, which waits for the measures of the score it belongs to. */
-    private applyStagedViewport(): void {
-        const target = this.pendingViewportTarget;
-        if (target === undefined) {
-            return;
-        }
-
-        this.pendingViewportTarget = undefined;
-        this.applyViewportTarget(target);
+    /**
+     * Stages the position the score now in place is to be shown at.
+     *
+     * @param target The scroll position to show.
+     */
+    private stageViewport(target: IPoint): void {
+        this.deferAfterRender(() => {
+            this.applyViewportTarget(target);
+        });
     }
 
     /**
      * @param target The scroll position to show.
      */
     private applyViewportTarget(target: IPoint): void {
-        const viewer = this.viewerRef.current;
-        if (viewer !== null) {
-            viewer.scrollLeft = target.x;
-
-            // The auto-follow tells its own scrolling from the user's by this offset, so the position just set is
-            // the one it has to know.
-            this.autoScrollLeft = viewer.scrollLeft;
-        }
+        this.scrollViewerTo(target.x);
 
         const verticalHost = this.verticalScrollHost();
         if (verticalHost !== undefined) {
@@ -956,7 +1016,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * @returns True once the track's row geometry has been revised.
      */
     private handleTrackChanged = (trackId: number): Promise<boolean> => {
-        const { arrangementPlayer, dataModel } = this.props;
+        const { dataModel } = this.props;
         const arrangement = dataModel.arrangement;
         const track = arrangement?.tracks.find((candidate) => {
             return candidate.id === trackId;
@@ -966,8 +1026,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             return Promise.resolve(false);
         }
 
-        const geometry = StaffRowGeometry.ofTrack(track, arrangement, arrangementPlayer.scoreMetrics, 1,
-            this.staffDisplayWidths);
+        const geometry = StaffRowGeometry.ofTrack(track, arrangement, 1, this.staffDisplayWidths);
         const previousGeometry = this.staffRowGeometries.get(trackId);
         if (previousGeometry?.staffLineOffsetPx !== geometry.staffLineOffsetPx
             || previousGeometry.centrePx !== geometry.centrePx
@@ -983,6 +1042,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     /**
      * Sets the play beam position and, if auto-follow is on, scrolls the viewer to follow the play head.
      * All computation is done at 100% zoom.
+     *
+     * The viewer advances in chunks of a whole measure: the beam travels through the measure the viewport starts
+     * with, and once it reaches a measure that is only partly shown, the viewer scrolls on by one chunk, so that
+     * measure is shown completely. A viewport that cannot hold a whole measure halves the chunk down to a quarter
+     * of it.
      *
      * @param realTime The current real time within the arrangement, provided by the animation engine.
      */
@@ -1000,48 +1064,29 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             return;
         }
 
-        const { arrangementPlayer } = this.props;
-        const metrics = arrangementPlayer.scoreMetrics;
-        const positionInColumn = column.progress * column.width;
-        const position = Math.floor(column.start + positionInColumn);
-
         // Auto-follow keeps the beam inside the viewport. Once the user scrolls the viewer himself,
         // the viewer stays where he put it and only the beam keeps moving.
         const clientWidth = viewer.clientWidth;
-        const maxScroll = Math.max(0, column.contentWidth - clientWidth);
-        const pulseWidthPixels = (column.width / metrics.stepsPerBar) * metrics.stepsPerPulse;
+        const scrollLeft = viewer.scrollLeft;
+        const position = column.start + (column.progress * column.width);
 
-        // Half-bar splits use beat-level granularity so odd time signatures snap musically.
-        // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
-        // using ceil+floor: 3+2 for 5/4, 4+3 for 7/8, 2+1 for 3/4.
-        const beatWidthPixels = column.width / metrics.beatsPerBar;
-        const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
-        const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
-
-        const rightPartialBarStart = trackViewMode === TrackViewMode.Staff
-            ? this.getRightPartialMeasureStart(viewer.scrollLeft, clientWidth)
-            : this.getRightPartialBarStart(viewer.scrollLeft, clientWidth, column.width);
-        const reachedRightPartialBar = position >= rightPartialBarStart;
-
-        if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth || reachedRightPartialBar) {
-            let snappedScroll: number;
-
-            if (column.width <= clientWidth) {
-                // The whole measure fits: snap to the start of its column.
-                snappedScroll = column.start;
-            } else if (secondHalfWidth <= clientWidth) {
-                // At least the smaller half fits: snap within each measure to the two half-sections.
-                snappedScroll = positionInColumn < firstHalfWidth ? column.start : column.start + firstHalfWidth;
-            } else {
-                // Not enough space for a half-measure: snap to pulse boundaries.
-                const pulses = Math.floor(positionInColumn / pulseWidthPixels);
-                snappedScroll = column.start + (pulses * pulseWidthPixels);
-            }
-
-            const target = clampValue(Math.floor(snappedScroll), 0, maxScroll);
-            this.autoScrollLeft = target;
-            viewer.scrollLeft = target;
+        // The measure at the viewport's right edge is only partly shown, so a beam entering it has to move on.
+        const trailingStart = trackViewMode === TrackViewMode.Staff
+            ? this.getRightPartialMeasureStart(scrollLeft, clientWidth)
+            : this.getRightPartialBarStart(scrollLeft, clientWidth, column.width);
+        const leftViewport = position < scrollLeft || position > scrollLeft + clientWidth;
+        if (!leftViewport && position < trailingStart) {
+            return;
         }
+
+        // Land on the start of the chunk the beam is in, so that chunk is shown completely.
+        const chunk = ArrangementViewer.scrollChunkOf(column.width, clientWidth);
+        const chunkIndex = Math.floor((position - column.start) / chunk);
+        const maxScroll = Math.max(0, column.contentWidth - clientWidth);
+        const target = clampValue(Math.floor(column.start + (chunkIndex * chunk)), 0, maxScroll);
+
+        this.autoScrollLeft = target;
+        viewer.scrollLeft = target;
     };
 
     /**
@@ -1300,7 +1345,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      *          The entries are dropped when the track's content or the arrangement changes.
      */
     private resolveStaffRowGeometries(): Map<number, IStaffRowGeometry> {
-        const { arrangementPlayer, dataModel } = this.props;
+        const { dataModel } = this.props;
         const arrangement = dataModel.arrangement;
         if (arrangement === undefined) {
             return this.staffRowGeometries;
@@ -1315,10 +1360,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             this.staffRowGeometries.clear();
         }
 
-        const metrics = arrangementPlayer.scoreMetrics;
         for (const track of arrangement.tracks) {
             if (!this.staffRowGeometries.has(track.id)) {
-                this.staffRowGeometries.set(track.id, StaffRowGeometry.ofTrack(track, arrangement, metrics, 1,
+                this.staffRowGeometries.set(track.id, StaffRowGeometry.ofTrack(track, arrangement, 1,
                     this.staffDisplayWidths));
             }
         }

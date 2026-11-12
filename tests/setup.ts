@@ -7,6 +7,8 @@ import "preact/compat";
 
 import { beforeEach, vi } from "vitest";
 
+import { AppMode, RunMode } from "../src/core/RunMode.js";
+
 // Required by auth.ts — the JWT secret is mandatory.
 // eslint-disable-next-line no-restricted-syntax
 process.env.JWT_SECRET = "test-secret";
@@ -86,6 +88,9 @@ vi.spyOn(window.history, "pushState").mockImplementation((data: unknown) => {
 
 beforeEach(() => {
     resetBrowserStateMocks();
+
+    // A test runs as a session unless it enters the demo itself.
+    RunMode.enter(AppMode.Normal);
 });
 
 export class AudioContextMock {

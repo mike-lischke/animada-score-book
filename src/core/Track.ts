@@ -6,11 +6,13 @@
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackPiece, type ITiming
+    type ISbDmTrackPiece
 } from "./ScoreBookDataModel.js";
-import { addFractions, compareFractions, reduceFraction } from "./serialisation/numeric-functions.js";
-import type { Mutable } from "./types/general.js";
-import { createBeatGroups, getNewId, reserveId } from "./utils.js";
+import {
+    addFractions, compareFractions,
+} from "./serialisation/numeric-functions.js";
+import type { IFraction, Mutable } from "./types/general.js";
+import { getNewId, reserveId } from "./utils.js";
 
 /**
  * A track holds its content as a list of {@link ISbDmTrackPiece} entries (one per bar).
@@ -45,28 +47,22 @@ export class Track implements ISbDmTrack {
     }
 
     /**
-     * Returns the note event at the given grid timing, or a synthesised rest event when
-     * the slot is empty. Returns undefined when the timing is out of range or covered by
-     * a non-grid (polyrhythm-shaped) event.
+     * Returns the note event that sounds at the given position of a measure, or a synthesised rest covering the
+     * grid slot that starts there. A longer note may cover a slot without starting there.
      *
-     * @param timing The bar/step position to look up.
-     * @returns The matching event, a synthesised rest, or undefined.
+     * @param bar The 1-based measure number.
+     * @param start The position as a fraction of the measure.
+     * @param slot The length of the grid slot that starts at the position.
+     *
+     * @returns The matching event, a synthesised rest, or undefined when the measure does not exist.
      */
-    public getNoteAt(timing: ITiming): ISbDmNoteEvent | undefined {
-        const measure = this.measures[timing.bar - 1] as ISbDmTrackPiece | undefined;
+    public getNoteAt(bar: number, start: IFraction, slot: IFraction): ISbDmNoteEvent | undefined {
+        const measure = this.measures[bar - 1] as ISbDmTrackPiece | undefined;
         if (!measure) {
             return undefined;
         }
 
-        const stepsPerBar = this.getStepsPerBar();
-        if (timing.step < 1 || timing.step > stepsPerBar) {
-            return undefined;
-        }
-
-        const slotStart = reduceFraction(timing.step - 1, stepsPerBar);
-
-        // Find a sounding note that covers this grid slot. Grid-aligned notes start exactly on the
-        // slot; a longer note may cover a slot without starting there.
+        // Find a sounding note that covers this slot. Grid-aligned notes start exactly on the slot.
         const event = measure.noteEvents.find((candidate) => {
             if (!candidate.audioData) {
                 return false;
@@ -74,14 +70,10 @@ export class Track implements ISbDmTrack {
 
             const candidateEnd = addFractions(candidate.start, candidate.duration);
 
-            return compareFractions(candidate.start, slotStart) <= 0 && compareFractions(slotStart, candidateEnd) < 0;
+            return compareFractions(candidate.start, start) <= 0 && compareFractions(start, candidateEnd) < 0;
         });
 
-        if (event) {
-            return event;
-        }
-
-        return this.createSynthesisedRest(measure, timing);
+        return event ?? this.createSynthesisedRest(measure, start, slot);
     }
 
     /**
@@ -200,7 +192,6 @@ export class Track implements ISbDmTrack {
     }
 
     private createEmptyMeasure(measureNumber: number): ISbDmTrackPiece {
-        const stepsPerBar = this.getStepsPerBar();
         const { timeSignature } = this.arrangement.timeParams;
         const [beats, beatUnits] = timeSignature.split("/").map(Number);
 
@@ -212,8 +203,6 @@ export class Track implements ISbDmTrack {
             meter: {
                 beats,
                 beatUnits,
-                stepResolution: stepsPerBar,
-                beatGroups: createBeatGroups(beats, beatUnits, stepsPerBar),
             },
             events: [{
                 start: { numerator: 0, denominator: 1 },
@@ -224,17 +213,14 @@ export class Track implements ISbDmTrack {
         };
     }
 
-    private createSynthesisedRest(measure: ISbDmTrackPiece, timing: ITiming): ISbDmNoteEvent {
-        const stepsPerBar = this.getStepsPerBar();
-
+    private createSynthesisedRest(measure: ISbDmTrackPiece, start: IFraction, slot: IFraction): ISbDmNoteEvent {
         return {
-            id: this.getRestPlaceholderId(timing),
+            id: this.getRestPlaceholderId(measure, start, slot),
             type: SbDmEntityType.NoteEvent,
             measure,
-            start: reduceFraction(timing.step - 1, stepsPerBar),
-            duration: reduceFraction(1, stepsPerBar),
+            start: { ...start },
+            duration: { ...slot },
             track: this,
-            timing,
             audioData: undefined,
         };
     }
@@ -243,25 +229,11 @@ export class Track implements ISbDmTrack {
         return (this.id * 10_000) + measureNumber;
     }
 
-    private getRestPlaceholderId(timing: ITiming): number {
-        // Deterministic id within this track. Offset keeps the value distinct from event ids
-        // (which come from getNewId()) and from measure ids (this.id * 10_000 + n).
-        return (this.id * 1_000_000) + (timing.bar * 1_000) + timing.step;
-    }
+    private getRestPlaceholderId(measure: ISbDmTrackPiece, start: IFraction, slot: IFraction): number {
+        // Deterministic id within this track: the slot index inside the measure. The offset keeps the value
+        // distinct from event ids (which come from getNewId()) and from measure ids (this.id * 10_000 + n).
+        const slotIndex = Math.round(start.numerator * slot.denominator / (start.denominator * slot.numerator));
 
-    private getStepsPerBar(): number {
-        const stepsPerBar = this.arrangement.timeParams.timings.reduce((maxStep, timing) => {
-            if (timing.bar !== 1) {
-                return maxStep;
-            }
-
-            return Math.max(maxStep, timing.step);
-        }, 0);
-
-        if (stepsPerBar < 1) {
-            throw new Error("Invalid arrangement timings: expected at least one step in bar 1");
-        }
-
-        return stepsPerBar;
+        return (this.id * 1_000_000) + (measure.number * 1_000) + slotIndex;
     }
 }

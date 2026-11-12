@@ -43,9 +43,11 @@ import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
+import { EntryHandoff, EntryMode } from "./core/EntryHandoff.js";
+import { AppMode, RunMode } from "./core/RunMode.js";
 import {
-    SbDmEntityType, ScoreBookChangeReason, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore,
-    type ISbDmScoreFolder
+    SbDmEntityType, ScoreBookChangeReason, ScoreBookDataModel, type IDemoScoreEntry, type ISbDmInstrument,
+    type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult,
@@ -218,6 +220,18 @@ export class App extends UIComponent<{}, IAppState> {
     private compactQueries = [this.compactHeaderQuery, this.compactLayoutQuery];
     private signInFromRunning = false;
 
+    /** The site this app was entered from, which owns the sign-in while no session exists. */
+    private siteOrigin: string | undefined;
+
+    /** True while a sign-out hands the visitor over to that site, so no dialog of this installation opens. */
+    private leavingForSite = false;
+
+    /** True while an explicit sign-out runs, whose own dialog must not be opened a second time. */
+    private signingOut = false;
+
+    /** The curated scores a demo offers instead of the score library. */
+    private demoScores: IDemoScoreEntry[] = [];
+
     /** True while an MP3 export is running, to keep the export button disabled. */
     private exporting = false;
 
@@ -229,13 +243,12 @@ export class App extends UIComponent<{}, IAppState> {
             editMode: false,
             zenMode: false,
             sidebarOpen: false,
-            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
-                ?? TrackViewMode.Grid,
-            preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
+            trackViewMode: TrackViewMode.Grid,
+            preferredEntryMode: EditEntryMode.Insert,
             printing: false,
             printPreviewOpen: false,
             notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
-            zoom: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100,
+            zoom: 100,
             compactHeader: this.compactHeaderQuery.matches,
             compactLayout: this.compactLayoutQuery.matches,
             scoreSaved: false,
@@ -249,7 +262,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentDidMount() {
-        this.selectedThemePreference = AppStorage.loadUISettings()?.theme ?? "Light+";
+        // The document starts with the default theme; what a session stored follows once its mode is known.
         this.applyThemePreference(this.selectedThemePreference);
         this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
         for (const query of this.compactQueries) {
@@ -492,6 +505,29 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
+        // A demo offers the curated catalog instead of the score library.
+        let libraryButton: ComponentChild;
+        if (RunMode.isDemo) {
+            libraryButton = <Dropdown
+                id="demoScoresButton"
+                className="du-btn-ghost"
+                title="Demo Scores"
+                icon={<Icon src={UIIcon.Library} />}
+                items={this.buildDemoMenuItems()}
+                closeOnSelect
+            />;
+        } else {
+            libraryButton = <Button
+                id="scoreLibraryButton"
+                className="du-btn-ghost"
+                title="Score Library"
+                data-tutorial="score-library"
+                onClick={this.handleScoreLibraryClick}
+            >
+                <Icon src={UIIcon.Library} />
+            </Button>;
+        }
+
         const headerNavigation = (
             <Container
                 id="mainToolbarButtons"
@@ -499,7 +535,7 @@ export class App extends UIComponent<{}, IAppState> {
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
-                <img id="titleLogo" src="/logo.svg" />
+                <img id="titleLogo" src={`${import.meta.env.BASE_URL}logo.svg`} />
                 <Button
                     className="du-btn-ghost displayOptionsButton"
                     title="Settings"
@@ -508,15 +544,7 @@ export class App extends UIComponent<{}, IAppState> {
                 >
                     <Icon src={UIIcon.Gear} />
                 </Button>
-                <Button
-                    id="scoreLibraryButton"
-                    className="du-btn-ghost"
-                    title="Score Library"
-                    data-tutorial="score-library"
-                    onClick={this.handleScoreLibraryClick}
-                >
-                    <Icon src={UIIcon.Library} />
-                </Button>
+                {libraryButton}
                 {userButton}
             </Container>
         );
@@ -874,7 +902,8 @@ export class App extends UIComponent<{}, IAppState> {
     private renderUserButton(): ComponentChild {
         const isAdmin = this.dataModel.user?.isAdmin ?? false;
 
-        if (this.dataModel.authenticated) {
+        // A demo offers no account actions at all, so the identity menu — including signing out — stays away.
+        if (RunMode.current === AppMode.Normal && this.dataModel.authenticated) {
             // The identity accent is a fixed brand pair, so its foreground is fixed as well instead of following
             // the theme's text colour.
             const userMenuStyle = isAdmin
@@ -1035,47 +1064,44 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        const sessionRestored = await this.dataModel.restoreSession();
+        const entry = EntryHandoff.takeEntry();
+        this.siteOrigin = entry?.site ?? EntryHandoff.rememberedSiteOrigin() ?? EntryHandoff.derivedSiteOrigin();
+        if (this.siteOrigin !== undefined) {
+            EntryHandoff.rememberSiteOrigin(this.siteOrigin);
+        }
 
-        if (sessionRestored) {
+        // A handover decides the mode. Without one, a demo tab stays in the demo across reloads.
+        const startsInDemo = entry === undefined ? EntryHandoff.isDemoTab() : entry.mode === EntryMode.Demo;
+        if (startsInDemo) {
+            // A demo neither uses the session this browser may hold nor ends it.
+            EntryHandoff.rememberDemoTab();
+            RunMode.enter(AppMode.Demo);
+            await this.dataModel.loadDemoCapabilities();
             await this.initializeApp();
 
             return;
         }
 
-        // No active session. If a score URL parameter is present, try anonymous access first.
-        const params = new URL(window.location.href).searchParams;
-        const scoreIdStr = params.get("score");
+        EntryHandoff.forgetDemoTab();
 
-        if (scoreIdStr) {
-            const scoreId = Number(scoreIdStr);
-            if (!isNaN(scoreId)) {
-                const [score, status] = await this.dataModel.fetchScoreById(scoreId);
-                if (score) {
-                    await this.initializeApp();
+        const sessionRestored = await this.dataModel.restoreSession();
 
-                    return;
-                }
+        if (sessionRestored) {
+            RunMode.enter(AppMode.Normal);
+            EntryHandoff.forgetDemoTab();
+            this.applyStoredSettings();
+            this.adoptDemoScore();
+            await this.initializeApp();
 
-                if (status === 403) {
-                    await this.confirmDialogRef.current?.show(
-                        "This score is not publicly accessible. Please sign in to continue.",
-                        { accept: "Sign In" },
-                        "Access Restricted",
-                    );
-                } else if (status === 404) {
-                    await this.confirmDialogRef.current?.show(
-                        "This score no longer exists. It may have been deleted.",
-                        { accept: "OK" },
-                        "Score Not Found",
-                    );
-                }
-            }
+            return;
         }
 
-        this.setState({ phase: AppPhase.Login }, () => {
-            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
-        });
+        // Without a session the application continues as a demo: with the last cached score and without reading or
+        // writing any settings. A score link is tried on the way there; the loader reports itself when that score
+        // is not publicly accessible.
+        RunMode.enter(AppMode.Demo);
+
+        await this.initializeApp();
     }
 
     /**
@@ -1092,13 +1118,27 @@ export class App extends UIComponent<{}, IAppState> {
     private handleAuthChanged = (): Promise<boolean> => {
         const { phase } = this.state;
 
-        if (!this.dataModel.authenticated && phase === AppPhase.Running) {
-            this.setState({ phase: AppPhase.Login }, () => {
-                void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
-            });
-        } else {
-            this.forceUpdate();
+        if (this.leavingForSite || this.signingOut) {
+            // The visitor is on the way to a sign-in, so no dialog of this installation may appear.
+            return Promise.resolve(true);
         }
+
+        if (!this.dataModel.authenticated && phase === AppPhase.Running && !RunMode.isDemo) {
+            if (this.siteOrigin !== undefined) {
+                // The site owns the account, so a session that ended continues as a demo instead of asking again.
+                void this.continueInDemoMode();
+
+                return Promise.resolve(true);
+            }
+
+            this.setState({ phase: AppPhase.Login }, () => {
+                void this.loginDialogRef.current?.show(true).then(this.handleLoginDialogResult);
+            });
+
+            return Promise.resolve(true);
+        }
+
+        this.forceUpdate();
 
         return Promise.resolve(true);
     };
@@ -1139,12 +1179,20 @@ export class App extends UIComponent<{}, IAppState> {
         if (loggedIn) {
             this.handleLoginSuccess();
         } else {
-            this.handleContinueAnonymous();
+            this.handleSignInSkipped();
         }
     };
 
     private handleLoginSuccess = (): void => {
         this.signInFromRunning = false;
+        RunMode.enter(AppMode.Normal);
+
+        // The session keeps its settings and its score in the session records again, whether a demo score came
+        // along or not.
+        EntryHandoff.forgetDemoTab();
+        this.applyStoredSettings();
+        this.adoptDemoScore();
+
         void this.initializeApp().then(() => {
             const group = this.dataModel.activeGroup;
             const message = group
@@ -1155,16 +1203,19 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     /**
-     * Called when the user chooses to continue without logging in.
-     * Hides the login dialog. The app continues with anonymous capabilities.
+     * Called when the visitor skips the sign-in dialog, by choosing the demo or by cancelling it. The app keeps the
+     * capabilities of a caller without a session.
      */
-    private handleContinueAnonymous = (): void => {
+    private handleSignInSkipped = (): void => {
         if (this.signInFromRunning) {
             this.signInFromRunning = false;
             this.setState({ phase: AppPhase.Running });
 
             return;
         }
+
+        // Cancelling a login leaves the app in a demo, which keeps its own score and no settings.
+        RunMode.enter(AppMode.Demo);
 
         // If a score URL parameter was present, remove it — the user chose not to sign in.
         const params = new URL(window.location.href).searchParams;
@@ -1176,6 +1227,49 @@ export class App extends UIComponent<{}, IAppState> {
 
         void this.initializeApp();
     };
+
+    /**
+     * Continues a session that has ended as a demo: the score stays on screen, its storage moves to the demo
+     * record and nothing is written to the session records any more.
+     */
+    private async continueInDemoMode(): Promise<void> {
+        RunMode.enter(AppMode.Demo);
+
+        const [, catalog] = await Promise.all([
+            this.dataModel.loadDemoCapabilities(),
+            this.dataModel.listDemoScores(),
+        ]);
+
+        this.demoScores = catalog;
+        this.forceUpdate();
+        void requisitions.execute("showInfo", "Your session has ended. You continue in demo mode.");
+    }
+
+    /**
+     * Moves an edited demo score into the session that was just established, so the work survives the login. The
+     * score loses any server identity: it is a local copy, not the score it may have been loaded from.
+     *
+     * @returns Whether a demo score was carried over.
+     */
+    private adoptDemoScore(): boolean {
+        const carried = AppStorage.takeDemoScore();
+        if (carried === undefined) {
+            return false;
+        }
+
+        const snapshot = tryParsePackedArrangement(carried);
+        if (!snapshot) {
+            console.warn("The demo score could not be read and is dropped.");
+
+            return false;
+        }
+
+        delete snapshot.scoreId;
+        AppStorage.saveCurrentScore(stringifyPackedArrangement(snapshot));
+        void requisitions.execute("showInfo", "Your demo score was carried over into your session.");
+
+        return true;
+    }
 
     /**
      * Called when the backend setup dialog is closed.
@@ -1202,6 +1296,9 @@ export class App extends UIComponent<{}, IAppState> {
                 const sessionRestored = await this.dataModel.restoreSession();
 
                 if (sessionRestored) {
+                    RunMode.enter(AppMode.Normal);
+                    EntryHandoff.forgetDemoTab();
+                    this.applyStoredSettings();
                     await this.initializeApp();
 
                     return;
@@ -1218,6 +1315,25 @@ export class App extends UIComponent<{}, IAppState> {
         }
     };
 
+    /**
+     * Applies what a session stored, once its mode is known. A demo keeps the fixed defaults instead, so nothing
+     * a session kept reaches it.
+     */
+    private applyStoredSettings(): void {
+        const settings = AppStorage.loadUISettings();
+        const viewSettings = settings?.viewSettings?.arrangementViewSettings;
+        const trackViewMode = viewSettings?.displayMode ?? TrackViewMode.Grid;
+        const preferredEntryMode = settings?.entryMode ?? EditEntryMode.Insert;
+
+        this.applyThemePreference(settings?.theme);
+        this.selectionManager.applyPersistedModes(preferredEntryMode, trackViewMode);
+        this.setState({
+            trackViewMode,
+            preferredEntryMode,
+            zoom: viewSettings?.zoomLevel ?? 100,
+        });
+    }
+
     private async initializeApp(): Promise<void> {
         // The score is drawn with the music font from its first paint on, so the font loads next to the data.
         const musicFont = AppStorage.loadUISettings()?.musicFont;
@@ -1228,7 +1344,165 @@ export class App extends UIComponent<{}, IAppState> {
 
         const params = new URL(window.location.href).searchParams;
 
+        if (RunMode.isDemo) {
+            await this.loadDemoCatalog(params);
+
+            return;
+        }
+
         await this.loadInitialScore(params);
+    }
+
+    /**
+     * Reads the curated catalog and opens its first score when the demo has nothing stored yet.
+     *
+     * @param params The URL parameters of the current document.
+     */
+    private async loadDemoCatalog(params: URLSearchParams): Promise<void> {
+        this.demoScores = await this.dataModel.listDemoScores();
+
+        const stored = AppStorage.loadCurrentScore();
+        const hasStoredScore = stored !== undefined && tryParsePackedArrangement(stored) !== undefined;
+        if (stored !== undefined && !hasStoredScore) {
+            // A snapshot this build cannot read is dropped, and the demo starts with its catalog as on a first start.
+            AppStorage.clearCurrentScore();
+        }
+
+        const hasScoreLink = params.get("score") !== null;
+
+        if (!hasStoredScore && !hasScoreLink) {
+            if (this.demoScores.length > 0) {
+                await this.loadScorebookById(this.demoScores[0].id);
+                this.setState({ phase: AppPhase.Running }, () => {
+                    this.warnAboutBlockedStorage();
+                });
+
+                return;
+            }
+
+            // An installation that curates no catalog still needs something to show, so the demo opens a blank sheet.
+            this.startEmptyDemoSheet();
+
+            return;
+        }
+
+        await this.loadInitialScore(params);
+    }
+
+    /** Opens the demo's fallback content: one bar with the instruments a bateria starts with. */
+    private startEmptyDemoSheet(): void {
+        const names = ["Agogô 2-Bell", "Tamborim", "Caixa", "Surdo Terceira", "Surdo Segunda", "Surdo Primeira"];
+        const instruments = names
+            .map((name) => {
+                return this.dataModel.instruments.find((instrument) => {
+                    return instrument.displayName === name;
+                });
+            })
+            .filter((instrument): instrument is ISbDmInstrument => {
+                return instrument !== undefined;
+            });
+
+        this.startNewSong(instruments, { timeSignature: "4/4", tempo: 110, length: 1 });
+
+        this.setState({ phase: AppPhase.Running }, () => {
+            this.warnAboutBlockedStorage();
+        });
+    }
+
+    /**
+     * @param id The id of the curated score to open.
+     */
+    private async loadScorebookById(id: number): Promise<void> {
+        const [score] = await this.dataModel.fetchScoreById(id);
+
+        if (!score) {
+            void requisitions.execute("showError", "This demo score could not be loaded.");
+
+            return;
+        }
+
+        this.loadScorebook(score);
+    }
+
+    /**
+     * @returns The menu entries of the curated demo scores, followed by the one import a demo offers.
+     */
+    private buildDemoMenuItems(): IDropdownItem[] {
+        const items: IDropdownItem[] = this.demoScores.map((entry) => {
+            return {
+                label: entry.name,
+                icon: <Icon src={UIIcon.Library} />,
+                onClick: () => {
+                    void this.loadScorebookById(entry.id);
+                },
+            };
+        });
+
+        if (items.length === 0) {
+            items.push({ label: "No demo scores available" });
+        }
+
+        items.push({
+            label: "Import BananaDrum Song…",
+            icon: <Icon src={UIIcon.CloudDownload} />,
+            onClick: () => {
+                void this.importBananaDrumSong();
+            },
+        });
+
+        return items;
+    }
+
+    /**
+     * Loads a BananaDrum song from a pasted link. It is the only import a demo offers, and it replaces the demo's
+     * score without touching the library.
+     */
+    private async importBananaDrumSong(): Promise<void> {
+        const result = await this.valueDialogRef.current?.show(
+            "bananaDrumImportDialog",
+            "Import BananaDrum Song",
+            UIIcon.CloudDownload,
+            [{
+                type: ValueEditorEntryType.Title,
+                id: "bananaDrumImportDescription",
+                content: "Score URL:",
+                displayWidth: 2,
+            },
+            {
+                type: ValueEditorEntryType.Value,
+                id: "bananaDrumImportUrl",
+                content: "",
+                placeholder: "https://<host-name>/?a2=...",
+                displayWidth: 6,
+            }],
+        );
+
+        if (result?.closure !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        const entered = (result.data.bananaDrumImportUrl as IValueEditorValueEntry).content;
+        const link = typeof entered === "string" ? entered.trim() : "";
+        if (link === "") {
+            return;
+        }
+
+        let params: URLSearchParams;
+        try {
+            params = new URL(link).searchParams;
+        } catch {
+            void requisitions.execute("showError", "This is not a valid link.");
+
+            return;
+        }
+
+        if (!params.has("a") && !params.has("a2")) {
+            void requisitions.execute("showError", "The link holds no BananaDrum song.");
+
+            return;
+        }
+
+        this.loadScorebook(params);
     }
 
     private async loadInitialScore(params: URLSearchParams): Promise<void> {
@@ -1246,7 +1520,9 @@ export class App extends UIComponent<{}, IAppState> {
                     const [score, status] = await this.dataModel.fetchScoreById(scoreId);
                     if (score) {
                         this.loadScorebook(score);
-                        this.setState({ phase: AppPhase.Running });
+                        this.setState({ phase: AppPhase.Running }, () => {
+                            this.warnAboutBlockedStorage();
+                        });
 
                         return;
                     }
@@ -1266,10 +1542,26 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         this.setState({ phase: AppPhase.Running }, () => {
+            this.warnAboutBlockedStorage();
+
             if (pendingWarning) {
                 void requisitions.execute("showWarning", pendingWarning);
             }
         });
+    }
+
+    /**
+     * Tells the user that the browser denies site data, which is what keeps the app from remembering settings,
+     * the cached score and the tab's session. Safari hides that switch behind its advanced settings.
+     */
+    private warnAboutBlockedStorage(): void {
+        if (AppStorage.hasLocalStorage) {
+            return;
+        }
+
+        void requisitions.execute("showWarning", "This browser blocks site data, so your settings and the score"
+            + " you had open are not remembered between reloads. In Safari, open Settings › Advanced, show the"
+            + " advanced settings and turn off “Block All Cookies” in the Privacy section.");
     }
 
     private handleGithubClick = () => {
@@ -1298,13 +1590,26 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleSignInClick = () => {
+        // A demo that was entered from a site signs in there, where the account lives. A standalone installation
+        // has no site, so its own dialog stays the fallback.
+        if (this.siteOrigin !== undefined) {
+            window.location.assign(`${this.siteOrigin}login`);
+
+            return;
+        }
+
         this.signInFromRunning = true;
         this.setState({ phase: AppPhase.Login }, () => {
-            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+            // Signing in is optional, so the dialog can be cancelled and the visitor stays in the demo.
+            void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);
         });
     };
 
     private handleLogoutClick = async () => {
+        // Signing out of an installation that was entered from a site returns to its login page.
+        this.leavingForSite = this.siteOrigin !== undefined;
+        this.signingOut = true;
+
         await this.dataModel.logout();
         this.dataModel.reset();
 
@@ -1317,8 +1622,16 @@ export class App extends UIComponent<{}, IAppState> {
         this.undoManager?.dispose();
         this.undoManager = undefined;
 
+        if (this.siteOrigin !== undefined) {
+            window.location.assign(`${this.siteOrigin}login`);
+
+            return;
+        }
+
+        this.signingOut = false;
         this.setState({ phase: AppPhase.Login }, () => {
-            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+            // After a logout the visitor continues in the demo instead of being forced back in.
+            void this.loginDialogRef.current?.show(false).then(this.handleLoginDialogResult);
         });
     };
 
@@ -1849,13 +2162,12 @@ export class App extends UIComponent<{}, IAppState> {
             resolvedSource = source;
         } else {
             // Try to load the last opened score from localStorage, if available and no other source is provided.
-            const lastScoreString = AppStorage.loadUISettings()?.currentScore;
+            const lastScoreString = AppStorage.loadCurrentScore();
             if (lastScoreString) {
-                try {
-                    resolvedSource = tryParsePackedArrangement(lastScoreString);
-                } catch {
-                    // Remove the invalid score from storage to prevent future errors, and proceed without loading.
-                    AppStorage.saveSetting("currentScore", undefined);
+                resolvedSource = tryParsePackedArrangement(lastScoreString);
+                if (!resolvedSource) {
+                    // An unreadable record is dropped, so the next start begins with a clean score.
+                    AppStorage.clearCurrentScore();
                 }
             }
         }
@@ -1885,7 +2197,7 @@ export class App extends UIComponent<{}, IAppState> {
             document.title = arrangement.title + " - Animada Score Book";
         }
 
-        AppStorage.saveSetting("currentScore",
+        AppStorage.saveCurrentScore(
             stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()),
         );
 
@@ -2268,7 +2580,6 @@ export class App extends UIComponent<{}, IAppState> {
             title: result.title,
             timeSignature: result.timeSignature,
             pulse: result.pulse,
-            stepResolution: result.stepResolution,
             length: result.barCount,
             tempo: result.tempo,
         });
@@ -2289,8 +2600,7 @@ export class App extends UIComponent<{}, IAppState> {
             document.title = arrangement.title + " - Animada Score Book";
         }
 
-        AppStorage.saveSetting("currentScore",
-            stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
+        AppStorage.saveCurrentScore(stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
 
         this.forceUpdate();
 
@@ -2430,7 +2740,7 @@ export class App extends UIComponent<{}, IAppState> {
         try {
             const content = await this.dataModel.saveArrangement();
             if (content) {
-                AppStorage.saveSetting("currentScore", content);
+                AppStorage.saveCurrentScore(content);
                 this.undoManager.clearHistory();
 
                 this.setState({ scoreSaved: true });

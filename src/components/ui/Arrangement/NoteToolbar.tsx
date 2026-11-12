@@ -103,7 +103,7 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
         const tupletSection: ISelectionToolbarSection = {
             label: "Tuplets",
             className: "subdivision-toolbar",
-            content: <SubdivisionToolbar selectionManager={selectionManager} />,
+            content: <SubdivisionToolbar selectionManager={selectionManager} trackViewMode={trackViewMode} />,
         };
 
         const allNoteCells = entries.every((entry) => {

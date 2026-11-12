@@ -1,6 +1,6 @@
 # Animada Score Book Handbook
 
-Animada Score Book is a browser-based score library and playback application for Samba groups. It stores your repertoire, shows each score as a note grid or as staff notation, plays it back with per-track mixing, and prints or exports it. This handbook documents version 2.0.1.
+Animada Score Book is a browser-based score library and playback application for Samba groups. It stores your repertoire, shows each score as a note grid or as staff notation, plays it back with per-track mixing, and prints or exports it. This handbook documents version 2.1.0.
 
 Choose the path that matches your role:
 
@@ -12,10 +12,10 @@ Choose the path that matches your role:
 
 ## Getting Started
 
-| Chapter                                                   | Contents                                                                                                                  |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [What Animada Score Book Is](getting-started/overview.md) | The product idea, the terms used throughout the handbook, browser and device requirements, and how anonymous access works |
-| [Your First Session](getting-started/first-steps.md)      | Signing in, opening a score, playback, switching views, zoom, Zen mode, saving, and where the settings are                |
+| Chapter                                                   | Contents                                                                                                           |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| [What Animada Score Book Is](getting-started/overview.md) | The product idea, the terms used throughout the handbook, browser and device requirements, and how demo mode works |
+| [Your First Session](getting-started/first-steps.md)      | Signing in, opening a score, playback, switching views, zoom, Zen mode, saving, and where the settings are         |
 
 ## Using the Application
 
@@ -50,15 +50,15 @@ Choose the path that matches your role:
 | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
 | [Keyboard Shortcuts](reference/keyboard-shortcuts.md)       | Global shortcuts, score input keys, selection modifiers, and dialog keys   |
 | [Glossary](reference/glossary.md)                           | Application terms, music terms, and the instruments of a bateria           |
-| [Troubleshooting and Known Limitations](troubleshooting.md) | Common problems with their cause, and the limitations documented for 2.0.1 |
+| [Troubleshooting and Known Limitations](troubleshooting.md) | Common problems with their cause, and the limitations documented for 2.1.0 |
 
 ## Development
 
-| Chapter                                                        | Contents                                                                                         |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [Development Setup](development/setup.md)                      | Requirements, configuration, development server, backend start, test commands, and debugging     |
-| [Architecture and Decisions](development/architecture.md)      | A short map of the codebase with links to the architecture decisions and design contracts        |
-| [Maintaining This Documentation](development/documentation.md) | Page and image conventions, the handbook/website handoff, and what must change with each release |
+| Chapter                                                        | Contents                                                                                     |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [Development Setup](development/setup.md)                      | Requirements, configuration, development server, backend start, test commands, and debugging |
+| [Architecture and Decisions](development/architecture.md)      | A short map of the codebase with links to the architecture decisions and design contracts    |
+| [Maintaining This Documentation](development/documentation.md) | Page and image conventions, the handbook handoff, and what must change with each release     |
 
 ## Related Documents
 
@@ -69,4 +69,4 @@ Choose the path that matches your role:
 
 ## Editions and Languages
 
-The English handbook in this directory is the authoritative edition. Sibling language directories are reserved for future translations and are created only when a translation exists. A published HTML edition is planned in a separate website project; until then, these Markdown pages are the reference.
+The English handbook in this directory is the authoritative edition. Sibling language directories are reserved for future translations and are created only when a translation exists. A published HTML edition is planned in a separate project; until then, these Markdown pages are the reference.

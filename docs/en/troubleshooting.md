@@ -1,6 +1,6 @@
 # Troubleshooting and Known Limitations
 
-This chapter lists the problems that occur in practice, with their cause and remedy, and collects what the 2.0.1 release documents instead of fixing.
+This chapter lists the problems that occur in practice, with their cause and remedy, and collects what the 2.1.0 release documents instead of fixing.
 
 ## The Backend Is Unreachable
 
@@ -122,7 +122,7 @@ Compare these settings:
 | MP3              | Needs browser MP3 encoding; no loop and no range export                                                        |
 | Group login      | Group logins share the `anonymous` account, and a new group login ends the previous group session              |
 | Score locks      | 30 minutes, no heartbeat, released only on save or leaving edit mode                                           |
-| Anonymous access | Anonymous visitors see every score shared with `World`                                                         |
+| Demo mode        | Only the scores in `demo.scoreIds`; every other score is reachable only through a `World` grant                |
 | Lists            | User and group lists are not paginated                                                                         |
 | HTTPS            | The backend itself serves HTTP; the refresh cookie requires TLS in front of it                                 |
 | Migration files  | A migration file changed after it ran blocks the start; there are no down migrations                           |

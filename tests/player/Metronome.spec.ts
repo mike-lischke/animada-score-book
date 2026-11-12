@@ -5,22 +5,17 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { ITimeParams } from "../../src/core/types/general.js";
+import type { ITimeParamsBase } from "../../src/core/types/general.js";
 import { Metronome } from "../../src/player/Metronome.js";
 import { PlayerPlayState } from "../../src/player/ArrangementPlayer.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 
 const makeTimeCoordinator = (): TimeCoordinator => {
-    const timeParams: ITimeParams = {
+    const timeParams: ITimeParamsBase = {
         timeSignature: "4/4",
         tempo: 60,
         length: 2,
         pulse: "2/8",
-        stepResolution: 16,
-        timings: [],
-        isValid: () => {
-            return true;
-        },
     };
 
     const realtimeProvider = {

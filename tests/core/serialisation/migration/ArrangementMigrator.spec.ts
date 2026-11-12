@@ -11,6 +11,7 @@ import { Damping, type ISbDmInstrument } from "../../../../src/core/ScoreBookDat
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { IBananaDrumSnapshot } from "../../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import { getArrangementSnapshot } from "../../../../src/core/serialisation/snapshots.js";
+import { StepGrid } from "../../../../src/core/StepGrid.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../../src/core/types/general.js";
 import { createInstrument, hydrateMeasureEvents } from "../../../unit-test-helpers.js";
 
@@ -206,13 +207,11 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
             tempo: migrated.timeParams.tempo,
             length: migrated.timeParams.length,
             pulse: migrated.timeParams.pulse,
-            stepResolution: migrated.timeParams.stepResolution,
         }).toEqual({
             timeSignature: "4/4",
             tempo: 100,
             length: 4,
             pulse: "1/4",
-            stepResolution: 16,
         });
         expect(migrated.tracks).toHaveLength(2);
 
@@ -253,8 +252,6 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
 
         expect(measure.meter.beats).toBe(6);
         expect(measure.meter.beatUnits).toBe(8);
-        expect(measure.meter.stepResolution).toBe(6);
-        expect(measure.meter.beatGroups).toEqual([3, 3]);
 
         // All 13 visible steps are notes; the 4:1 subdivision is the only asymmetric tuplet.
         expect(measure.events).toHaveLength(13);
@@ -330,7 +327,6 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
                 tempo: 100,
                 length: 11,
                 pulse: "1/4",
-                stepResolution: 16,
             }));
             expect(arrangement.tracks.length).toBe(8);
             for (const track of arrangement.tracks) {
@@ -342,7 +338,7 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
             hydrateMeasureEvents(arrangement);
             const noteCounts = new Map<string, number>();
             for (const track of arrangement.tracks) {
-                const stepsPerBar = track.measures[0].meter.stepResolution;
+                const stepsPerBar = StepGrid.stepsPerBarOfMeter(track.measures[0].meter);
                 const count = [...track.notes].filter((event) => {
                     return event.audioData !== undefined
                         || (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;

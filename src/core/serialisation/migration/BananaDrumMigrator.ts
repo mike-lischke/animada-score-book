@@ -3,16 +3,14 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
-import { TimeCoordinator, type IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { decomposeRestSpan } from "../../rest-notation.js";
 import type { INoteArticulation, ISbDmInstrument } from "../../ScoreBookDataModel.js";
+import { StepGrid } from "../../StepGrid.js";
 import { TimeParams } from "../../TimeParams.js";
 import type {
-    IArrangementSnapshot, IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase,
-    ITrackPieceSnapshot, ITrackSnapshot
+    IArrangementSnapshot, IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision, ITrackPieceSnapshot,
+    ITrackSnapshot
 } from "../../types/general.js";
-import type { IRealtimeProvider } from "../../../ui/AnimationEngine.js";
 import { getNewId, primeFactors } from "../../utils.js";
 import {
     addFractions, compareFractions, convertToBaseN, greatestCommonDivisor, reduceFraction, urlDecodeNumber
@@ -27,8 +25,19 @@ import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "../constants.
  */
 export interface IBananaDrumSnapshot {
     title?: string;
-    timeParams: ITimeParamsBase;
+    timeParams: IBananaDrumTimeParams;
     tracks: IBananaDrumTrackSnapshot[];
+}
+
+/** The time parameters a share link states, including the step grid the legacy app counted its note indices in. */
+export interface IBananaDrumTimeParams {
+    timeSignature: string;
+    tempo: number;
+    length: number;
+    pulse: string;
+
+    /** Steps per whole note, the grid the link's note indices refer to. */
+    stepResolution: number;
 }
 
 export interface IBananaDrumTrackSnapshot {
@@ -67,8 +76,20 @@ interface IBananaDrumSubdivision {
 interface IBananaDrumMeasure {
     number: number;
     meter: IMeterSnapshot;
+
+    /** The number of grid steps the bar is divided into. */
+    stepsPerBar: number;
     steps: IBananaDrumStep[];
     subdivisions: IBananaDrumSubdivision[];
+}
+
+/** The grid a share link states: its bar count, meter and step structure. */
+interface IBananaDrumGrid {
+    bars: number;
+    beatsPerBar: number;
+    beatUnit: number;
+    stepsPerBar: number;
+    beatGroups: number[];
 }
 
 /** A flat event produced by expanding steps and subdivisions. */
@@ -200,9 +221,7 @@ class BananaDrumArrangement {
         this.title = snapshot.title ?? "Untitled Arrangement";
 
         const tp = snapshot.timeParams;
-        this.timeParams = new TimeParams(
-            tp.timeSignature, tp.tempo, tp.length, tp.pulse, tp.stepResolution,
-        );
+        this.timeParams = new TimeParams(tp.timeSignature, tp.tempo, tp.length, tp.pulse);
 
         const stepsPerBar = calculateStepsPerBar(tp.timeSignature, tp.stepResolution);
         const totalSteps = stepsPerBar * tp.length;
@@ -323,8 +342,8 @@ export class BananaDrumMigrator {
      */
     public static toSnapshot(snapshot: IBananaDrumSnapshot, instruments: ISbDmInstrument[]): IArrangementSnapshot {
         const arrangement = new BananaDrumArrangement(snapshot);
-        const metrics = BananaDrumMigrator.getScoreMetrics(arrangement);
-        const meterBase = BananaDrumMigrator.getMeterBase(metrics.beatsPerBar, metrics.beatUnit);
+        const grid = BananaDrumMigrator.getGrid(snapshot.timeParams);
+        const meterBase = BananaDrumMigrator.getMeterBase(grid.beatsPerBar, grid.beatUnit);
         const tp = arrangement.timeParams;
 
         return {
@@ -335,10 +354,9 @@ export class BananaDrumMigrator {
                 tempo: tp.tempo,
                 length: tp.length,
                 pulse: tp.pulse,
-                stepResolution: tp.stepResolution,
             },
             tracks: arrangement.tracks.map((track) => {
-                return BananaDrumMigrator.convertTrack(track, metrics, meterBase, tp.pulse, instruments);
+                return BananaDrumMigrator.convertTrack(track, grid, meterBase, tp.pulse, instruments);
             }),
         };
     }
@@ -500,29 +518,27 @@ export class BananaDrumMigrator {
     }
 
     /**
-     * @param arrangement The decoded share-link arrangement.
+     * Resolves the grid a share link's note indices refer to. That grid is the legacy one, not the grid the meter
+     * derives, so the migrated measures keep the step counts the link states.
      *
-     * @returns The score metrics of its time grid.
+     * @param timeParams The legacy time parameters of the share link.
+     *
+     * @returns The bar count, meter and step structure of the legacy grid.
      */
-    private static getScoreMetrics(arrangement: BananaDrumArrangement): IScoreMetrics {
-        const realtimeProvider: IRealtimeProvider = {
-            get state(): PlayerPlayState {
-                return PlayerPlayState.Stopped;
-            },
-            get currentTime() {
-                return 0;
-            },
+    private static getGrid(timeParams: IBananaDrumTimeParams): IBananaDrumGrid {
+        const [beatsPerBar, beatUnit] = timeParams.timeSignature.split("/").map((value) => {
+            return Number(value);
+        });
+
+        const stepsPerBar = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution);
+
+        return {
+            bars: timeParams.length,
+            beatsPerBar,
+            beatUnit,
+            stepsPerBar,
+            beatGroups: StepGrid.beatGroupsFor(beatsPerBar, beatUnit, stepsPerBar),
         };
-
-        const tp = arrangement.timeParams;
-
-        return new TimeCoordinator({
-            timeSignature: tp.timeSignature,
-            tempo: tp.tempo,
-            length: tp.length,
-            pulse: tp.pulse,
-            stepResolution: tp.stepResolution,
-        }, realtimeProvider).metrics;
     }
 
     /**
@@ -530,14 +546,14 @@ export class BananaDrumMigrator {
      * already migrated measure events.
      *
      * @param track The decoded share-link track.
-     * @param metrics The score metrics of the arrangement.
+     * @param grid The legacy grid the link's note indices refer to.
      * @param meterBase The natural subdivision basis of the meter.
      * @param pulse The pulse of the arrangement.
      * @param instruments The available instruments, used to resolve articulations.
      *
      * @returns The migrated track.
      */
-    private static convertTrack(track: BananaDrumTrack, metrics: IScoreMetrics, meterBase: Set<number>,
+    private static convertTrack(track: BananaDrumTrack, grid: IBananaDrumGrid, meterBase: Set<number>,
         pulse: string, instruments: ISbDmInstrument[]): ITrackSnapshot {
         const instrument = instruments.find((candidate) => {
             return candidate.typeId === track.instrumentId;
@@ -546,14 +562,14 @@ export class BananaDrumMigrator {
         return {
             id: track.id,
             instrumentId: track.instrumentId,
-            measures: BananaDrumMigrator.convertTrackPieces(track, metrics, meterBase, pulse, instrument),
+            measures: BananaDrumMigrator.convertTrackPieces(track, grid, meterBase, pulse, instrument),
         };
     }
 
-    private static convertTrackPieces(track: BananaDrumTrack, metrics: IScoreMetrics, meterBase: Set<number>,
+    private static convertTrackPieces(track: BananaDrumTrack, grid: IBananaDrumGrid, meterBase: Set<number>,
         pulse: string, instrument: ISbDmInstrument | undefined): ITrackPieceSnapshot[] {
         const measures: ITrackPieceSnapshot[] = [];
-        const stepsPerBar = metrics.stepsPerBar;
+        const stepsPerBar = grid.stepsPerBar;
 
         const visibleNotes: BananaDrumNote[] = [];
         for (const note of track.getNoteIterator()) {
@@ -561,7 +577,7 @@ export class BananaDrumMigrator {
         }
 
         let noteCursor = 0;
-        for (let measureNumber = 0; measureNumber < metrics.bars; measureNumber++) {
+        for (let measureNumber = 0; measureNumber < grid.bars; measureNumber++) {
             const subdivisions = BananaDrumMigrator.collectMeasureSubdivisions(
                 visibleNotes, noteCursor, measureNumber, stepsPerBar,
             );
@@ -585,11 +601,10 @@ export class BananaDrumMigrator {
             measures.push(BananaDrumMigrator.convertMeasure({
                 number: measureNumber + 1,
                 meter: {
-                    beats: metrics.beatsPerBar,
-                    beatUnits: metrics.beatUnit,
-                    stepResolution: stepsPerBar,
-                    beatGroups: metrics.beatGroups,
+                    beats: grid.beatsPerBar,
+                    beatUnits: grid.beatUnit,
                 },
+                stepsPerBar,
                 steps,
                 subdivisions,
             }, instrument, pulse));
@@ -630,6 +645,19 @@ export class BananaDrumMigrator {
             notesInMeasure: notesEnd - previousNotes,
             hasMore: prEndStep > measureBaseEnd,
         };
+    }
+
+    private static getNoteGridPosition(note: BananaDrumNote, stepsPerBar: number, afterNote = false): number {
+        const polyrhythm = note.polyrhythm;
+        if (!polyrhythm) {
+            return ((note.timing.bar - 1) * stepsPerBar) + note.timing.step + Number(afterNote);
+        }
+
+        const start = BananaDrumMigrator.getNoteGridPosition(polyrhythm.start, stepsPerBar);
+        const end = BananaDrumMigrator.getNoteGridPosition(polyrhythm.end, stepsPerBar, true);
+        const slot = note.timing.step + Number(afterNote);
+
+        return start + (slot * (end - start) / polyrhythm.length);
     }
 
     private static collectMeasureSubdivisions(visibleNotes: BananaDrumNote[], noteCursor: number,
@@ -673,8 +701,8 @@ export class BananaDrumMigrator {
                 notesInMeasure = pr.length;
                 hasMore = false;
             } else {
-                const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
-                const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
+                const prStartStep = BananaDrumMigrator.getNoteGridPosition(pr.start, stepsPerBar);
+                const prEndStep = BananaDrumMigrator.getNoteGridPosition(pr.end, stepsPerBar, true) - 1;
 
                 const overlapStart = Math.max(prStartStep, measureBaseStart);
                 const overlapEnd = Math.min(prEndStep, measureBaseEnd);
@@ -787,12 +815,7 @@ export class BananaDrumMigrator {
                     continue;
                 }
 
-                const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
-                const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
-                const totalNormal = prEndStep - prStartStep + 1;
-
-                const noteIndex = pr.notes.indexOf(note);
-                const pos = prStartStep + (noteIndex * totalNormal / pr.length);
+                const pos = BananaDrumMigrator.getNoteGridPosition(note, stepsPerBar);
 
                 if (pos >= barEnd) {
                     break;
@@ -868,11 +891,11 @@ export class BananaDrumMigrator {
         );
         const pulseFraction = BananaDrumMigrator.parsePulse(pulse);
         const measureEnd: IFraction = { numerator: 1, denominator: 1 };
-        const stepResolution = measure.meter.stepResolution;
+        const stepsPerBar = measure.stepsPerBar;
 
         const isGridRest = (event: ISerializedEvent): boolean => {
             return event.noteStyleId === undefined
-                && event.duration.numerator * stepResolution === event.duration.denominator;
+                && event.duration.numerator * stepsPerBar === event.duration.denominator;
         };
 
         // Start of the next note or subdivision rest after the given index (grid rests do not stop absorption).
@@ -907,14 +930,14 @@ export class BananaDrumMigrator {
 
         const pushRest = (start: IFraction, duration: IFraction): void => {
             const last = final.at(-1);
-            const isGrid = duration.numerator * stepResolution === duration.denominator;
+            const isGrid = duration.numerator * stepsPerBar === duration.denominator;
             const isGridAligned = (fraction: IFraction): boolean => {
-                return (fraction.numerator * stepResolution) % fraction.denominator === 0;
+                return (fraction.numerator * stepsPerBar) % fraction.denominator === 0;
             };
 
             const lastIsGridRest = last !== undefined && last.noteStyleId === undefined
                 && isGridAligned(last.start)
-                && (last.duration.numerator * stepResolution) % last.duration.denominator === 0;
+                && (last.duration.numerator * stepsPerBar) % last.duration.denominator === 0;
 
             if (isGrid && lastIsGridRest) {
                 last.duration = addFractions(last.duration, duration);
@@ -987,7 +1010,7 @@ export class BananaDrumMigrator {
             }
         }
 
-        const events = BananaDrumMigrator.decomposeFinalRests(final, subdivisionFinalIndices, stepResolution);
+        const events = BananaDrumMigrator.decomposeFinalRests(final, subdivisionFinalIndices, stepsPerBar);
 
         const subdivisions: ISubdivision[] = subdivisionRecords.map((record) => {
             const start = serialized[record.firstSerializedIndex].start;
@@ -1097,7 +1120,7 @@ export class BananaDrumMigrator {
     private static expandMeasure(measure: IBananaDrumMeasure, instrument: ISbDmInstrument | undefined): {
         events: ISerializedEvent[]; subdivisions: ISubdivisionRecord[];
     } {
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = measure.stepsPerBar;
         const steps = [...measure.steps].sort((left, right) => {
             return left.index - right.index;
         });

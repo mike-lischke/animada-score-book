@@ -256,7 +256,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         }
 
         if (id === "copyUrl" && entry.type === SbDmEntityType.Score) {
-            const url = `${window.location.origin}/?score=${entry.id}`;
+            const url = `${window.location.origin}${import.meta.env.BASE_URL}?score=${entry.id}`;
             void navigator.clipboard.writeText(url);
             void NotificationCenter.showInfo("Score URL copied to clipboard.");
 

@@ -74,9 +74,13 @@ Hosting follows from this split: an administrator installs the backend once, and
 | Network | The browser must reach the backend. HTTPS is required for sessions to refresh, see [Security Notes](../administration/security.md).    |
 | Server  | Node.js and MySQL/MariaDB or PostgreSQL, installed as described in [Installing Animada Score Book](../administration/installation.md). |
 
-## Anonymous Access
+## Demo Mode
 
-The `Sign In` dialog offers `Continue Anonymously` next to `Log In`. Anonymous visitors can browse and play every publicly readable score, and the application keeps their local changes in the browser. They cannot publish changes to scores they do not own.
+A visitor without a session works in demo mode. The application starts without a login prompt, offers the curated catalog of songs in the header instead of the score library, and keeps exactly one local score: the song the demo opened, with every change made to it. Settings are not stored, so the next demo starts from the defaults again.
+
+A demo has no user, group, or permission surface. It neither uses nor ends a session this browser already holds, and it cannot publish anything to the server. `Import BananaDrum Song…` is the only import a demo offers; the score it creates stays local.
+
+Printing and MP3 export work in a demo as they do in a normal session. Signing in hands the edited demo score to the session, so the work continues as a new score instead of being lost.
 
 ## Where to Go Next
 

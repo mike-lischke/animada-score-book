@@ -11,7 +11,8 @@ import { defaultEntryValue, noteValueFraction, type INoteValue } from "../core/r
 import type {
     IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
-import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
+import { addFractions, compareFractions, divideFraction, reduceFraction }
+    from "../core/serialisation/numeric-functions.js";
 import { EditEntryMode, type IAudioData, type IFraction, type IMeasureEvent } from "../core/types/general.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
@@ -655,6 +656,25 @@ export abstract class MeasureEditor {
     }
 
     /**
+     * Asks the view to scroll the cursor into sight after an entry moved it. Nothing the user did scrolls for an
+     * automatic advance, and the measure it lands in may not be rendered at all — or may not exist yet — so the
+     * request addresses the position rather than a rendered element. The position asked for is the one the cursor's
+     * element is drawn at, and it goes to the middle of the viewport, which is where the eye follows the entry.
+     */
+    protected revealCursor(): void {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return;
+        }
+
+        void requisitions.execute("measureVisibilityRequested", {
+            bar: cursor.bar,
+            position: this.drawnAnchorOf(cursor),
+            centre: true,
+        });
+    }
+
+    /**
      * Makes a position the cursor and selects the element rendered there.
      *
      * @param position The position to select.
@@ -835,10 +855,10 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Converts a note value into its duration as a fraction of the measure. The arrangement's step
-     * resolution counts steps per whole note, the measure's resolution steps per bar. The duration
-     * stays a fraction: the grid adds its raster on top, because a value the raster cannot address
-     * has no cell, while the staff places any value the meter can express.
+     * Converts a note value into its duration as a fraction of the measure. A note value is a fraction of a
+     * whole note, and the measure's meter states how many beat units its bar holds. The duration stays a
+     * fraction: the grid adds its raster on top, because a value the raster cannot address has no cell, while
+     * the staff places any value the meter can express.
      *
      * @param value The selected note value, including its augmentation dot.
      * @param measure The measure the duration is expressed in.
@@ -846,14 +866,13 @@ export abstract class MeasureEditor {
      * @returns The duration as a fraction of the measure, or undefined when the value is invalid.
      */
     protected noteValueDurationFor(value: INoteValue, measure: ISbDmTrackPiece): IFraction | undefined {
-        const arrangement = this.dataModel.arrangement;
-        if (!arrangement) {
+        if (!this.dataModel.arrangement) {
             return undefined;
         }
 
         const fraction = noteValueFraction(value);
-        const duration = reduceFraction(arrangement.timeParams.stepResolution * fraction.numerator,
-            fraction.denominator * measure.meter.stepResolution);
+        const { beats, beatUnits } = measure.meter;
+        const duration = reduceFraction(fraction.numerator * beatUnits, fraction.denominator * beats);
 
         return compareFractions(duration, barLine) <= 0 ? duration : undefined;
     }
@@ -984,6 +1003,25 @@ export abstract class MeasureEditor {
      * @returns True when the selection changed.
      */
     protected abstract resizeSelectionForLengthChange(): boolean;
+
+    /**
+     * @param cursor The cursor position.
+     *
+     * @returns The fraction of the measure the cursor's element is drawn at: the middle of the span a rest covers,
+     *          and the position itself for a note, whose head stands there.
+     */
+    private drawnAnchorOf(cursor: IMeasurePosition): IFraction {
+        const measure = this.resolveMeasure(cursor.trackId, cursor.bar);
+        const event = measure?.events.find((candidate) => {
+            return compareFractions(candidate.start, cursor.start) === 0;
+        });
+
+        if (event === undefined || event.noteStyleId !== undefined) {
+            return cursor.start;
+        }
+
+        return addFractions(event.start, divideFraction(event.duration, 2));
+    }
 
     private rejectSimileEntry(entries: ISelectionEntry[]): boolean {
         const hasSimile = entries.some(({ target }) => {

@@ -37,6 +37,12 @@ export interface IMeasureVisibilityRequest {
 
     /** Position inside the measure that has to be visible, as a fraction of the measure. */
     position?: IFraction;
+
+    /**
+     * Whether the position is placed in the middle of the viewport instead of anchoring the measure at its edge.
+     * A cursor that an edit moved asks for this: it should land where the eye looks, not at the viewport's edge.
+     */
+    centre?: boolean;
 }
 
 /** The visible viewport of the score, normalized to its scrollable content. */

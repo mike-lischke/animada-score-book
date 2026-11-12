@@ -10,7 +10,15 @@
         "password": ""
     },
     "soundLibPath": "public/sounds",
+    "registration": {
+        "enabled": false
+    },
+    "demo": {
+        "scoreIds": [
+            10005,
+            10004
+        ]
+    },
     "allowedOrigins": [],
-    "trustProxy": false,
-    "autoMigrate": false
+    "trustProxy": false
 }

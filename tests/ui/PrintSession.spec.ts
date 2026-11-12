@@ -6,7 +6,6 @@
 import { describe, expect, it } from "vitest";
 
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
-import type { INotationGrid } from "../../src/core/MeasureProjection.js";
 import { PageOrientation, PrintLayout } from "../../src/core/PrintLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../src/core/ScoreBookDataModel.js";
 import { TrackViewMode } from "../../src/core/types/general.js";
@@ -14,9 +13,6 @@ import {
     PrintSession, defaultPrintMargins, defaultPrintScale, maxPreviewZoom, maxPrintMargin, maxPrintScale,
     minPreviewZoom, minPrintMargin, minPrintScale,
 } from "../../src/ui/PrintSession.js";
-
-/** A 4/4 grid, which is all the notation rules the width floor needs. */
-const grid: INotationGrid = { stepsPerBar: 16, beatGroups: [4, 4, 4, 4] };
 
 /**
  * @param id The track id.
@@ -252,7 +248,6 @@ describe("PrintSession", () => {
             return PrintLayout.layout({
                 arrangement,
                 barCount: 3,
-                grid,
                 setup: session.pageSetup,
                 tracks: arrangement.tracks,
                 viewMode: TrackViewMode.Staff,

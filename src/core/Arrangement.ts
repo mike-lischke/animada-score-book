@@ -7,13 +7,13 @@ import { MeasureLayout } from "./MeasureLayout.js";
 import { RangeArticulations } from "./RangeArticulations.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTimeParams, type ISbDmTrack,
     type ISbDmTrackPiece
 } from "./ScoreBookDataModel.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
 import type {
-    IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITimeParams, ITrackSnapshot
+    IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITrackSnapshot
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 import {
@@ -27,7 +27,6 @@ export interface IArrangementCreationOptions {
     tempo?: number;
     length?: number;
     pulse?: string;
-    stepResolution?: number;
 }
 
 export class Arrangement implements ISbDmArrangement {
@@ -37,7 +36,7 @@ export class Arrangement implements ISbDmArrangement {
     /** All tracks in display order for the arrangement. */
     public readonly tracks: ISbDmTrack[] = [];
 
-    public timeParams!: ITimeParams;
+    public timeParams!: ISbDmTimeParams;
 
     /** Column widths of individual measures, keyed by 1-based measure number, in px at 100% zoom. */
     public readonly measureWidths = new Map<number, number>();
@@ -105,7 +104,6 @@ export class Arrangement implements ISbDmArrangement {
             options?.tempo ?? 110,
             options?.length ?? 1,
             options?.pulse ?? "1/4",
-            options?.stepResolution ?? 16,
         );
 
         if (options?.title) {
@@ -133,7 +131,6 @@ export class Arrangement implements ISbDmArrangement {
                 tempo: this.timeParams.tempo,
                 length: this.timeParams.length,
                 pulse: this.timeParams.pulse,
-                stepResolution: this.timeParams.stepResolution,
             },
             tracks: this.tracks.map((track) => {
                 return {
@@ -517,24 +514,18 @@ export class Arrangement implements ISbDmArrangement {
         this.timeParams.tempo = arrangementSnapshot.timeParams.tempo;
         this.timeParams.length = arrangementSnapshot.timeParams.length;
         this.timeParams.pulse = arrangementSnapshot.timeParams.pulse;
-        this.timeParams.stepResolution = arrangementSnapshot.timeParams.stepResolution;
     };
 
     private applyTrackSnapshot(track: Track, trackSnapshot: ITrackSnapshot): void {
         const newMeasures: ISbDmTrackPiece[] = trackSnapshot.measures.map((measureSnapshot) => {
-            const beatGroupsCandidate = (measureSnapshot.meter as { beatGroups?: unknown; }).beatGroups;
-            const beatGroups = Array.isArray(beatGroupsCandidate)
-                ? [...(beatGroupsCandidate as number[])]
-                : [measureSnapshot.meter.stepResolution];
-
             const measure: ISbDmTrackPiece = {
                 id: this.getTrackPieceId(track, measureSnapshot.number),
                 type: SbDmEntityType.TrackPiece,
                 track,
                 number: measureSnapshot.number,
                 meter: {
-                    ...measureSnapshot.meter,
-                    beatGroups,
+                    beats: measureSnapshot.meter.beats,
+                    beatUnits: measureSnapshot.meter.beatUnits,
                 },
                 events: measureSnapshot.events.map((event) => {
                     return {

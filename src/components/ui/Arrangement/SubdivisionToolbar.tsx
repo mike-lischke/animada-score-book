@@ -8,12 +8,13 @@ import type { ComponentChild } from "preact";
 import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import { NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
-import type { IFraction } from "../../../core/types/general.js";
+import { TrackViewMode, type IFraction } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { maxTupletLevels } from "../../../core/tuplets.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
+    type ISelectionTarget,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
@@ -21,6 +22,9 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 
 export interface ISubdivisionToolbarProps extends ICommonUIProperties {
     selectionManager: SelectionManager;
+
+    /** The view the score is shown in. The staff draws no grid, so a slot there needs no cell boundary. */
+    trackViewMode?: TrackViewMode;
 }
 
 interface ISubdivisionToolbarState {
@@ -112,8 +116,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         const { maxSlots } = this.state;
         const { selectionManager } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
-        const selectedSubdivisionSlot = entries.length === 1
-            && SelectionSerializer.addressesSubdivisionSlot(entries[0].target);
+        const selectedSubdivisionSlot = entries.length === 1 && this.addressesSubdivisionSlot(entries[0].target);
 
         return subdivisionOptions.map((option) => {
             const enabled = selectedSubdivisionSlot || option.actual <= maxSlots;
@@ -128,6 +131,30 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                     : undefined,
             };
         });
+    }
+
+    /**
+     * Checks whether a target addresses a subdivision slot, so a nested tuplet may be created for it. The grid
+     * distinguishes a slot from a cell by its start missing the cell boundaries; the staff draws no grid, so there
+     * the covered fractional position alone decides.
+     *
+     * @param target The target to inspect.
+     *
+     * @returns True when the target addresses a subdivision slot.
+     */
+    private addressesSubdivisionSlot(target: ISelectionTarget): boolean {
+        if (SelectionSerializer.addressesSubdivisionSlot(target)) {
+            return true;
+        }
+
+        const { trackViewMode = TrackViewMode.Grid } = this.props;
+        if (trackViewMode !== TrackViewMode.Staff || target.granularity !== SelectionGranularity.Note) {
+            return false;
+        }
+
+        const start = target.start ?? target.event.start;
+
+        return SelectionSerializer.subdivisionAt(target.measure, start) !== undefined;
     }
 
     /**

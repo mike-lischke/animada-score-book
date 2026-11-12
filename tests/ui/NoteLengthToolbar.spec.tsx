@@ -11,6 +11,7 @@ import { AppStorage } from "../../src/core/AppStorage.js";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel }
     from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength, type INoteValue } from "../../src/core/rest-notation.js";
+import { StepGrid } from "../../src/core/StepGrid.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -19,11 +20,14 @@ import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import { noteEntry, noteGroupEntry, noteGroupInSteps, noteValue, trackEntry } from "../unit-test-helpers.js";
 
 const makeDataModel = (stepResolution: number, stepsPerBar: number): ScoreBookDataModel => {
-    const arrangement = { timeParams: { stepResolution, pulse: "1/4" }, tracks: [] } as unknown as ISbDmArrangement;
+    const arrangement = {
+        timeParams: { timeSignature: `${stepsPerBar}/${stepResolution}`, pulse: "1/4" },
+        tracks: [],
+    } as unknown as ISbDmArrangement;
     const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
     const measure = {
         number: 1,
-        meter: { stepResolution: stepsPerBar },
+        meter: { beats: stepsPerBar, beatUnits: stepResolution },
         subdivisions: [],
         track,
         events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 } }],
@@ -50,7 +54,10 @@ interface INoteSpec {
  * @returns The model with that measure.
  */
 const makeDataModelWithTuplet = (): ScoreBookDataModel => {
-    const arrangement = { timeParams: { stepResolution: 16, pulse: "1/4" }, tracks: [] } as unknown as ISbDmArrangement;
+    const arrangement = {
+        timeParams: { timeSignature: "4/4", pulse: "1/4" },
+        tracks: [],
+    } as unknown as ISbDmArrangement;
     const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
     const slots = [
         { start: { numerator: 0, denominator: 1 }, rest: false },
@@ -69,7 +76,7 @@ const makeDataModelWithTuplet = (): ScoreBookDataModel => {
     ];
     const measure = {
         number: 1,
-        meter: { stepResolution: 16 },
+        meter: { beats: 4, beatUnits: 4 },
         subdivisions: [{ startIndex: 0, actual: 3, normal: 2, isTuplet: true }],
         track,
         events,
@@ -91,11 +98,14 @@ const makeDataModelWithTuplet = (): ScoreBookDataModel => {
 
 const makeDataModelWithNotes = (stepResolution: number, stepsPerBar: number,
     notes: INoteSpec[]): ScoreBookDataModel => {
-    const arrangement = { timeParams: { stepResolution, pulse: "1/4" }, tracks: [] } as unknown as ISbDmArrangement;
+    const arrangement = {
+        timeParams: { timeSignature: `${stepsPerBar}/${stepResolution}`, pulse: "1/4" },
+        tracks: [],
+    } as unknown as ISbDmArrangement;
     const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
     const measure = {
         number: 1,
-        meter: { stepResolution: stepsPerBar },
+        meter: { beats: stepsPerBar, beatUnits: stepResolution },
         subdivisions: [],
         track,
         events: notes.map((note) => {
@@ -132,7 +142,7 @@ const makeDataModelWithNotes = (stepResolution: number, stepsPerBar: number,
 const noteEntryAt = (dataModel: ScoreBookDataModel, step: number): ISelectionEntry => {
     const measure = dataModel.arrangement!.tracks[0].measures[0];
 
-    return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+    return noteEntry(measure, { numerator: step, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) });
 };
 
 /**
@@ -145,7 +155,7 @@ const selectSingleNote = (selectionManager: SelectionManager): void => {
     const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
     const measure = {
         number: 1,
-        meter: { stepResolution: 16 },
+        meter: { beats: 4, beatUnits: 4 },
         subdivisions: [],
         track,
         events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 } }],

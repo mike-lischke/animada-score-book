@@ -4,7 +4,7 @@
  */
 
 import type {
-    ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackPiece, ITiming,
+    ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackPiece,
 } from "../core/ScoreBookDataModel.js";
 import type { INoteValue } from "../core/rest-notation.js";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../core/types/general.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
+import { StepGrid } from "../core/StepGrid.js";
 import type { ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { MeasureEditor, type IAddressedEvent, type IMeasurePosition } from "./MeasureEditor.js";
@@ -78,8 +79,9 @@ export class GridMeasureEditor extends MeasureEditor {
             return undefined;
         }
 
-        const step = reduceFraction(1, measure.meter.stepResolution);
-        const aligned = compareFractions(start, reduceFraction(position.step, measure.meter.stepResolution)) === 0;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
+        const step = reduceFraction(1, stepsPerBar);
+        const aligned = compareFractions(start, reduceFraction(position.step, stepsPerBar)) === 0;
         const event = aligned ? undefined : modelEventAt(measure, start);
 
         this.dataModel.setNoteAt(position.trackId, position.bar, start, event?.duration ?? step, noteStyleId);
@@ -105,7 +107,7 @@ export class GridMeasureEditor extends MeasureEditor {
             return undefined;
         }
 
-        const steps = duration.numerator * measure.meter.stepResolution / duration.denominator;
+        const steps = duration.numerator * StepGrid.stepsPerBarOfMeter(measure.meter) / duration.denominator;
 
         return Number.isInteger(steps) && steps >= 1 ? duration : undefined;
     }
@@ -231,7 +233,7 @@ export class GridMeasureEditor extends MeasureEditor {
         }
 
         return this.dataModel.setNoteAt(position.trackId, position.bar, start,
-            reduceFraction(1, measure.meter.stepResolution), undefined);
+            reduceFraction(1, StepGrid.stepsPerBarOfMeter(measure.meter)), undefined);
     }
 
     /**
@@ -250,7 +252,7 @@ export class GridMeasureEditor extends MeasureEditor {
             return false;
         }
 
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const start = position.start ?? reduceFraction(position.step, stepsPerBar);
         const selectedEvent = position.start === undefined
             ? undefined
@@ -342,8 +344,10 @@ export class GridMeasureEditor extends MeasureEditor {
             return undefined;
         }
 
-        const timing: ITiming = { bar: position.bar, step: position.step + 1 };
-        const note = track.getNoteAt(timing);
+        const measure = track.measures[position.bar - 1];
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
+        const note = track.getNoteAt(position.bar, reduceFraction(position.step, stepsPerBar),
+            reduceFraction(1, stepsPerBar));
 
         return { ...position, arrangement, track, note };
     }
@@ -371,7 +375,8 @@ export class GridMeasureEditor extends MeasureEditor {
                         track,
                         bar: measure.number,
                         trackId: track.id,
-                        step: event.timing.step - 1,
+                        step: Math.floor(event.start.numerator * StepGrid.stepsPerBarOfMeter(measure.meter)
+                            / event.start.denominator),
                         note: event,
                     };
                 }
@@ -577,7 +582,9 @@ export class GridMeasureEditor extends MeasureEditor {
             return undefined;
         }
 
-        return reduceFraction(position.step, cell.track.measures[position.bar - 1].meter.stepResolution);
+        const measure = cell.track.measures[position.bar - 1];
+
+        return reduceFraction(position.step, StepGrid.stepsPerBarOfMeter(measure.meter));
     }
 
     /**
@@ -594,12 +601,12 @@ export class GridMeasureEditor extends MeasureEditor {
 
     private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackPiece,
         targetMeasure: ISbDmTrackPiece): IFraction | undefined {
-        const steps = duration.numerator * sourceMeasure.meter.stepResolution / duration.denominator;
+        const steps = duration.numerator * StepGrid.stepsPerBarOfMeter(sourceMeasure.meter) / duration.denominator;
         if (!Number.isInteger(steps)) {
             return undefined;
         }
 
-        return reduceFraction(steps, targetMeasure.meter.stepResolution);
+        return reduceFraction(steps, StepGrid.stepsPerBarOfMeter(targetMeasure.meter));
     }
 
     /**
@@ -642,7 +649,7 @@ export class GridMeasureEditor extends MeasureEditor {
         }
 
         const measure = first.measure;
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
 
         let minStep = Number.MAX_SAFE_INTEGER;
         let maxStep = Number.MIN_SAFE_INTEGER;

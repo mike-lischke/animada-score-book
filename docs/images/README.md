@@ -1,6 +1,6 @@
 # Handbook Images
 
-Shared visual assets for the English handbook, the README, and the published website. Screenshots are captured from the running application, never drawn or mocked.
+Shared visual assets for the English handbook, the README, and the published edition. Screenshots are captured from the running application, never drawn or mocked.
 
 ## Directory Layout
 
@@ -39,9 +39,8 @@ A folder is created when its first image is added. The planned images, their cap
 | Alt text       | Describes the visible content, never "screenshot of …"                                             |
 
 A decorative device frame — a tablet or phone body around a genuine capture — is allowed for a showcase image, for
-example the README hero `en/presentation/tablet-zen-mode.png` with its grid counterpart `tablet-zen-grid.png`, which
-the website project pairs with it. The frame is drawn around the capture and never replaces it: the screen content is
-the running application, never a mock.
+example the README hero `en/presentation/tablet-zen-mode.png`. The frame is drawn around the capture and never
+replaces it: the screen content is the running application, never a mock.
 
 ## Usage in Markdown
 

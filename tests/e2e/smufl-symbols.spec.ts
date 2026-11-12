@@ -21,14 +21,14 @@ const buildPackedArrangement = (instrumentIds: string[]): string => {
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
         title: "Symbol Test",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: instrumentIds.map((instrumentId, trackIndex) => {
             return {
                 id: trackIndex + 1,
                 instrumentId,
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         {
                             start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },

@@ -438,7 +438,7 @@
 
     .trackControlsPanel {
         /* The rows follow the centred score rows; the header above them stays where it is. */
-        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--panel-head-room, 0px) + var(--content-center-shift));
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--content-center-shift));
     }
 
     .staff-measure-viewer,
@@ -447,7 +447,8 @@
     }
 
     /* A grid column carries its beat strip instead of head room of its own: the strip is given the distance below
-       the action bar the staff's first row has, so a column's content sits as far down as the staff's does. */
+       the action bar the staff's first row has, so a column's content sits as far down as the staff's does. The
+       strip and its margins are part of `--score-row-top`, so the panels need no offset of their own. */
     &.view-grid {
         --grid-head-room: var(--measure-focus-headroom);
 
@@ -455,12 +456,6 @@
 
         .grid-measure-viewer {
             padding-top: var(--grid-head-room);
-        }
-
-        /* That head room is not part of the head room `--score-row-top` states for the panels to mirror, so the edit
-           mode adds it to their offset. The non-edit mode does the same in its own branch. */
-        &.edit-mode {
-            --panel-head-room: var(--grid-head-room);
         }
     }
 
@@ -704,16 +699,6 @@
 
 }
 
-#appRoot:not(.zen-mode) {
-    #trackViewerContainer:not(.edit-mode) {
-
-        /* A grid column carries its beat strip in head room the staff's rows do not have; the panels mirror it. */
-        &.view-grid {
-            --panel-head-room: var(--grid-head-room);
-        }
-    }
-}
-
 .track-edit-sidebar {
     box-sizing: border-box;
     flex: 0 0 auto;
@@ -731,7 +716,7 @@
        back to the shared panel offset. */
     .trackEditSidebarPanel {
         min-width: 0;
-        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px + var(--panel-head-room, 0px) + var(--content-center-shift));
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px + var(--content-center-shift));
 
         .trackEditEmpty {
             padding: 24px 2px;
@@ -1225,37 +1210,6 @@
     &.is-selected {
         border-color: var(--color-primary);
         background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
-    }
-}
-
-.guiderail {
-    height: 20pt;
-    margin-left: 2px;
-}
-
-.staff-measure-viewer .guiderail {
-    visibility: hidden;
-}
-
-.guiderail-timing {
-    flex-basis: calc(var(--note-height) + 4px);
-    border-color: var(--color-neutral-content);
-
-    &.odd-beat {
-        background-color: var(--color-neutral);
-    }
-}
-
-.guiderail-timing-content {
-    padding: 2px 0 0 12px;
-    color: var(--color-neutral-content);
-}
-
-@media only screen and (min-width: 1000px) {
-
-    /* We label the bar numbers always. On smaller screens only, we show the sub-bar labels too */
-    .guiderail-timing:not(.startOfBar) .guiderail-timing-content {
-        display: none;
     }
 }
 

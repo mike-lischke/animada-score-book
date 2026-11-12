@@ -7,6 +7,10 @@ description: Project-wide coding guidelines and conventions for the Animada Scor
 Score management and arrangement app for Samba/Bateria groups.
 Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/PostgreSQL), Vitest + Playwright tests.
 
+## Machine Rules — Highest Priority
+
+Nothing on this computer changes without the explicit permission of the user: no shell environment variables (`export`, assigning `path`/`PATH`), no dotfiles, no installations, no `sudo`, no writes outside this repository. Tooling is Node.js/TypeScript only (`tsx`, Vitest, Playwright, the `npm` scripts) — no python, perl, sed or awk. The rules every AI model has to follow are in [`AGENTS.md`](../AGENTS.md).
+
 ---
 
 ## Architecture

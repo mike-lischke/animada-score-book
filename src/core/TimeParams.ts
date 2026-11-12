@@ -4,19 +4,15 @@
  */
 
 import { requisitions } from "../supplement/Requisitions.js";
-import type { ISbDmTimeParams, ITiming } from "./ScoreBookDataModel.js";
+import type { ISbDmTimeParams } from "./ScoreBookDataModel.js";
 
 /**
  * Encapsulates timing parameters for an arrangement and publishes changes.
  *
- * Maintains a derived list of `timings` covering every step of every bar,
- * updated whenever any parameter changes (time signature, tempo, length, pulse, resolution).
+ * The time parameters state the music itself — meter, tempo, length and pulse; everything a view derives from them
+ * is that view's concern.
  */
 export class TimeParams implements ISbDmTimeParams {
-    /** All valid timings for the current configuration (bar/step pairs). */
-    public readonly timings: ITiming[] = [];
-
-    private resolution: number;
     private signature: string;
     private usedTempo: number;
     private usedLength: number;
@@ -29,39 +25,17 @@ export class TimeParams implements ISbDmTimeParams {
      * @param tempo The tempo in BPM.
      * @param length The number of bars in the arrangement.
      * @param pulse The rhythmic pulse as "count/unit" (e.g., "1/4" or "3/8").
-     * @param stepResolution The granularity per whole note (power of two), e.g., 8 for sixteenths.
      */
-    public constructor(timeSignature: string, tempo: number, length: number, pulse: string, stepResolution: number) {
+    public constructor(timeSignature: string, tempo: number, length: number, pulse: string) {
         if (!this.validateTimeSignature(timeSignature)) {
             throw new Error("Invalid time signature");
         }
 
-        if (!this.validateStepGridCompatibility(timeSignature, stepResolution)) {
-            throw new Error("Incompatible time signature and step resolution");
-        }
-
         this.signature = timeSignature;
-        this.resolution = stepResolution;
         this.usedTempo = tempo;
         this.usedLength = length;
         this.usedPulse = pulse;
-        this.regenerateTimings();
     }
-
-    /**
-     * Rebuilds the `timings` list from the current parameters.
-     * Called whenever any parameter changes to keep derived state consistent.
-     */
-    public regenerateTimings() {
-        this.timings.length = 0;
-        const stepsPerBar = this.calculateStepsPerBar(this.timeSignature, this.resolution);
-
-        for (let bar = 1; bar <= this.usedLength; bar++) {
-            for (let step = 1; step <= stepsPerBar; step++) {
-                this.timings.push({ bar, step });
-            }
-        }
-    };
 
     /**
      * Current time signature.
@@ -73,7 +47,7 @@ export class TimeParams implements ISbDmTimeParams {
     };
 
     /**
-     * Updates the time signature and regenerates timings.
+     * Updates the time signature.
      *
      * @param newTimeSignature The new time signature string.
      */
@@ -82,13 +56,8 @@ export class TimeParams implements ISbDmTimeParams {
             throw new Error("Invalid time signature");
         }
 
-        if (!this.validateStepGridCompatibility(newTimeSignature, this.resolution)) {
-            throw new Error("Incompatible time signature and step resolution");
-        }
-
         if (newTimeSignature !== this.signature) {
             this.signature = newTimeSignature;
-            this.regenerateTimings();
             void requisitions.execute("timeParamsChanged", undefined);
         }
     }
@@ -103,7 +72,7 @@ export class TimeParams implements ISbDmTimeParams {
     }
 
     /**
-     * Updates the tempo and regenerates timings.
+     * Updates the tempo.
      *
      * @param newTempo The new tempo in BPM.
      */
@@ -114,7 +83,6 @@ export class TimeParams implements ISbDmTimeParams {
 
         if (newTempo !== this.usedTempo) {
             this.usedTempo = newTempo;
-            this.regenerateTimings();
             void requisitions.execute("timeParamsChanged", undefined);
         }
     }
@@ -129,7 +97,7 @@ export class TimeParams implements ISbDmTimeParams {
     }
 
     /**
-     * Updates the arrangement length and regenerates timings.
+     * Updates the arrangement length.
      *
      * @param newLength The new number of bars.
      */
@@ -140,7 +108,6 @@ export class TimeParams implements ISbDmTimeParams {
 
         if (newLength !== this.usedLength) {
             this.usedLength = newLength;
-            this.regenerateTimings();
             void requisitions.execute("timeParamsChanged", undefined);
         }
     }
@@ -155,7 +122,7 @@ export class TimeParams implements ISbDmTimeParams {
     }
 
     /**
-     * Updates the pulse and regenerates timings.
+     * Updates the pulse.
      *
      * @param newPulse The new pulse string.
      */
@@ -166,60 +133,8 @@ export class TimeParams implements ISbDmTimeParams {
 
         if (newPulse !== this.usedPulse) {
             this.usedPulse = newPulse;
-            this.regenerateTimings();
             void requisitions.execute("timeParamsChanged", undefined);
         }
-    }
-
-    /**
-     * Current step resolution (granularity per whole note).
-     *
-     * @returns The resolution value.
-     */
-    public get stepResolution() {
-        return this.resolution;
-    }
-
-    /**
-     * Updates the step resolution and regenerates timings.
-     *
-     * @param newStepResolution The new resolution (power of two).
-     */
-    public set stepResolution(newStepResolution: number) {
-        if (!this.validateNoteValue(newStepResolution)) {
-            throw new Error("Invalid step resolution");
-        }
-
-        if (!this.validateStepGridCompatibility(this.signature, newStepResolution)) {
-            throw new Error("Incompatible time signature and step resolution");
-        }
-
-        if (newStepResolution !== this.resolution) {
-            this.resolution = newStepResolution;
-            this.regenerateTimings();
-            void requisitions.execute("timeParamsChanged", undefined);
-        }
-    }
-
-    /**
-     * Validates whether a timing falls within the current arrangement.
-     *
-     * @param timing The timing to validate.
-     * @param timing.bar 1-based bar index.
-     * @param timing.step 1-based step index within the bar.
-     * @returns True if the timing is within bounds for the current configuration.
-     */
-    public isValid({ bar, step }: ITiming) {
-        if (bar > this.usedLength) {
-            return false;
-        } // timing falls outside the arrangement entirely
-
-        const stepsPerBar = this.calculateStepsPerBar(this.timeSignature, this.resolution);
-        if (step > stepsPerBar) {
-            return false;
-        }
-
-        return true;
     }
 
     /**
@@ -343,42 +258,4 @@ export class TimeParams implements ISbDmTimeParams {
 
         return true;
     };
-
-    /**
-     * Validates that a time signature and step resolution produce a natural number of steps per bar.
-     *
-     * @param timeSignature The time signature to validate.
-     * @param stepResolution The step resolution to validate.
-     * @returns True if the combination defines a valid step grid.
-     */
-    private validateStepGridCompatibility(timeSignature: string, stepResolution: number): boolean {
-        try {
-            this.calculateStepsPerBar(timeSignature, stepResolution);
-
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * Calculates the number of steps per bar for a given signature/resolution combination.
-     *
-     * @param timeSignature The time signature in the form beats/unit.
-     * @param stepResolution The step resolution.
-     * @returns The number of steps per bar.
-     */
-    private calculateStepsPerBar(timeSignature: string, stepResolution: number): number {
-        const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
-            return Number(value);
-        });
-
-        const stepsPerBeat = stepResolution / beatUnit;
-        const stepsPerBar = stepsPerBeat * beatsPerBar;
-        if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
-            throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
-        }
-
-        return stepsPerBar;
-    }
 };

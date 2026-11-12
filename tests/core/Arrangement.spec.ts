@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { Damping, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
+import { StepGrid } from "../../src/core/StepGrid.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../src/core/types/general.js";
@@ -17,25 +18,24 @@ describe("Arrangement", () => {
     it("removes all obsolete tracks when applying a snapshot", () => {
         const instruments = [createInstrument("0", 0, 0), createInstrument("1", 1, 1), createInstrument("2", 2, 2)];
 
-        const stepsPerBar = 4;
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", stepsPerBar);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         arrangement.applyArrangementSnapshot({
-            version: 2,
+            version: 7,
             title: "Original",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: stepsPerBar },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [
-                emptyMeasureTrack(100, "0", stepsPerBar),
-                emptyMeasureTrack(200, "1", stepsPerBar),
-                emptyMeasureTrack(300, "2", stepsPerBar),
+                emptyMeasureTrack(100, "0"),
+                emptyMeasureTrack(200, "1"),
+                emptyMeasureTrack(300, "2"),
             ],
         }, instruments);
 
         arrangement.applyArrangementSnapshot({
-            version: 2,
+            version: 7,
             title: "Imported",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: stepsPerBar },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [],
         }, instruments);
 
@@ -54,9 +54,9 @@ describe("Arrangement", () => {
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const snapshot: IArrangementSnapshot = {
-            version: 4,
+            version: 7,
             title: "Measure Events",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4" },
             tracks: [
                 {
                     id: 100,
@@ -64,7 +64,7 @@ describe("Arrangement", () => {
                     measures: [
                         {
                             number: 1,
-                            meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [2, 2, 2, 2] },
+                            meter: { beats: 4, beatUnits: 4 },
                             events: [
                                 {
                                     start: { numerator: 0, denominator: 8 },
@@ -77,7 +77,7 @@ describe("Arrangement", () => {
                         },
                         {
                             number: 2,
-                            meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [2, 2, 2, 2] },
+                            meter: { beats: 4, beatUnits: 4 },
                             events: [
                                 { start: { numerator: 0, denominator: 8 }, duration: { numerator: 4, denominator: 8 } },
                                 {
@@ -95,18 +95,20 @@ describe("Arrangement", () => {
         };
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 2, "1/4", 8);
+        arrangement.timeParams = new TimeParams("4/4", 120, 2, "1/4");
         arrangement.applyArrangementSnapshot(snapshot, [instrument]);
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
-        expect(track.getNoteAt({ bar: 1, step: 1 })?.audioData?.id).toBe("1");
-        expect(track.getNoteAt({ bar: 2, step: 5 })?.audioData?.id).toBe("1");
+        const stepsPerBar = StepGrid.stepsPerBarOf("4/4");
+        const step = { numerator: 1, denominator: stepsPerBar };
+
+        expect(track.getNoteAt(1, { numerator: 0, denominator: 1 }, step)?.audioData?.id).toBe("1");
+        expect(track.getNoteAt(2, { numerator: 4, denominator: 8 }, step)?.audioData?.id).toBe("1");
 
         // No non-grid (polyrhythm-shaped) events expected in this snapshot. Sounding grid notes
         // may carry an extended duration (a multiple of the grid step) when they absorb the
         // following rest gap within their pulse.
-        const stepsPerBar = 8;
         const allEvents = track.measures.flatMap((measure) => {
             return measure.events;
         });
@@ -122,7 +124,7 @@ describe("Arrangement", () => {
         const instrument = createInstrument("0", 0, 0);
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 8);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
         arrangement.addTrack(instrument);
 
         const source = arrangement.tracks[0] as Track;
@@ -174,7 +176,7 @@ describe("Arrangement", () => {
 
     it("omits scoreId from toSnapshot for local arrangements", () => {
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 8);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         // new Arrangement() gets a local id via getNewId()
         expect(arrangement.id).toBeLessThan(10000);
@@ -200,7 +202,6 @@ describe("Arrangement", () => {
             tempo: 140,
             length: 3,
             pulse: "3/8",
-            stepResolution: 8,
         });
 
         expect(arrangement.title).toBe("New Tune");
@@ -208,7 +209,6 @@ describe("Arrangement", () => {
         expect(arrangement.timeParams.tempo).toBe(140);
         expect(arrangement.timeParams.length).toBe(3);
         expect(arrangement.timeParams.pulse).toBe("3/8");
-        expect(arrangement.timeParams.stepResolution).toBe(8);
         expect(arrangement.tracks).toHaveLength(1);
         expect(arrangement.tracks[0].measures).toHaveLength(3);
     });
@@ -240,16 +240,15 @@ describe("Arrangement", () => {
     });
 
     it("restores the DB id when applyArrangementSnapshot has a scoreId", () => {
-        const stepsPerBar = 16;
         const instruments = [createInstrument("0", 0, 0)];
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", stepsPerBar);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         arrangement.applyArrangementSnapshot({
-            version: 3,
+            version: 7,
             scoreId: 10042,
             title: "Test",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: stepsPerBar },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [emptyMeasureTrack(100, "0")],
         }, instruments);
 
@@ -257,16 +256,15 @@ describe("Arrangement", () => {
     });
 
     it("keeps the existing local id when the snapshot has no scoreId", () => {
-        const stepsPerBar = 16;
         const instruments = [createInstrument("0", 0, 0)];
         const arrangement = new Arrangement();
         const localId = arrangement.id;
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", stepsPerBar);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         arrangement.applyArrangementSnapshot({
-            version: 3,
+            version: 7,
             title: "Test",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: stepsPerBar },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [emptyMeasureTrack(100, "0")],
         }, instruments);
 
@@ -274,22 +272,21 @@ describe("Arrangement", () => {
     });
 
     it("preserves the id through applyArrangementSnapshot round-trip", () => {
-        const stepsPerBar = 16;
         const instruments = [createInstrument("0", 0, 0)];
         const arrangement = new Arrangement();
         arrangement.id = 10042;
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", stepsPerBar);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         arrangement.applyArrangementSnapshot({
-            version: 3,
+            version: 7,
             title: "Test",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: stepsPerBar },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [emptyMeasureTrack(100, "0")],
         }, instruments);
 
         const snapshot = arrangement.toSnapshot();
         const restored = new Arrangement();
-        restored.timeParams = new TimeParams("4/4", 120, 1, "1/4", stepsPerBar);
+        restored.timeParams = new TimeParams("4/4", 120, 1, "1/4");
         restored.applyArrangementSnapshot(snapshot, instruments);
 
         expect(restored.id).toBe(10042);
@@ -299,7 +296,7 @@ describe("Arrangement", () => {
         const instrument = createInstrument("0", 0, 0);
 
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 8);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         const first = arrangement.addTrack(instrument);
         const second = arrangement.addTrack(instrument);
@@ -321,14 +318,14 @@ describe("Arrangement", () => {
     it("reserves restored track ids so a new track cannot reuse them", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4");
 
         // A score stored by an earlier session holds ids this session's counter has never handed out.
         const storedId = getNewId() + 20;
         arrangement.applyArrangementSnapshot({
-            version: 3,
+            version: 7,
             title: "Stored",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [emptyMeasureTrack(storedId, "0")],
         }, [instrument]);
 

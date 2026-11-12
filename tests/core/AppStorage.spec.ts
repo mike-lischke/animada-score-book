@@ -16,6 +16,10 @@ const importFreshAppStorage = async (prepare?: () => void) => {
     prepare?.();
 
     const module = await import("../../src/core/AppStorage.js");
+    const { AppMode, RunMode } = await import("../../src/core/RunMode.js");
+
+    // These tests address the records of a session; one that wants the demo enters it itself.
+    RunMode.enter(AppMode.Normal);
 
     return module.AppStorage;
 };
@@ -40,7 +44,7 @@ describe("AppStorage", { concurrent: false }, () => {
         vi.clearAllMocks();
     });
 
-    it("uses history.state session id and removes legacy global session key on init", async () => {
+    it("uses history.state session id and removes legacy global session key when the session is resolved", async () => {
         const AppStorage = await importFreshAppStorage(() => {
             window.history.replaceState({ sessionId: "history-session" }, "");
             localStorage.setItem(legacySessionIdKey, "legacy-session");
@@ -186,16 +190,19 @@ describe("AppStorage", { concurrent: false }, () => {
         expect(localStorage.getItem(`${sessionMetaPrefix}clear-session`)).toBeNull();
     });
 
-    it("cleanup removes expired session records but keeps active session", async () => {
+    it("cleanup removes expired session records but keeps the active session", async () => {
         const now = Date.now();
 
-        await importFreshAppStorage(() => {
+        const AppStorage = await importFreshAppStorage(() => {
             window.history.replaceState({ sessionId: "active" }, "");
             localStorage.setItem(`${sessionSettingsPrefix}active`, JSON.stringify({ currentScore: "keep" }));
             localStorage.setItem(`${sessionMetaPrefix}active`, String(now));
             localStorage.setItem(`${sessionSettingsPrefix}stale`, JSON.stringify({ currentScore: "old" }));
             localStorage.setItem(`${sessionMetaPrefix}stale`, String(now - sessionTtlMs - 1));
         });
+
+        // The session is resolved on first use, not at import, so a demo never reaches the cleanup.
+        expect(AppStorage.sessionId).toBe("active");
 
         expect(localStorage.getItem(`${sessionSettingsPrefix}active`)).not.toBeNull();
         expect(localStorage.getItem(`${sessionMetaPrefix}active`)).not.toBeNull();
@@ -206,7 +213,7 @@ describe("AppStorage", { concurrent: false }, () => {
     it("cleanup enforces maximum retained session records", async () => {
         const now = Date.now();
 
-        await importFreshAppStorage(() => {
+        const AppStorage = await importFreshAppStorage(() => {
             window.history.replaceState({ sessionId: "session-24" }, "");
 
             for (let i = 0; i < 25; i++) {
@@ -215,6 +222,8 @@ describe("AppStorage", { concurrent: false }, () => {
                 localStorage.setItem(`${sessionMetaPrefix}${id}`, String(now - i));
             }
         });
+
+        expect(AppStorage.sessionId).toBe("session-24");
 
         const sessionKeys = getSessionSettingsKeys();
         expect(sessionKeys.length).toBe(20);
@@ -233,5 +242,27 @@ describe("AppStorage", { concurrent: false }, () => {
 
         expect(AppStorage.loadUISettings()).toBeNull();
         expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it("leaves the session records alone while a demo runs", async () => {
+        const now = Date.now();
+
+        const AppStorage = await importFreshAppStorage(() => {
+            localStorage.setItem(`${sessionSettingsPrefix}prior`, JSON.stringify({ currentScore: "prior-song" }));
+            localStorage.setItem(`${sessionMetaPrefix}prior`, String(now));
+        });
+        const priorRecord = localStorage.getItem(`${sessionSettingsPrefix}prior`);
+
+        const { AppMode, RunMode } = await import("../../src/core/RunMode.js");
+        RunMode.enter(AppMode.Demo);
+        AppStorage.loadUISettings();
+        AppStorage.saveUISettings({ theme: "Dark+" });
+        AppStorage.saveCurrentScore("demo-song");
+
+        expect(localStorage.getItem(globalSettingsKey)).toBeNull();
+        expect(localStorage.getItem(`${sessionSettingsPrefix}prior`)).toBe(priorRecord);
+        expect(getSessionSettingsKeys()).toEqual([`${sessionSettingsPrefix}prior`]);
+        expect(localStorage.getItem(`${sessionMetaPrefix}prior`)).toBe(String(now));
+        expect(localStorage.getItem("asb-demo-score")).toBe(JSON.stringify({ version: 1, score: "demo-song" }));
     });
 });

@@ -337,8 +337,10 @@ test.describe("Setup: fresh start, database has data", () => {
         await page.click("#backend-setup-close");
         await page.waitForTimeout(2000);
 
-        // After setup with existing users but no session, the login dialog appears.
-        await expect(page.locator("#loginDialog")).toBeVisible({ timeout: 10000 });
+        // After setup with existing users but no session, the app continues as a demo.
+        await expect(page.locator("#appRoot")).toBeVisible({ timeout: 10000 });
+        await expect(page.locator("#demoScoresButton")).toBeVisible();
+        await expect(page.locator("#loginDialog")).not.toBeVisible();
     });
 });
 

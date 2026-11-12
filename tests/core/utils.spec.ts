@@ -7,18 +7,27 @@ import { describe, expect, it } from "vitest";
 
 import { TimeParams } from "../../src/core/TimeParams.js";
 
-describe("TimeParams step grid compatibility", () => {
-    it("builds timings for compatible configurations", () => {
-        const timeParams = new TimeParams("6/8", 120, 2, "3/8", 16);
+describe("TimeParams", () => {
+    it("accepts a valid configuration", () => {
+        const timeParams = new TimeParams("6/8", 120, 2, "3/8");
 
-        expect(timeParams.timings).toHaveLength(24);
-        expect(timeParams.isValid({ bar: 1, step: 12 })).toBe(true);
-        expect(timeParams.isValid({ bar: 1, step: 13 })).toBe(false);
+        expect(timeParams.timeSignature).toBe("6/8");
+        expect(timeParams.tempo).toBe(120);
+        expect(timeParams.length).toBe(2);
+        expect(timeParams.pulse).toBe("3/8");
     });
 
-    it("throws for incompatible time-signature and resolution combinations", () => {
+    it("rejects an invalid time signature", () => {
         expect(() => {
-            new TimeParams("3/8", 120, 1, "1/8", 4);
-        }).toThrow(/Incompatible time signature and step resolution/);
+            new TimeParams("3/x", 120, 1, "1/8");
+        }).toThrow(/Invalid time signature/);
+    });
+
+    it("rejects an invalid pulse", () => {
+        const timeParams = new TimeParams("3/8", 120, 1, "1/8");
+
+        expect(() => {
+            timeParams.pulse = "1/3";
+        }).toThrow(/Invalid pulse/);
     });
 });

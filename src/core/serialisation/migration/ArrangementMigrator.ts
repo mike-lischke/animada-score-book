@@ -113,9 +113,7 @@ export class ArrangementMigrator {
     private static createArrangementFromSnapshot(snapshot: IArrangementSnapshot,
         instruments: ISbDmInstrument[]): Arrangement {
         const tps = snapshot.timeParams;
-        const timeParams = new TimeParams(
-            tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution,
-        );
+        const timeParams = new TimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse);
 
         const arrangement = new Arrangement();
         arrangement.timeParams = timeParams;

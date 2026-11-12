@@ -30,7 +30,6 @@ export interface INewScoreResult {
     title: string;
     timeSignature: string;
     pulse: string;
-    stepResolution: number;
     barCount: number;
     tempo: number;
     selectedItems: ISelectionDialogItem[];
@@ -39,15 +38,14 @@ export interface INewScoreResult {
 interface INewScoreTimeSignature {
     signature: string;
     pulse: string;
-    stepResolution: number;
 }
 
-/** The time signatures the grid/staff rendering supports, with their grid parameters. */
+/** The time signatures the grid/staff rendering supports, with their pulse. */
 const timeSignatureOptions: INewScoreTimeSignature[] = [
-    { signature: "4/4", pulse: "1/4", stepResolution: 16 },
-    { signature: "6/8", pulse: "3/8", stepResolution: 8 },
-    { signature: "5/4", pulse: "1/2", stepResolution: 8 },
-    { signature: "7/8", pulse: "1/2", stepResolution: 8 },
+    { signature: "4/4", pulse: "1/4" },
+    { signature: "6/8", pulse: "3/8" },
+    { signature: "5/4", pulse: "1/2" },
+    { signature: "7/8", pulse: "1/2" },
 ];
 
 interface INewScoreDialogState {
@@ -346,7 +344,6 @@ export class NewScoreDialog extends UIComponent<{}, INewScoreDialogState> {
                 title: "",
                 timeSignature: "4/4",
                 pulse: "1/4",
-                stepResolution: 16,
                 barCount: 1,
                 tempo: 110,
                 selectedItems: [],
@@ -368,7 +365,6 @@ export class NewScoreDialog extends UIComponent<{}, INewScoreDialogState> {
             title: title.trim() || "Untitled Arrangement",
             timeSignature,
             pulse: signature?.pulse ?? "1/4",
-            stepResolution: signature?.stepResolution ?? 16,
             barCount: this.parsePositiveInteger(barCount, 1),
             tempo: this.parsePositiveInteger(tempo, 110),
             selectedItems,

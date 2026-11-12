@@ -20,7 +20,7 @@ test.describe("Staff view two-step note", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Two-Step Note",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 200,
                 instrumentId: "0",
@@ -29,8 +29,6 @@ test.describe("Staff view two-step note", () => {
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events: [
                         {

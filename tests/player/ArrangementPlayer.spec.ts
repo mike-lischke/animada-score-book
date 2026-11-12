@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Damping } from "../../src/core/ScoreBookDataModel.js";
 
 import type { IAudioData, Mutable } from "../../src/core/types/general.js";
-import type { Event as PlaybackEvent, ICallbackEvent, IInterval } from "../../src/player/types.js";
+import type { Event as PlaybackEvent, IInterval } from "../../src/player/types.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
     private readonly _arrangement: ISbDmArrangement;
@@ -33,10 +33,6 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
             this.realTimeLength = 1;
         }
 
-        public convertToRealTime(timing: ITiming): RealTime {
-            return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
-        }
-
         public convertToLoopProgress(realTime: RealTime): number {
             return (realTime % this.realTimeLength) / this.realTimeLength;
         }
@@ -58,15 +54,11 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
             return {
                 realTimeLength: this.realTimeLength,
                 secondsPerBar: 1,
-                secondsPerStep: 0.1,
                 bars: 1,
                 performedBars: this.performedBars,
                 beatsPerBar: 4,
                 beatUnit: 4,
                 pulsesPerBar: 4,
-                stepsPerBar: 16,
-                beatGroups: [4, 4, 4, 4],
-                stepsPerPulse: 4,
             };
         }
     }
@@ -93,13 +85,6 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
                 events.push({ realTime: t, audioBuffer: {}, event: firstEvent });
             }
 
-            events.push({
-                realTime: t,
-                callback: () => {
-                    return;
-                }
-            });
-
             return events;
         }
 
@@ -116,30 +101,29 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
 });
 
 // Build simple track/arrangement factories
-const makeMeasure = (track: ISbDmTrack, stepResolution = 16): ISbDmTrackPiece => {
+const makeMeasure = (track: ISbDmTrack): ISbDmTrackPiece => {
     return {
         type: SbDmEntityType.TrackPiece,
         id: getNewId(),
         track,
         number: 1,
-        meter: { beats: 4, beatUnits: 4, stepResolution, beatGroups: [stepResolution] },
+        meter: { beats: 4, beatUnits: 4 },
         events: [],
         subdivisions: [],
         noteEvents: [],
     };
 };
 
-const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: IAudioData): ISbDmNoteEvent => {
+const makeNote = (track: ISbDmTrack, noteStyle?: IAudioData): ISbDmNoteEvent => {
     const measure = makeMeasure(track);
 
     return {
         type: SbDmEntityType.NoteEvent,
         id: getNewId(),
         measure,
-        start: { numerator: timing.step - 1, denominator: 16 },
+        start: { numerator: 0, denominator: 16 },
         duration: { numerator: 1, denominator: 16 },
         track,
-        timing,
         audioData: noteStyle,
     };
 };
@@ -150,14 +134,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
         tempo: 120,
         length: 1,
         pulse: "2/8",
-        stepResolution: 16,
-        timings: [
-            { bar: 1, step: 1 },
-            { bar: 1, step: 2 }
-        ],
-        isValid: () => {
-            return true;
-        },
     };
 
     const tracks: Array<Mutable<ISbDmTrack>> = [];
@@ -214,9 +190,9 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
 
-        const sourceNote = makeNote(track, { bar: 1, step: 1 }, noteStyle);
+        const sourceNote = makeNote(track, noteStyle);
         notes.push(sourceNote);
-        const measure = makeMeasure(track, 1);
+        const measure = makeMeasure(track);
         measure.events.push({
             start: { numerator: 0, denominator: 1 },
             duration: { numerator: 1, denominator: 1 },
@@ -229,7 +205,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
             start: { numerator: 0, denominator: 1 },
             duration: { numerator: 1, denominator: 1 },
             track: track,
-            timing: { bar: 1, step: 1 },
             audioData: sourceNote.audioData,
         });
         track.measures.push(measure);
@@ -262,7 +237,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
 // Import after mocks
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent,
-    type ISbDmTimeParams, type ISbDmTrack, type ISbDmTrackPiece, type ITiming, type RealTime
+    type ISbDmTimeParams, type ISbDmTrack, type ISbDmTrackPiece, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { getNewId } from "../../src/core/utils.js";
 import { ArrangementPlayer, PlayerPlayState } from "../../src/player/ArrangementPlayer.js";
@@ -327,7 +302,7 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         expect(player.trackPlayers.size).toBe(2);
     });
 
-    it("aggregates events within the requested interval and includes timing callbacks", () => {
+    it("aggregates events within the requested interval", () => {
         const arrangement = makeArrangement(1);
         const dm = new TestScoreBookDataModel(arrangement);
         const player = new ArrangementPlayer(dm);
@@ -340,33 +315,14 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         for (let i = 1; i < events.length; i++) {
             expect(events[i - 1].realTime).toBeLessThanOrEqual(events[i].realTime);
         }
-
-        const cb = events.find((event): event is ICallbackEvent => {
-            return event.kind === "callback";
-        });
-        expect(cb).toBeDefined();
-        expect(player.currentTiming).toBeUndefined();
-        cb!.callback();
-        expect(player.currentTiming).toBeTruthy();
     });
 
-    it("onStop resets currentTiming and forwards to track players", () => {
+    it("onStop forwards to track players", () => {
         const arrangement = makeArrangement(2);
         const dm = new TestScoreBookDataModel(arrangement);
         const player = new ArrangementPlayer(dm);
 
-        // Prime currentTiming by firing a timing callback.
-        // @ts-expect-error Accessing internal for test purposes
-        const events = player.getEvents({ start: 0, end: 0.5 });
-        const timingCb = events.find((event): event is ICallbackEvent => {
-            return event.kind === "callback";
-        });
-        timingCb?.callback();
-        expect(player.currentTiming).toBeTruthy();
-
-        // Call onStop and assert reset + forwarding.
         player.onStop();
-        expect(player.currentTiming).toBeUndefined();
 
         const tps = Array.from(player.trackPlayers.values()) as Array<TrackPlayer & { stopped: boolean; }>;
         tps.forEach((tp) => {
@@ -398,7 +354,6 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         const player = new ArrangementPlayer(new TestScoreBookDataModel(arrangement));
         const startTimes: number[] = [];
         const fadeOut = vi.fn();
-        const callback = vi.fn();
         const scheduler = player as unknown as {
             audioContext: BaseAudioContext;
             getEvents: (interval: IInterval) => PlaybackEvent[];
@@ -428,7 +383,6 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
             { kind: "audio", realTime: 0, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
             { kind: "audio", realTime: 0.95, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
             { kind: "audio", realTime: 1, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
-            { kind: "callback", realTime: 0, callback },
         ];
         const getEvents = vi.spyOn(scheduler, "getEvents").mockImplementation((interval) => {
             return events.filter(({ realTime }) => {
@@ -443,20 +397,17 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
 
             expect(startTimes).toEqual([10, 10.95, 11]);
             expect(fadeOut).not.toHaveBeenCalled();
-            expect(callback).toHaveBeenCalledTimes(1);
             expect(player.currentTime).toBeCloseTo(0.875);
             expect(player.state).toBe(PlayerPlayState.Playing);
 
             await vi.advanceTimersByTimeAsync(125);
 
             expect(player.currentTime).toBeCloseTo(0);
-            expect(callback).toHaveBeenCalledTimes(2);
             expect(fadeOut).not.toHaveBeenCalled();
 
             await vi.advanceTimersByTimeAsync(1000);
 
             expect(startTimes).toEqual([10, 10.95, 11, 11.95, 12]);
-            expect(callback).toHaveBeenCalledTimes(3);
             expect(player.currentTime).toBeCloseTo(0);
             expect(fadeOut).not.toHaveBeenCalled();
             for (const [interval] of getEvents.mock.calls) {

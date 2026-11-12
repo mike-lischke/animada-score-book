@@ -6,6 +6,7 @@
 import { uuid } from "../string-helpers.js";
 import type { Articulation } from "./articulation.js";
 import type { INoteValue } from "./rest-notation.js";
+import { RunMode } from "./RunMode.js";
 import type { EditEntryMode, IPoint, TrackViewMode } from "./types/general.js";
 
 export interface IArrangementViewSettings {
@@ -141,9 +142,18 @@ export interface IUISettings {
 }
 
 /**
- * This class takes care for saving and loading settings and the like to and from localStorage.
+ * This class takes care for saving and loading settings and the like to and from localStorage. Which records it
+ * touches follows `RunMode`: a demo keeps one score record and no settings.
  */
 export class AppStorage {
+    /**
+     * The tab's session storage, or undefined where the browser denies it. A caller reaches the storage only
+     * through this handle, which is what keeps a denied storage from throwing at the place it is used.
+     */
+    public static readonly sessionStore: Storage | undefined = AppStorage.#openStorage(() => {
+        return window.sessionStorage;
+    });
+
     /** Local storage key for global UI settings shared across sessions. */
     static #settingsKey = "asb-ui-settings";
 
@@ -169,53 +179,141 @@ export class AppStorage {
         "viewSettings",
     ]);
 
+    /** Local storage key for the record a demo keeps: the score it edits, and nothing else. */
+    static #demoScoreKey = "asb-demo-score";
+
     /** Active session identifier used for session-scoped storage keys. */
     static #sessionId = "";
+
+    /** Whether the tab's session has been resolved and recorded. */
+    static #sessionReady = false;
 
     /**
      * Whether localStorage is available and writable in the current environment.
      * This check is done once at class initialization time.
      */
-    static #hasLocalStorage: boolean = (() => {
-        if ("setItem" in window.localStorage) {
-            try {
-                const testKey = "__asb-test__";
-                window.localStorage.setItem(testKey, "1");
-                window.localStorage.removeItem(testKey);
+    static #hasLocalStorage: boolean = AppStorage.#openStorage(() => {
+        return window.localStorage;
+    }) !== undefined;
 
-                return true;
-            } catch (e) {
-                console.warn("LocalStorage is not available:", e);
-
-                return false;
-            }
-        } else {
-            console.warn("LocalStorage is not available.");
-
-            return false;
-        }
-    })();
-
-    static {
-        if (this.#hasLocalStorage) {
-            // Remove legacy global session id key from old implementations.
-            localStorage.removeItem(this.#sessionStorageKey);
-            this.#sessionId = this.#resolveInitialSessionId();
-            this.#persistSessionId();
-            this.#touchSession(this.#sessionId);
-            this.#cleanupSessions();
-        } else {
-            this.#sessionId = uuid();
-        }
+    /**
+     * @returns Whether the browser stores settings for this page. A denied storage leaves the app working, but
+     * nothing is remembered between reloads.
+     */
+    public static get hasLocalStorage(): boolean {
+        return this.#hasLocalStorage;
     }
 
     /**
-     * The current storage session identifier.
+     * The current storage session identifier. Reading it resolves the tab's session on first use, because a page
+     * that turns out to be a demo never asks for it and therefore leaves no record behind.
      *
      * @returns The active session id used for session-scoped settings.
      */
     public static get sessionId(): string {
+        this.#ensureSession();
+
         return this.#sessionId;
+    }
+
+    /**
+     * Stores the current score where the running mode keeps it: in the session record normally, in the demo record
+     * during a demo.
+     *
+     * @param packed The packed arrangement snapshot.
+     */
+    public static saveCurrentScore(packed: string): void {
+        if (!RunMode.isDemo) {
+            this.saveSetting("currentScore", packed);
+
+            return;
+        }
+
+        if (!this.#hasLocalStorage) {
+            return;
+        }
+
+        localStorage.setItem(this.#demoScoreKey, JSON.stringify({ version: 1, score: packed }));
+    }
+
+    /**
+     * @returns The packed snapshot of the score the running mode kept, if one was stored.
+     */
+    public static loadCurrentScore(): string | undefined {
+        if (!RunMode.isDemo) {
+            return this.loadUISettings()?.currentScore;
+        }
+
+        if (!this.#hasLocalStorage) {
+            return undefined;
+        }
+
+        const raw = localStorage.getItem(this.#demoScoreKey);
+        if (raw === null) {
+            return undefined;
+        }
+
+        try {
+            return AppStorage.#parseDemoScoreRecord(raw);
+        } catch (error) {
+            // A record that cannot be read is dropped, so the next start begins with a fresh demo.
+            console.error("The stored demo score is not readable and is dropped.", error);
+            localStorage.removeItem(this.#demoScoreKey);
+
+            return undefined;
+        }
+    }
+
+    /**
+     * Hands the demo score over and removes its record, so a login carries it over exactly once.
+     *
+     * @returns The packed snapshot of the demo score, if a record was stored.
+     */
+    public static takeDemoScore(): string | undefined {
+        if (!this.#hasLocalStorage) {
+            return undefined;
+        }
+
+        const raw = localStorage.getItem(this.#demoScoreKey);
+        if (raw === null) {
+            return undefined;
+        }
+
+        localStorage.removeItem(this.#demoScoreKey);
+
+        try {
+            return AppStorage.#parseDemoScoreRecord(raw);
+        } catch (error) {
+            console.error("The stored demo score is not readable and is dropped.", error);
+
+            return undefined;
+        }
+    }
+
+    /**
+     * @param raw The stored demo record.
+     *
+     * @returns The packed snapshot the record holds, if it holds one.
+     */
+    static #parseDemoScoreRecord(raw: string): string | undefined {
+        const record = JSON.parse(raw) as { score?: unknown; };
+
+        return typeof record.score === "string" ? record.score : undefined;
+    }
+
+    /**
+     * Drops the stored score of the running mode.
+     */
+    public static clearCurrentScore(): void {
+        if (!RunMode.isDemo) {
+            this.saveSetting("currentScore", undefined);
+
+            return;
+        }
+
+        if (this.#hasLocalStorage) {
+            localStorage.removeItem(this.#demoScoreKey);
+        }
     }
 
     /**
@@ -224,6 +322,15 @@ export class AppStorage {
      * @param desiredSessionId Optional explicit session id to activate.
      */
     public static resetSession(desiredSessionId?: string): void {
+        this.#ensureSession();
+
+        if (!this.#hasLocalStorage) {
+            // Without storage there is no stored id to collide with, so a plain one is enough.
+            this.#sessionId = desiredSessionId ?? uuid();
+
+            return;
+        }
+
         this.#sessionId = desiredSessionId ?? this.#generateSessionId();
         this.#persistSessionId();
         this.#touchSession(this.#sessionId);
@@ -236,11 +343,18 @@ export class AppStorage {
      * @param settings The UI settings object to persist.
      */
     public static saveUISettings(settings: IUISettings): void {
+        if (RunMode.isDemo) {
+            // A demo keeps no settings, so every write path ends here.
+            return;
+        }
+
         if (!this.#hasLocalStorage) {
             console.warn("LocalStorage is not available. UI settings cannot be saved.");
 
             return;
         }
+
+        this.#ensureSession();
 
         const globalSettings = this.#pickSettings(settings, false);
         const sessionSettings = this.#pickSettings(settings, true);
@@ -258,11 +372,18 @@ export class AppStorage {
      * @returns The merged settings object, or null if nothing is stored.
      */
     public static loadUISettings(): IUISettings | null {
+        if (RunMode.isDemo) {
+            // A demo runs on fixed defaults and reads nothing that a session stored.
+            return null;
+        }
+
         if (!this.#hasLocalStorage) {
             console.warn("LocalStorage is not available. UI settings cannot be loaded.");
 
             return null;
         }
+
+        this.#ensureSession();
 
         const globalSettings = this.#loadSettingsByKey(this.#settingsKey);
         const sessionSettings = this.#loadSessionSettings(globalSettings);
@@ -281,9 +402,11 @@ export class AppStorage {
      * Clears persisted UI settings for both global and active session scopes.
      */
     public static clearUISettings(): void {
-        if (!this.#hasLocalStorage) {
+        if (RunMode.isDemo || !this.#hasLocalStorage) {
             return;
         }
+
+        this.#ensureSession();
 
         localStorage.removeItem(this.#settingsKey);
         localStorage.removeItem(this.#getSessionSettingsKey());
@@ -297,6 +420,10 @@ export class AppStorage {
      * @param value The new value. Use undefined to remove the key.
      */
     public static saveSetting<T extends keyof IUISettings>(key: T, value: IUISettings[T]): void {
+        if (RunMode.isDemo) {
+            return;
+        }
+
         const settings = this.loadUISettings() ?? {};
         if (value === undefined) {
             delete settings[key];
@@ -305,6 +432,54 @@ export class AppStorage {
         }
 
         this.saveUISettings(settings);
+    }
+
+    /**
+     * Resolves the tab's session once: the legacy key is dropped, the session id is taken over or cloned from the
+     * latest one, and the session is recorded. Only session-mode access calls this, so a demo writes nothing.
+     */
+    static #ensureSession(): void {
+        if (this.#sessionReady) {
+            return;
+        }
+
+        this.#sessionReady = true;
+
+        if (!this.#hasLocalStorage) {
+            this.#sessionId = uuid();
+
+            return;
+        }
+
+        // Remove legacy global session id key from old implementations.
+        localStorage.removeItem(this.#sessionStorageKey);
+        this.#sessionId = this.#resolveInitialSessionId();
+        this.#persistSessionId();
+        this.#touchSession(this.#sessionId);
+        this.#cleanupSessions();
+    }
+
+    /**
+     * Opens a browser storage, which the browser may deny: Safari raises a `SecurityError` on the property
+     * itself when the user blocks site data, and a storage that refuses the write is no use either.
+     *
+     * @param open Reads the storage from the window.
+     *
+     * @returns The storage, or undefined when it is not available for writing.
+     */
+    static #openStorage(open: () => Storage): Storage | undefined {
+        try {
+            const store = open();
+            const testKey = "__asb-test__";
+            store.setItem(testKey, "1");
+            store.removeItem(testKey);
+
+            return store;
+        } catch (e) {
+            console.warn("Browser storage is not available:", e);
+
+            return undefined;
+        }
     }
 
     /**
@@ -322,7 +497,7 @@ export class AppStorage {
             }
         }
 
-        return sessionStorage.getItem(this.#sessionStorageKey)
+        return this.sessionStore?.getItem(this.#sessionStorageKey)
             ?? undefined;
     }
 
@@ -404,7 +579,7 @@ export class AppStorage {
      */
     static #persistSessionId(): void {
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId: this.#sessionId }, "");
-        sessionStorage.setItem(this.#sessionStorageKey, this.#sessionId);
+        this.sessionStore?.setItem(this.#sessionStorageKey, this.#sessionId);
     }
 
     /**

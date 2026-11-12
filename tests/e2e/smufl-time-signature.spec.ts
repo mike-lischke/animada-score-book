@@ -22,12 +22,11 @@ test.beforeEach(async ({ page }) => {
  */
 const buildSnapshot = (timeSignature: string) => {
     const [beats, beatUnits] = timeSignature.split("/").map(Number);
-    const stepResolution = 16;
 
     return {
         version: arrangementSnapshotVersion,
         title: `E2E ${timeSignature}`,
-        timeParams: { timeSignature, tempo: 120, length: 1, pulse: "1/4", stepResolution },
+        timeParams: { timeSignature, tempo: 120, length: 1, pulse: "1/4" },
         tracks: [{
             id: 100,
             instrumentId: "1",
@@ -36,8 +35,6 @@ const buildSnapshot = (timeSignature: string) => {
                 meter: {
                     beats,
                     beatUnits,
-                    stepResolution,
-                    beatGroups: new Array<number>(beats).fill(stepResolution / beatUnits),
                 },
                 events: [
                     {

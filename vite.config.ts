@@ -76,9 +76,14 @@ const bundleBudgetCheck = (): Plugin => {
  * @returns A Vite plugin object.
  */
 const spaDocumentFallback = (): Plugin => {
+    let base = "/";
+
     return {
         name: "spa-document-fallback",
         apply: "serve",
+        configResolved: (config) => {
+            base = config.base;
+        },
         configureServer: (server) => {
             server.middlewares.use((req, _res, next) => {
                 const method = req.method ?? "GET";
@@ -89,7 +94,15 @@ const spaDocumentFallback = (): Plugin => {
                 }
 
                 const url = req.url ?? "/";
-                const pathname = url.split("?")[0];
+                const requestPath = url.split("?")[0];
+
+                if (!requestPath.startsWith(base)) {
+                    next();
+
+                    return;
+                }
+
+                const pathname = requestPath.slice(base.length - 1);
                 const accept = req.headers.accept ?? "";
 
                 const isHtmlRequest =
@@ -110,7 +123,7 @@ const spaDocumentFallback = (): Plugin => {
                     return;
                 }
 
-                req.url = "/index.html";
+                req.url = `${base}index.html`;
                 next();
             });
         },
@@ -142,7 +155,7 @@ export default defineConfig(({ command }) => {
         } : undefined,
         plugins: [
             preact({
-                prefreshEnabled: false, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
+                prefreshEnabled: true, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
             }),
             tailwindcss(),
             bundleBudgetCheck(),

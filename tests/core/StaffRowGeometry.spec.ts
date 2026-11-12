@@ -11,9 +11,6 @@ import {
     RangeArticulationKind, type IAudioData, type IForteMark, type IHairpin, type IRangeArticulation,
 } from "../../src/core/types/general.js";
 
-/** A 4/4 grid, which is all the notation rules the row geometry calls need. */
-const grid = { stepsPerBar: 16, beatGroups: [4, 4, 4, 4] };
-
 /**
  * Builds a one-measure track whose single event is a quarter note on the given staff line.
  *
@@ -35,7 +32,7 @@ const trackWithNote = (id: number, noteLine: number, accent = false): ISbDmTrack
                 articulation: accent ? { damping: Damping.Open, accent: true, ghost: false } : undefined,
             }],
             subdivisions: [],
-            meter: { stepResolution: 16 },
+            meter: { beats: 4, beatUnits: 4 },
             noteEvents: [{ audioData: { id: "1", noteLine, characteristics: {}, sampleProfile: {} } }],
         }],
     } as unknown as ISbDmTrack;
@@ -55,7 +52,7 @@ const trackWithRest = (id: number): ISbDmTrack => {
         measures: [{
             events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } }],
             subdivisions: [],
-            meter: { stepResolution: 16 },
+            meter: { beats: 4, beatUnits: 4 },
             noteEvents: [],
         }],
     } as unknown as ISbDmTrack;
@@ -114,7 +111,7 @@ describe("StaffRowGeometry", () => {
     it("places the staff line by its own offset and states the row's centre from it", () => {
         const track = trackWithNote(1, 1);
 
-        const geometry = StaffRowGeometry.ofTrack(track, arrangementOfTracks([track]), grid);
+        const geometry = StaffRowGeometry.ofTrack(track, arrangementOfTracks([track]));
 
         expect(geometry.staffLineOffsetPx).toBeGreaterThan(0);
         expect(geometry.heightPx).toBeGreaterThan(geometry.staffLineOffsetPx);
@@ -125,8 +122,8 @@ describe("StaffRowGeometry", () => {
         const note = trackWithNote(1, 1);
         const rest = trackWithRest(2);
 
-        const noteGeometry = StaffRowGeometry.ofTrack(note, arrangementOfTracks([note]), grid);
-        const restGeometry = StaffRowGeometry.ofTrack(rest, arrangementOfTracks([rest]), grid);
+        const noteGeometry = StaffRowGeometry.ofTrack(note, arrangementOfTracks([note]));
+        const restGeometry = StaffRowGeometry.ofTrack(rest, arrangementOfTracks([rest]));
 
         // The note's stem reaches above the head, so its row is taller than the rest's.
         expect(noteGeometry.staffLineOffsetPx).toBeGreaterThan(restGeometry.staffLineOffsetPx);
@@ -137,8 +134,8 @@ describe("StaffRowGeometry", () => {
         const multi = trackWithNote(2, 1);
         multi.instrument.noteStyles["4"] = { id: "4", noteLine: 4 } as IAudioData;
 
-        const singleGeometry = StaffRowGeometry.ofTrack(single, arrangementOfTracks([single]), grid);
-        const multiGeometry = StaffRowGeometry.ofTrack(multi, arrangementOfTracks([multi]), grid);
+        const singleGeometry = StaffRowGeometry.ofTrack(single, arrangementOfTracks([single]));
+        const multiGeometry = StaffRowGeometry.ofTrack(multi, arrangementOfTracks([multi]));
 
         // The lowest line of a four-line staff sits below its middle, so the same stem reaches higher.
         expect(multiGeometry.staffLineOffsetPx).toBeGreaterThan(singleGeometry.staffLineOffsetPx);
@@ -147,13 +144,13 @@ describe("StaffRowGeometry", () => {
     it("reserves room below the notation for the label of a nested tuplet", () => {
         const track = trackWithNote(1, 1);
         const arrangement = arrangementOfTracks([track]);
-        const plain = StaffRowGeometry.ofTrack(track, arrangement, grid).heightPx;
+        const plain = StaffRowGeometry.ofTrack(track, arrangement).heightPx;
 
         track.measures[0].subdivisions.push(
             { startIndex: 0, actual: 3, normal: 4, isTuplet: true },
             { startIndex: 0, actual: 3, normal: 1, isTuplet: true },
         );
-        const nested = StaffRowGeometry.ofTrack(track, arrangement, grid).heightPx;
+        const nested = StaffRowGeometry.ofTrack(track, arrangement).heightPx;
 
         expect(nested).toBeGreaterThan(plain);
     });
@@ -161,7 +158,7 @@ describe("StaffRowGeometry", () => {
     it("measures every track of an arrangement, keyed by track id", () => {
         const tracks = [trackWithNote(1, 1), trackWithRest(2)];
 
-        const geometries = StaffRowGeometry.ofArrangement(arrangementOfTracks(tracks), grid);
+        const geometries = StaffRowGeometry.ofArrangement(arrangementOfTracks(tracks));
 
         expect(geometries.size).toBe(2);
         expect(geometries.has(1)).toBe(true);
@@ -171,8 +168,8 @@ describe("StaffRowGeometry", () => {
     it("states a marking band for a track the arrangement gives a hairpin, and none without markings", () => {
         const track = trackWithNote(1, 1);
 
-        const marked = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [hairpin]), grid);
-        const plain = StaffRowGeometry.ofTrack(track, arrangementOfTracks([track]), grid);
+        const marked = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [hairpin]));
+        const plain = StaffRowGeometry.ofTrack(track, arrangementOfTracks([track]));
 
         expect(marked.bandCentrePx).toBeDefined();
         expect(plain.bandCentrePx).toBeUndefined();
@@ -181,7 +178,7 @@ describe("StaffRowGeometry", () => {
     it("keeps the marking band's top clear of the notation's ink", () => {
         const track = trackWithNote(1, 1);
 
-        const geometry = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [hairpin]), grid);
+        const geometry = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [hairpin]));
 
         // The note's ink reaches 5 px below the staff line; the band's top must sit below that.
         expect(geometry.bandCentrePx! + (geometry.heightPx / 2) - hairpinBandHalfPx)
@@ -192,8 +189,8 @@ describe("StaffRowGeometry", () => {
         // The accented note's deeper ink lifts the row off its least height, so the f's larger band half shows.
         const track = trackWithNote(1, 1, true);
 
-        const hairpinGeometry = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [hairpin]), grid);
-        const forteGeometry = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [forteMark]), grid);
+        const hairpinGeometry = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [hairpin]));
+        const forteGeometry = StaffRowGeometry.ofTrack(track, arrangementWithMarkings([track], [forteMark]));
 
         // The band is symmetric about its middle, so the f's larger half grows the row by twice the difference.
         expect(forteGeometry.heightPx - hairpinGeometry.heightPx)

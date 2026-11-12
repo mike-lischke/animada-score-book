@@ -114,7 +114,10 @@ export class StaffMeasureEditor extends MeasureEditor {
      * @returns The duration as a fraction of the bar, or undefined when the value is invalid.
      */
     public noteValueDuration(value: INoteValue, position: IMeasurePosition): IFraction | undefined {
-        const measure = this.resolveMeasure(position.trackId, position.bar);
+        // A cursor behind the last measure is where a further entry adds a bar, so the last measure's meter
+        // stands in for the bar that does not exist yet.
+        const measure = this.resolveMeasure(position.trackId, position.bar)
+            ?? this.trackOf(position.trackId)?.measures.at(-1);
 
         return measure === undefined ? undefined : this.noteValueDurationFor(value, measure);
     }
@@ -360,6 +363,9 @@ export class StaffMeasureEditor extends MeasureEditor {
             return true;
         }
 
+        // An entry behind the last measure adds the bar it writes into, when the user allows that.
+        this.dataModel.ensureBarAvailable(cursor.bar);
+
         const duration = this.noteValueDuration(this.noteValue, cursor);
         const inserted = duration === undefined ? undefined : this.insertNoteWithShift(cursor, duration, style.id);
         this.playNote(inserted?.style);
@@ -385,6 +391,9 @@ export class StaffMeasureEditor extends MeasureEditor {
         if (cursor === undefined) {
             return false;
         }
+
+        // An entry behind the last measure adds the bar it writes into, when the user allows that.
+        this.dataModel.ensureBarAvailable(cursor.bar);
 
         const duration = this.noteValueDuration(this.noteValue, cursor);
         if (duration === undefined) {
@@ -626,6 +635,13 @@ export class StaffMeasureEditor extends MeasureEditor {
             return undefined;
         }
 
+        // An entry that ends at the bar line leaves the cursor in the following measure. That measure is made
+        // available before the write, so the write's own notification is what shows it and the cursor can select
+        // its rest right away.
+        if (compareFractions(addFractions(target.position.start, target.duration), barLine) >= 0) {
+            this.dataModel.ensureBarAvailable(target.position.bar + 1);
+        }
+
         const inserted = this.dataModel.insertEventsAt([{
             measure: target.measure,
             start: target.position.start,
@@ -686,6 +702,7 @@ export class StaffMeasureEditor extends MeasureEditor {
 
         this.cursor = next;
         this.selectStaffCursorFromModel(next);
+        this.revealCursor();
     }
 
     /**

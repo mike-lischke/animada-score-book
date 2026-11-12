@@ -61,7 +61,7 @@ const makeMeasure = (trackId: number, starts: IFraction[],
     const measure = {
         number: measureNumber,
         track,
-        meter: { stepResolution: 16 },
+        meter: { beats: 4, beatUnits: 4 },
         subdivisions: [],
         events: starts.map((start) => {
             return { start, duration };

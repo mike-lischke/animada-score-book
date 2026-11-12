@@ -4,7 +4,6 @@
  */
 
 import { MeasureLayout, staffMeasureInsets, staffSpacePx } from "./MeasureLayout.js";
-import type { INotationGrid } from "./MeasureProjection.js";
 import { RangeArticulations } from "./RangeArticulations.js";
 import type { ISbDmArrangement, ISbDmTrack } from "./ScoreBookDataModel.js";
 import { StaffInk } from "./StaffInk.js";
@@ -62,18 +61,16 @@ export interface IStaffRowGeometry {
 export class StaffRowGeometry {
     /**
      * @param arrangement The arrangement whose tracks are measured.
-     * @param grid The arrangement's timing grid, which the notation rules work on.
      * @param widthScale Factor the measure widths are divided by, which the print view states for its halved
      *                   layout.
      *
      * @returns The row geometry of every track, keyed by track id.
      */
-    public static ofArrangement(arrangement: ISbDmArrangement, grid: INotationGrid,
-        widthScale = 1): Map<number, IStaffRowGeometry> {
+    public static ofArrangement(arrangement: ISbDmArrangement, widthScale = 1): Map<number, IStaffRowGeometry> {
         const result = new Map<number, IStaffRowGeometry>();
 
         for (const track of arrangement.tracks) {
-            result.set(track.id, StaffRowGeometry.ofTrack(track, arrangement, grid, widthScale));
+            result.set(track.id, StaffRowGeometry.ofTrack(track, arrangement, widthScale));
         }
 
         return result;
@@ -82,15 +79,14 @@ export class StaffRowGeometry {
     /**
      * @param track The track to measure.
      * @param arrangement The arrangement the track belongs to, whose measure widths decide the beam slopes.
-     * @param grid The arrangement's timing grid, which the notation rules work on.
      * @param widthScale Factor the measure widths are divided by, which the print view states for its halved
      *                   layout.
      * @param measureWidths Optional display widths for the measure columns.
      *
      * @returns The row geometry of the track, derived from the notation of every measure it holds.
      */
-    public static ofTrack(track: ISbDmTrack, arrangement: ISbDmArrangement, grid: INotationGrid,
-        widthScale = 1, measureWidths?: ReadonlyMap<number, number>): IStaffRowGeometry {
+    public static ofTrack(track: ISbDmTrack, arrangement: ISbDmArrangement, widthScale = 1,
+        measureWidths?: ReadonlyMap<number, number>): IStaffRowGeometry {
         const centerLine = (StaffRowGeometry.maxNoteLineOf(track) + 1) / 2;
         const baseline = StaffInk.ofRow([], centerLine);
 
@@ -100,7 +96,7 @@ export class StaffRowGeometry {
         for (let bar = 1; bar <= track.measures.length; bar++) {
             const width = MeasureLayout.widthOf(bar, measureWidths ?? arrangement.measureWidths) / widthScale;
             const rowWidthPx = Math.max(1, width - staffMeasureInsets);
-            const { nodes, beamSpans } = StaffNotation.project(track.measures[bar - 1], grid, centerLine, rowWidthPx);
+            const { nodes, beamSpans } = StaffNotation.project(track.measures[bar - 1], centerLine, rowWidthPx);
             const ink = StaffNotation.rowInk(nodes, beamSpans, centerLine);
 
             inkTopPx = Math.max(inkTopPx, ink.topPx);

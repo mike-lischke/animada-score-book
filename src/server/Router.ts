@@ -109,6 +109,11 @@ export class Router {
 
                         break;
 
+                    case "listDemoScores":
+                        await this.scoreRoutes.handleListDemoScores(req, res);
+
+                        break;
+
                     case "resetChildPermissions":
                         await this.scoreRoutes.handleResetChildPermissions(req, res);
 
@@ -171,6 +176,11 @@ export class Router {
 
                     case "login":
                         await this.authRoutes.handleLogin(req, res);
+
+                        break;
+
+                    case "register":
+                        await this.authRoutes.handleRegister(req, res);
 
                         break;
 

@@ -35,7 +35,7 @@ const buildPackedArrangement = (tracks: Array<{
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
         title: "Decoration Test",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: tracks.map((track, trackIndex) => {
             const events = track.events
                 ? track.events.map((event) => {
@@ -65,8 +65,6 @@ const buildPackedArrangement = (tracks: Array<{
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events,
                     subdivisions: [],

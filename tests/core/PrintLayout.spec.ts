@@ -6,7 +6,6 @@
 import { describe, expect, it } from "vitest";
 
 import { MeasureLayout, staffPrefixWidth } from "../../src/core/MeasureLayout.js";
-import type { INotationGrid } from "../../src/core/MeasureProjection.js";
 import {
     PageOrientation, PrintLayout, PrintOverflowKind, printGridHeadRoom, printGridRowHeight,
     printInstrumentColumnWidth, printInstrumentGap, printRowGap, printStaffHeadRoom,
@@ -15,9 +14,6 @@ import {
 import type { ISbDmArrangement, ISbDmTrack } from "../../src/core/ScoreBookDataModel.js";
 import { StaffRowGeometry } from "../../src/core/StaffRowGeometry.js";
 import { TrackViewMode } from "../../src/core/types/general.js";
-
-/** A 4/4 grid, which is all the notation rules the row geometry calls need. */
-const grid: INotationGrid = { stepsPerBar: 16, beatGroups: [4, 4, 4, 4] };
 
 /** The margins every test uses unless it states its own. */
 const standardMargins: IPageMargins = { top: 15, right: 15, bottom: 15, left: 15 };
@@ -119,7 +115,6 @@ const layoutOf = (options: ILayoutOptions): IPrintLayout => {
     return PrintLayout.layout({
         arrangement,
         barCount,
-        grid,
         setup: { orientation: PageOrientation.Portrait, margins: { ...margins }, printScale },
         tracks: arrangement.tracks,
         viewMode,
@@ -271,8 +266,8 @@ describe("PrintLayout", () => {
 
             const system = layoutOf({ arrangement, barCount: 2 }).pages[0].systems[0];
             const widths = new Map([[1, MeasureLayout.defaultWidth()], [2, MeasureLayout.defaultWidth()]]);
-            const restHeight = StaffRowGeometry.ofTrack(rest, arrangement, grid, 1, widths).heightPx;
-            const noteHeight = StaffRowGeometry.ofTrack(note, arrangement, grid, 1, widths).heightPx;
+            const restHeight = StaffRowGeometry.ofTrack(rest, arrangement, 1, widths).heightPx;
+            const noteHeight = StaffRowGeometry.ofTrack(note, arrangement, 1, widths).heightPx;
 
             expect(system.rowHeightsPx).toEqual([restHeight, noteHeight]);
             expect(system.heightPx).toBe(printStaffHeadRoom + restHeight + noteHeight + printRowGap);

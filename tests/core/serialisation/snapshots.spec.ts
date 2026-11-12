@@ -97,7 +97,7 @@ describe("snapshots", () => {
             version: arrangementSnapshotVersion,
             title: "Scored",
             scoreId: 12345,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [],
         };
 
@@ -128,7 +128,7 @@ describe("snapshots", () => {
         arrangement.applyArrangementSnapshot({
             version: arrangementSnapshotVersion,
             title: "Foreign chunks",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4" },
             tracks: [],
             extensions: { laterFeature: { nested: [1, 2, 3] }, measureWidths: { 1: 1000 } },
         }, [instrument]);
@@ -148,7 +148,7 @@ describe("snapshots", () => {
 
         arrangement.applyArrangementSnapshot({
             version: arrangementSnapshotVersion,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4" },
             tracks: [],
             extensions: { measureWidths: { 2: 2000, 5: 500, 0: 900 } },
         }, [instrument]);
@@ -172,7 +172,7 @@ describe("snapshots", () => {
 
         arrangement.applyArrangementSnapshot({
             version: arrangementSnapshotVersion,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4" },
             tracks: [],
             extensions: { repeatBars: { 1: { start: true }, 2: { end: true } } },
         }, [instrument]);
@@ -186,7 +186,7 @@ describe("snapshots", () => {
 
         arrangement.applyArrangementSnapshot({
             version: arrangementSnapshotVersion,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4" },
             tracks: [],
             extensions: {
                 repeatBars: { 2: { end: true }, 5: { start: true }, 0: { start: true }, 1: {}, 3: { end: false } },
@@ -246,7 +246,7 @@ describe("snapshots", () => {
         const measures = Array.from({ length: bars }, (entry, index) => {
             return {
                 number: index + 1,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events: [
                     {
                         start: { numerator: 0, denominator: 1 },
@@ -267,7 +267,7 @@ describe("snapshots", () => {
         return {
             version: arrangementSnapshotVersion,
             title: "Marked notes",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: bars, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: bars, pulse: "1/4" },
             tracks: [{ id: 100, instrumentId: "0", measures }],
         };
     };

@@ -8,11 +8,12 @@ import { BeamGeometry, normalStemLengthSpaces, type IBeamNotePlan } from "./Beam
 import { staffSpacePx } from "./MeasureLayout.js";
 import {
     MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
-    type INotationGrid, type IProjectedEvent, type IProjectedItem,
+    type IProjectedEvent, type IProjectedItem,
 } from "./MeasureProjection.js";
 import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue } from "./rest-notation.js";
 import { NoteDisplayType, ExcitationMode, StickTechnique, type INoteArticulation, type ISbDmTrackPiece }
     from "./ScoreBookDataModel.js";
+import { StepGrid, type INotationGrid } from "./StepGrid.js";
 import { HeadMark, StaffInk, type IStaffInk, type IStaffInkNote } from "./StaffInk.js";
 import type { IAudioData, IFraction, ISubdivision } from "./types/general.js";
 
@@ -77,29 +78,26 @@ export interface IStaffNotation {
 export class StaffNotation {
     /**
      * @param measure The measure to project.
-     * @param grid The arrangement's timing grid.
      *
      * @returns The measure's node tree.
      */
-    public static nodesOf(measure: ISbDmTrackPiece, grid: INotationGrid): IStaffTreeNode[] {
+    public static nodesOf(measure: ISbDmTrackPiece): IStaffTreeNode[] {
         // A simile holds no content of its own; its mark replaces the notes the measure would draw.
         const items = measure.simile === true ? [] : MeasureProjection.project(measure);
 
-        return StaffNotation.buildNodes(items, measure, grid);
+        return StaffNotation.buildNodes(items, measure, StepGrid.gridOfMeter(measure.meter), 0);
     }
 
     /**
      * @param measure The measure to project.
-     * @param grid The arrangement's timing grid.
      * @param centerLine The line the row is drawn around.
      * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
      *
      * @returns The measure's node tree and the beam engraving of its beamed notes.
      */
-    public static project(measure: ISbDmTrackPiece, grid: INotationGrid, centerLine: number,
-        rowWidthPx: number): IStaffNotation {
-        const nodes = StaffNotation.nodesOf(measure, grid);
-        const beamSpans = StaffNotation.beamSpansOf(nodes, measure, grid, centerLine, rowWidthPx);
+    public static project(measure: ISbDmTrackPiece, centerLine: number, rowWidthPx: number): IStaffNotation {
+        const nodes = StaffNotation.nodesOf(measure);
+        const beamSpans = StaffNotation.beamSpansOf(nodes, measure, centerLine, rowWidthPx);
 
         return { nodes, beamSpans };
     }
@@ -182,24 +180,24 @@ export class StaffNotation {
      *
      * @param nodes The nodes holding the render data of the measure's events.
      * @param measure The measure the nodes belong to.
-     * @param grid Timing metrics for the grouping rules.
      * @param centerLine The line the row is drawn around.
      * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
      * @param noteAnchors Optional rendered note anchors in layout px, keyed by event index.
      *
      * @returns Map of note event indices to their beam engraving.
      */
-    public static beamSpansOf(nodes: IStaffTreeNode[], measure: ISbDmTrackPiece, grid: INotationGrid,
-        centerLine: number, rowWidthPx: number, noteAnchors?: ReadonlyMap<number, number>): Map<number, IBeamNotePlan> {
+    public static beamSpansOf(nodes: IStaffTreeNode[], measure: ISbDmTrackPiece, centerLine: number,
+        rowWidthPx: number, noteAnchors?: ReadonlyMap<number, number>): Map<number, IBeamNotePlan> {
         const target = new Map<number, IBeamNotePlan>();
         const notesByEvent = new Map<number, IStaffNoteNode>();
+        const grid = StepGrid.gridOfMeter(measure.meter);
         const halfStep = 1 / (2 * grid.stepsPerBar);
 
         for (const note of StaffNotation.collectNotes(nodes)) {
             notesByEvent.set(note.eventIndex, note);
         }
 
-        for (const group of MeasureProjection.noteGroups(measure, grid)) {
+        for (const group of MeasureProjection.noteGroups(measure)) {
             if (group.kind !== NoteGroupKind.Beam) {
                 continue;
             }

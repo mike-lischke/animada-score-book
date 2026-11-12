@@ -3,10 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
+import type { RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParamsBase } from "../core/types/general.js";
 import type { IRealtimeProvider } from "../ui/AnimationEngine.js";
-import { createBeatGroups } from "../core/utils.js";
 
 /**
  * Timing details about the score, such as how long a bar is, or how many pulses there are in a bar.
@@ -21,9 +20,6 @@ export interface IScoreMetrics {
     /** How many seconds is a bar long? */
     secondsPerBar: RealTime,
 
-    /** How many seconds is a step long? */
-    secondsPerStep: RealTime,
-
     /** How many bars are in the score? */
     bars: number,
 
@@ -36,25 +32,8 @@ export interface IScoreMetrics {
     /** What note value represents one beat? (e.g. 4 for 4/4, 8 for 6/8 etc.) */
     beatUnit: number,
 
-    /** How many pulses are in a bar? (= beatGroups.length) */
+    /** How many pulses are in a bar? A pulse is what the tempo counts, e.g. 4 in 4/4. */
     pulsesPerBar: number,
-
-    /** How many steps are in a bar? */
-    stepsPerBar: number,
-
-    /**
-     * Beat group sizes in steps, summing to {@link stepsPerBar}.
-     * E.g. `[4, 4, 4, 4]` for 4/4 or `[3, 2, 2]` for 7/8.  Irregular meters have
-     * varying group sizes; this array captures the exact pulse boundaries.
-     */
-    beatGroups: number[],
-
-    /**
-     * How many steps are in a pulse, when beat groups are uniform.
-     * For irregular meters this is the average (may be fractional);
-     * prefer {@link beatGroups} for precise pulse-boundary work.
-     */
-    stepsPerPulse: number,
 }
 
 /**
@@ -70,8 +49,8 @@ export interface IScoreMetrics {
  * - Bar: A subdivision of the music, defined by the time signature. Bars are numbered from 1.
  * - Pulse: A subdivision of a bar. Groups steps together. Usually corresponds to the beat (2 for 2/4, 4 for 4/4 etc.).
  *          Defined by the pulse setting.
- * - Step: The base unit of time in the music. Steps are numbered from 1, and there are `stepResolution` steps
- *         in a beat.
+ * - Step: The base unit of time in the music. Steps are numbered from 1, and there are as many steps per bar
+ *         as the meter's step grid states.
  */
 export class TimeCoordinator {
 
@@ -97,33 +76,6 @@ export class TimeCoordinator {
     public get metrics(): IScoreMetrics {
         return this.#metrics;
     }
-
-    /**
-     * Computes the number of base-grid steps in one pulse. Notation rules need it to tell a ternary
-     * pulse (three equal steps, drawn as eighths) from a binary one.
-     *
-     * @param timeParams The time parameters to read the pulse and the step resolution from.
-     *
-     * @returns The number of steps in one pulse.
-     */
-    public static stepsPerPulseOf(timeParams: Readonly<ITimeParamsBase>): number {
-        const [pulseFrequency, pulseResolution] = timeParams.pulse.split("/").map((str) => {
-            return Number(str);
-        });
-
-        return timeParams.stepResolution * pulseFrequency / pulseResolution;
-    }
-
-    /**
-     * Converting is currently extremely easy, but will become more complicated with polyrhythms
-     * and tempo changes.
-     *
-     * @param timing The timing to convert.
-     * @returns The real time.
-     */
-    public convertToRealTime(timing: ITiming): RealTime {
-        return (this.#metrics.secondsPerBar * (timing.bar - 1)) + (this.#metrics.secondsPerStep * (timing.step - 1));
-    };
 
     public convertToLoopProgress(realTime: number): RealTime {
         return ((realTime + this.internalOffset) % this.#metrics.realTimeLength) / this.#metrics.realTimeLength;
@@ -161,38 +113,28 @@ export class TimeCoordinator {
     }
 
     private computeMetrics(): IScoreMetrics {
-        const { timeSignature, tempo, stepResolution } = this.timeParams;
+        const { timeSignature, tempo, pulse } = this.timeParams;
         const [beatsPerBar, beatUnit] = timeSignature.split("/").map((str) => {
             return Number(str);
         });
+        const [pulseCount, pulseUnit] = pulse.split("/").map((str) => {
+            return Number(str);
+        });
 
-        // Lay some ground work...
-        const stepsPerBeat = stepResolution / beatUnit;
-        const stepsPerBar = stepsPerBeat * beatsPerBar;
-        if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
-            throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
-        }
-
-        const stepsPerPulse = TimeCoordinator.stepsPerPulseOf(this.timeParams);
+        // A bar holds `beatsPerBar / beatUnit` whole notes and a pulse `pulseCount / pulseUnit` of one, so their
+        // quotient is the number of pulses the bar holds.
+        const pulsesPerBar = (beatsPerBar * pulseUnit) / (beatUnit * pulseCount);
         const secondsPerPulse = 60 / tempo;
-
-        // And produce our actually useful values.
-        const secondsPerStep = secondsPerPulse / stepsPerPulse;
-        const secondsPerBar = secondsPerStep * stepsPerBar;
-        const beatGroups = createBeatGroups(beatsPerBar, beatUnit, stepsPerBar);
+        const secondsPerBar = secondsPerPulse * pulsesPerBar;
 
         return {
             realTimeLength: secondsPerBar * this.#performedBars,
             secondsPerBar,
-            secondsPerStep,
             bars: this.timeParams.length,
             performedBars: this.#performedBars,
-            pulsesPerBar: beatGroups.length,
             beatsPerBar,
             beatUnit,
-            stepsPerBar,
-            beatGroups,
-            stepsPerPulse,
+            pulsesPerBar,
         };
     }
 };

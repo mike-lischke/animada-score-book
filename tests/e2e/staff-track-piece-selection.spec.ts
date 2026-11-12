@@ -10,7 +10,7 @@ import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapsho
 import { EditEntryMode, type IArrangementSnapshot, type ITrackPieceSnapshot } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
-const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
+const meter = { beats: 4, beatUnits: 4 };
 
 /** A bar holding nothing but a whole rest, so a click on the staff addresses the track piece. */
 const restPiece: ITrackPieceSnapshot = {
@@ -24,7 +24,7 @@ const restPiece: ITrackPieceSnapshot = {
 const twoTrackSnapshot: IArrangementSnapshot = {
     version: arrangementSnapshotVersion,
     title: "E2E Two Staff Rows",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
     tracks: [
         { id: 200, instrumentId: "a", measures: [restPiece] },
         { id: 201, instrumentId: "a", measures: [restPiece] },

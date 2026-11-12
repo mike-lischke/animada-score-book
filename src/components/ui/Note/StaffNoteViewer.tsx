@@ -27,11 +27,11 @@ import {
     type IStaffNoteNode, type IStaffSubdivisionNode, type IStaffTreeNode,
 } from "../../../core/StaffNotation.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
+import { StepGrid } from "../../../core/StepGrid.js";
 import type {
     IArticulationPortion, IAudioData, IForteMark, IFraction, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision,
 } from "../../../core/types/general.js";
 import { RangeArticulationKind } from "../../../core/types/general.js";
-import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { BarlineView } from "../framework/BarlineView.js";
 import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
@@ -40,8 +40,6 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 export interface IStaffNoteViewerProperties extends ICommonUIProperties {
     isLastBar: boolean;
     timeSignature: string;
-    scoreMetrics: IScoreMetrics;
-    baseSteps: number;
 
     measure: ISbDmTrackPiece;
     barNumber: number;
@@ -145,7 +143,7 @@ const tupletBracketMarginSpaces = 0.5;
 
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
-        const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
+        const { isLastBar, measure, barNumber, trackId, maxNoteLine = 1,
             scoreElementRegistry, repeatBars, articulations, rowGeometry,
             measureWidth = MeasureLayout.defaultWidth(), nominalWidth = measureWidth } = this.props;
 
@@ -166,8 +164,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // the view states it as data instead of measuring the rendered row.
         const rowWidthPx = Math.max(1, measureWidth - staffMeasureInsets);
 
-        const nodes = StaffNotation.nodesOf(measure, scoreMetrics);
-        const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
+        const grid = StepGrid.gridOfMeter(measure.meter);
+        const nodes = StaffNotation.nodesOf(measure);
+        const tupletLabels = this.computeTupletLabels(nodes, grid.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
             return this.nodeHasAnyNote(node);
@@ -191,12 +190,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // A measure is resized around its notation: the grid keeps the room the first event holds at the default
         // width, and the room before the closing barline closes down to that same room.
         const gridInsets = StaffNoteViewer.gridInsetsOf(nodes, measureWidth, nominalWidth,
-            scoreMetrics.stepsPerBar);
+            grid.stepsPerBar);
         const gridWidthPx = Math.max(1, rowWidthPx - gridInsets.leftPx - gridInsets.rightPx);
-        const noteAnchors = StaffNoteViewer.noteAnchorsOf(nodes, scoreMetrics.stepsPerBar, gridWidthPx);
+        const noteAnchors = StaffNoteViewer.noteAnchorsOf(nodes, grid.stepsPerBar, gridWidthPx);
         const articulationHeadWidths = StaffNoteViewer.articulationHeadWidthsOf(nodes);
-        const beamSpans = StaffNotation.beamSpansOf(nodes, measure, scoreMetrics, centerLine, gridWidthPx,
-            noteAnchors);
+        const beamSpans = StaffNotation.beamSpansOf(nodes, measure, centerLine, gridWidthPx, noteAnchors);
 
         let runs: ComponentChild[];
         if (usesSimile) {
@@ -924,7 +922,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamNotePlan>,
         keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1,
         atMeasureEnd = true, containerWidthPx = 0): ComponentChild[] {
-        const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
+        const { measure, barNumber, trackId, scoreElementRegistry } = this.props;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const widths = StaffNoteViewer.spacedWidthsOf(nodes, containerSpan, containerWidthPx);
 
         return nodes.map((node, index) => {
@@ -957,7 +956,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             // 50 % and a subdivision slot sits where the replaced note's notehead was. The offset is
             // the same for every note, which is what makes a beam reach the next note's anchor.
             const anchorPercent = node.duration.denominator > 0 && node.duration.numerator > 0
-                ? (node.duration.denominator / (2 * node.duration.numerator * scoreMetrics.stepsPerBar)) * 100
+                ? (node.duration.denominator / (2 * node.duration.numerator * stepsPerBar)) * 100
                 : 50;
 
             const beamInfo = beamSpans.get(node.eventIndex);
@@ -987,7 +986,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }),
             } as CSSProperties;
             const stepIndex = Math.floor(
-                (node.start.numerator * scoreMetrics.stepsPerBar) / node.start.denominator,
+                (node.start.numerator * stepsPerBar) / node.start.denominator,
             );
 
             if (node.noteStyle !== undefined) {

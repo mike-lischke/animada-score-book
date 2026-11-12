@@ -71,13 +71,13 @@ const slopedBeamSnapshot = (noteStyleIds: string[]) => {
     return {
         version: arrangementSnapshotVersion,
         title: "E2E Sloped Beam",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
         tracks: [{
             id: 100,
             instrumentId: fourLineInstrument,
             measures: [{
                 number: 1,
-                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                meter: { beats: 4, beatUnits: 4 },
                 events: [
                     ...noteStyleIds.map((noteStyleId, index) => {
                         return {
@@ -101,13 +101,13 @@ const slopedBeamSnapshot = (noteStyleIds: string[]) => {
 const quarterNoteSnapshot: IArrangementSnapshot = {
     version: arrangementSnapshotVersion,
     title: "E2E Quarter Notes",
-    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
     tracks: [{
         id: 100,
         instrumentId: fourLineInstrument,
         measures: [{
             number: 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            meter: { beats: 4, beatUnits: 4 },
             events: [0, 4, 8, 12].map((start) => {
                 return {
                     start: { numerator: start, denominator: 16 },
@@ -437,13 +437,13 @@ test.describe("Staff view selection", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Off-Grid Beam Group",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 200,
                 instrumentId: "0",
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 } },
                         ...[0, 1, 2, 3].map((index) => {
@@ -508,13 +508,13 @@ test.describe("Staff view selection", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Nested Tuplets",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 300,
                 instrumentId: "0",
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         { start: { numerator: 0, denominator: 1 }, duration: innerSlot, noteStyleId: "1" },
                         { start: { numerator: 1, denominator: 36 }, duration: innerSlot, noteStyleId: "1" },
@@ -560,13 +560,13 @@ test.describe("Staff view selection", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Two Beam Groups",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 400,
                 instrumentId: "0",
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         ...[0, 1, 2, 3].map((step) => {
                             return {

@@ -80,7 +80,10 @@ export class AuthRoutes {
 
         this.ctx.setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
-        const capabilities = await this.ctx.auth.buildCapabilities(payload);
+        const [capabilities, groupIds] = await Promise.all([
+            this.ctx.auth.buildCapabilities(payload),
+            this.groupIdsOf(user.id),
+        ]);
 
         this.ctx.sendJson(res, {
             token: accessToken,
@@ -89,6 +92,113 @@ export class AuthRoutes {
                 username: user.username,
                 displayName: user.displayName,
                 isAdmin: payload.isAdmin,
+                groupIds,
+            },
+            capabilities,
+        });
+    };
+
+    /**
+     * Creates an account for a visitor. The account starts without group membership and therefore without
+     * capabilities; the backend decides that, never the client.
+     *
+     * @param req The incoming HTTP request.
+     * @param res The response to write to.
+     */
+    public async handleRegister(req: IncomingMessage, res: ServerResponse) {
+        if (!this.ctx.config.registration.enabled) {
+            this.ctx.sendError(res, "Registration is disabled on this installation.", 403);
+
+            return;
+        }
+
+        const rlKey = this.ctx.rateLimitKey(req, "#register");
+
+        if (this.ctx.checkRateLimit(rlKey)) {
+            this.ctx.sendError(res, "Too many attempts. Try again later.", 429);
+
+            return;
+        }
+
+        // Every attempt counts, so one client cannot create accounts in a loop. The attempt that reaches the
+        // threshold is answered as blocked.
+        if (this.ctx.recordFailedAttempt(rlKey)) {
+            this.ctx.sendError(res, "Too many attempts. Try again later.", 429);
+
+            return;
+        }
+
+        const body = await this.ctx.readJsonBody(req);
+        const username = String(body.username ?? "").trim();
+        const password = String(body.password ?? "");
+        const displayName = String(body.displayName ?? "").trim() || username;
+
+        if (username.length < 3) {
+            this.ctx.sendError(res, "The username needs at least 3 characters.");
+
+            return;
+        }
+
+        if (password.length < 6) {
+            this.ctx.sendError(res, "The password needs at least 6 characters.");
+
+            return;
+        }
+
+        const users = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username],
+        );
+
+        if (users.length > 0) {
+            this.ctx.sendError(res, "That username is already taken.", 409);
+
+            return;
+        }
+
+        // A user and a group cannot share a name, because both are addressable by it.
+        const groups = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM `groups` WHERE name = ?",
+            [username],
+        );
+
+        if (groups.length > 0) {
+            this.ctx.sendError(res, "A group with this name already exists", 409);
+
+            return;
+        }
+
+        const passwordHash = await Auth.hashPassword(password);
+        const created = await this.ctx.auth.adapter.insertReturningId(
+            "INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)",
+            [username, passwordHash, displayName],
+        );
+
+        const payload: ITokenPayload = { userId: created.insertId, username, isAdmin: false };
+        const accessToken = Auth.createAccessToken(payload);
+        const refreshToken = Auth.createRefreshToken();
+
+        await this.ctx.auth.adapter.execute(
+            "UPDATE users SET refresh_token_hash = ? WHERE id = ?",
+            [refreshToken.hash, created.insertId],
+        );
+
+        await this.ctx.auth.recordLoginAudit(
+            created.insertId, LoginAuditEvent.Login, undefined, this.ctx.getClientIp(req),
+        );
+
+        this.ctx.setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
+
+        const capabilities = await this.ctx.auth.buildCapabilities(payload);
+
+        this.ctx.sendJson(res, {
+            token: accessToken,
+            user: {
+                id: created.insertId,
+                username,
+                displayName,
+                isAdmin: false,
+                groupIds: [],
             },
             capabilities,
         });
@@ -190,6 +300,7 @@ export class AuthRoutes {
                 username: anon.username,
                 displayName: anon.displayName,
                 isAdmin: false,
+                groupIds: [group.id],
             },
             group: {
                 id: group.id,
@@ -256,6 +367,12 @@ export class AuthRoutes {
         const user = this.ctx.getAuthUser(req);
 
         if (user) {
+            // Clearing the stored hash ends the session even if the cookie was captured before.
+            await this.ctx.auth.adapter.execute(
+                "UPDATE users SET refresh_token_hash = NULL WHERE id = ?",
+                [user.userId],
+            );
+
             await this.ctx.auth.recordLoginAudit(
                 user.userId, LoginAuditEvent.Logout, undefined, this.ctx.getClientIp(req),
             );
@@ -300,7 +417,10 @@ export class AuthRoutes {
             authType: user.authType,
             groupId: user.groupId,
         };
-        const capabilities = await this.ctx.auth.buildCapabilities(payload);
+        const [capabilities, groupIds] = await Promise.all([
+            this.ctx.auth.buildCapabilities(payload),
+            this.groupIdsOf(dbUser.id, user.authType === "group" ? user.groupId : undefined),
+        ]);
 
         let group: { id: number; name: string; } | undefined;
         if (user.authType === "group" && user.groupId !== undefined) {
@@ -321,6 +441,7 @@ export class AuthRoutes {
                 username: dbUser.username,
                 displayName: dbUser.displayName,
                 isAdmin: admin,
+                groupIds,
             },
             group,
             capabilities,
@@ -398,8 +519,6 @@ export class AuthRoutes {
             defaultGroupId = agResult.insertId;
         }
 
-        const worldId = await this.ctx.auth.getWorldGroupId();
-
         const orphanFolders = await this.ctx.auth.adapter.query<{ id: number; }>(
             `SELECT f.id FROM folders f
          WHERE NOT EXISTS (
@@ -410,10 +529,6 @@ export class AuthRoutes {
 
         for (const f of orphanFolders) {
             await this.ctx.auth.setOwner(EntityType.Folder, f.id, result.insertId);
-
-            if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, worldId, false);
-            }
 
             if (defaultGroupId) {
                 await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, defaultGroupId, false);
@@ -430,10 +545,6 @@ export class AuthRoutes {
 
         for (const s of orphanScores) {
             await this.ctx.auth.setOwner(EntityType.Score, s.id, result.insertId);
-
-            if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup(EntityType.Score, s.id, worldId, false);
-            }
 
             if (defaultGroupId) {
                 await this.ctx.auth.addEntityGroup(EntityType.Score, s.id, defaultGroupId, false);
@@ -467,8 +578,30 @@ export class AuthRoutes {
 
         this.ctx.sendJson(res, {
             token: accessToken,
-            user: { id: result.insertId, username, displayName, isAdmin: true },
+            user: { id: result.insertId, username, displayName, isAdmin: true, groupIds: [adminGroupResult.insertId] },
             capabilities,
         });
     };
+
+    /**
+     * @param userId The user whose memberships are collected.
+     * @param sessionGroupId The group a group-password session logged in through, if there is one.
+     *
+     * @returns The ids of the groups the session belongs to.
+     */
+    private async groupIdsOf(userId: number, sessionGroupId?: number): Promise<number[]> {
+        // A group session carries only the group it logged in through, not the memberships of its account.
+        if (sessionGroupId !== undefined) {
+            return [sessionGroupId];
+        }
+
+        const rows = await this.ctx.auth.adapter.query<{ group_id: number; }>(
+            "SELECT group_id FROM user_groups WHERE user_id = ?",
+            [userId],
+        );
+
+        return rows.map((row) => {
+            return row.group_id;
+        });
+    }
 }

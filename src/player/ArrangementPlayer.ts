@@ -4,7 +4,7 @@
  */
 
 import { requisitions } from "../supplement/Requisitions.js";
-import type { ISbDmNoteEvent, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import type { ISbDmNoteEvent, ISbDmTrack, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { waitFor } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
@@ -14,7 +14,7 @@ import { PlaybackOrder } from "./PlaybackOrder.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
-    Event, ICallbackEvent, IInterval, type IAudioEvent, type IMetronomeEvent,
+    type Event, type IAudioEvent, type IInterval, type IMetronomeEvent,
 } from "./types.js";
 
 /** What the player is doing: counting a bar in, playing, or idle. */
@@ -32,7 +32,7 @@ interface IBarSpan {
 
 /**
  * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s and
- * publishing UI-relevant updates (current timing and audible tracks).
+ * publishing UI-relevant updates.
  *
  * Lifecycle:
  * - Construct with an arrangement to subscribe to changes.
@@ -47,8 +47,6 @@ export class ArrangementPlayer {
     private metronome: Metronome;
     private readonly timeCoordinator: TimeCoordinator;
 
-    private timing?: ITiming;
-    private callbackEvents: ICallbackEvent[] = [];
     private disposed = false;
 
     private audioContext: BaseAudioContext = getSharedAudioContext();
@@ -82,10 +80,6 @@ export class ArrangementPlayer {
     private activeSpan?: IBarSpan;
 
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
-    private scheduledCallbackEvents: Array<{
-        callbackEvent: ICallbackEvent,
-        timeoutId: ReturnType<typeof setTimeout>;
-    }> = [];
 
     /** The bars in the order they are played, as 1-based bar numbers. */
     #playOrder: number[] = [];
@@ -105,7 +99,7 @@ export class ArrangementPlayer {
         requisitions.register("arrangementMutated", this.handleArrangementMutated);
         requisitions.register("arrangementReverted", this.handleArrangementMutated);
 
-        this.updateCallbackEvents();
+        this.refreshTimeBase();
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("playFocusChanged", this.handlePlayFocusChanged);
@@ -115,15 +109,10 @@ export class ArrangementPlayer {
     }
 
     /**
-     * The most recent `ITiming` reached during playback. `null` when stopped or before playback.
-     * Updated via callback events generated from `arrangement.timeParams.timings`.
+     * The score metrics of the arrangement: the numbers the views and the animation work with.
      *
-     * @returns The current timing or `undefined` if none.
+     * @returns The metrics of the current time parameters.
      */
-    public get currentTiming(): ITiming | undefined {
-        return this.timing;
-    }
-
     public get scoreMetrics(): IScoreMetrics {
         return this.timeCoordinator.metrics;
     }
@@ -161,10 +150,9 @@ export class ArrangementPlayer {
 
     /**
      * Stops playback-related state and notifies subscribers.
-     * Resets `currentTiming` and informs all track players via `onStop()`.
+     * Informs all track players via `onStop()`.
      */
     public onStop = (): void => {
-        this.timing = undefined;
         void requisitions.execute("playerStateChanged", this.#state);
         for (const player of this.trackPlayers.values()) {
             player.onStop();
@@ -223,7 +211,7 @@ export class ArrangementPlayer {
 
         this.activeSpan = interval === undefined ? this.focusedSpan : undefined;
         this.refreshPerformance();
-        this.updateCallbackEvents();
+        this.refreshTimeBase();
 
         // Clear any interval restriction and start from 0.
         this.currentInterval = interval;
@@ -276,7 +264,7 @@ export class ArrangementPlayer {
 
             this.activeSpan = undefined;
             this.refreshPerformance();
-            this.updateCallbackEvents();
+            this.refreshTimeBase();
 
             this.onStop();
         }
@@ -405,27 +393,7 @@ export class ArrangementPlayer {
             });
         }
 
-        events.push(...this.getCallbackEvents(interval));
-
         return events;
-    };
-
-    /**
-     * Builds callback events for a given interval, updating `currentTiming` when fired.
-     *
-     * @param interval The real-time interval [start, end) to query.
-     * @returns Callback events aligned to audio time.
-     */
-    private getCallbackEvents = (interval: IInterval): ICallbackEvent[] => {
-        const eventsInInterval: ICallbackEvent[] = [];
-
-        this.callbackEvents.filter(({ realTime }) => {
-            return realTime >= interval.start && realTime < interval.end;
-        }).forEach((audioEvent) => {
-            eventsInInterval.push(audioEvent);
-        });
-
-        return eventsInInterval;
     };
 
     /**
@@ -532,16 +500,13 @@ export class ArrangementPlayer {
      */
     private handleTimeParamsChanged = (): Promise<boolean> => {
         this.refreshPerformance();
-        this.updateCallbackEvents();
+        this.refreshTimeBase();
 
         return Promise.resolve(true);
     };
 
-    /**
-     * Recomputes timing-based callback events from `arrangement.timeParams.timings`.
-     * Publishing `currentTiming` occurs when those callbacks fire during playback.
-     */
-    private updateCallbackEvents = (): void => {
+    /** Recomputes the cached metrics after a change of the time parameters, also while playback runs. */
+    private refreshTimeBase = (): void => {
         // Recompute cached metrics when time parameters change (e.g. tempo) during playback.
         this.timeCoordinator.recomputeMetrics();
 
@@ -549,30 +514,6 @@ export class ArrangementPlayer {
         if (this.#state === PlayerPlayState.Playing && !this.currentInterval) {
             this.endOffset = this.timeCoordinator.metrics.realTimeLength;
         }
-
-        const timingsByBar = new Map<number, ITiming[]>();
-        for (const timing of this.dataModel.arrangement!.timeParams.timings) {
-            const timings = timingsByBar.get(timing.bar);
-            if (timings) {
-                timings.push(timing);
-            } else {
-                timingsByBar.set(timing.bar, [timing]);
-            }
-        }
-
-        const { secondsPerBar, secondsPerStep } = this.timeCoordinator.metrics;
-        this.callbackEvents = [];
-        this.#playOrder.forEach((bar, index) => {
-            for (const timing of timingsByBar.get(bar) ?? []) {
-                this.callbackEvents.push({
-                    kind: "callback",
-                    realTime: (index * secondsPerBar) + ((timing.step - 1) * secondsPerStep),
-                    callback: () => {
-                        this.timing = timing;
-                    },
-                });
-            }
-        });
     };
 
     private async ensureContextIsRunning(): Promise<void> {
@@ -592,11 +533,6 @@ export class ArrangementPlayer {
             switch (event.kind) {
                 case "audio": {
                     this.scheduleAudioEvent(event);
-                    break;
-                }
-
-                case "callback": {
-                    this.scheduleCallbackEvent(event);
                     break;
                 }
 
@@ -671,19 +607,6 @@ export class ArrangementPlayer {
         }
     }
 
-    private scheduleCallbackEvent(callbackEvent: ICallbackEvent): void {
-        const ms = Math.max(this.getMsFromNow(callbackEvent.realTime), 0);
-        const callbackEventReference = {
-            callbackEvent,
-            timeoutId: setTimeout(() => {
-                callbackEvent.callback();
-                this.removeFromCallbackSchedule(callbackEventReference);
-            }, ms)
-        };
-
-        this.scheduledCallbackEvents.push(callbackEventReference);
-    }
-
     private scheduleMetronomeEvent(event: IMetronomeEvent) {
         const ctx = this.audioContext;
         const time = event.realTime + this.offset;
@@ -716,29 +639,12 @@ export class ArrangementPlayer {
         osc.stop(time + 0.04);
     }
 
-    private removeFromCallbackSchedule(
-        callbackEventReference: { callbackEvent: ICallbackEvent, timeoutId: ReturnType<typeof setTimeout>; }
-    ): void {
-        const scheduleIndex = this.scheduledCallbackEvents.indexOf(callbackEventReference);
-        if (scheduleIndex !== -1) {
-            this.scheduledCallbackEvents.splice(scheduleIndex, 1);
-        }
-        // Currently no need to clearTimeout on callback events
-        // They are only getting unscheduled by this function after they fire
-        // They are also getting unscheduled by clearScheduledEvents, which does clearTimeout
-    }
-
     private clearScheduledEvents(): void {
         this.scheduledAudioEvents.forEach(({ audioBufferPlayer }) => {
             audioBufferPlayer.stop();
         });
 
-        this.scheduledCallbackEvents.forEach(({ timeoutId }) => {
-            clearTimeout(timeoutId);
-        });
-
         this.scheduledAudioEvents.splice(0);
-        this.scheduledCallbackEvents.splice(0);
     }
 
     private getMsFromNow(time: number): number {

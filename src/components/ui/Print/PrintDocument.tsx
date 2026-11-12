@@ -53,7 +53,6 @@ export class PrintDocument extends UIComponent<IPrintDocumentProperties> {
         const layout = PrintLayout.layout({
             arrangement,
             barCount: arrangementPlayer.scoreMetrics.bars,
-            grid: arrangementPlayer.scoreMetrics,
             setup: session.pageSetup,
             tracks,
             viewMode,

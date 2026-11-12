@@ -66,6 +66,12 @@ The backend serves the whole application itself: `dist/index.html`, the built as
 
 The package has no `index.html` in its root, and `dist/` is not a document root; both are intentional, because the backend delivers the interface. Check a new deployment with `https://<host>/api?action=health`: it answers `"status":"ok"` together with `"configLoaded":true`, `"database":"…"`, and `"initialized":true`. A `404 Not found` for every address, or `"configLoaded":false`, means the process runs in another directory; a `Server Unreachable` dialog in the browser means the domain is served statically instead of through the backend. [Troubleshooting and Known Limitations](../troubleshooting.md#the-page-shows-not-found) walks through the first symptom.
 
+## Serving the Application from a Subpath
+
+The frontend takes a build-time base path (`--base <path>`). A deployment that serves other documents from the origin root builds the application with `--base /app/`, so its assets, fonts, and samples are requested below `/app/`, while `/api`, `/soundLib/`, and `/uploads/` stay origin-absolute server routes.
+
+The application itself knows nothing about that layout: `--base` only changes the URLs it emits, a build without it keeps `/`, and both deployments share one `backend-config.json`, one database, and one process. Registration and the demo catalog are configured there as well, see [Configuring the Backend](configuration.md).
+
 ## Configuring the Backend
 
 The backend reads `backend-config.json` from the directory it is started in. The file is not optional: it carries the database connection, and without a usable database block the browser only reports that the configuration is missing. In a hosting environment the database account and its credentials are supplied by the hoster, which cannot be reached from the application, so these values are always entered by hand.
@@ -103,7 +109,7 @@ JWT_SECRET="<long random value>" node server.js
 
 ## Preparing the Database
 
-Create the database and a user for it before the first start. The backend creates the schema inside that database, either when the dialog in the browser initialises it or, with `"autoMigrate": true`, on start; it does not create the database itself. The account needs the right to create tables, indexes, and foreign keys in that database.
+Create the database and a user for it before the first start. The backend creates the tables inside that database on start; it does not create the database itself. The account needs the right to create tables, indexes, and foreign keys in that database.
 
 MySQL or MariaDB:
 
@@ -127,7 +133,7 @@ GRANT ALL PRIVILEGES ON DATABASE animada TO animada;
 JWT_SECRET="<long random value>" node server.js
 ```
 
-The process connects to the database and then listens; `Backend connected: <engine> @ <host>:<port>/<database>` confirms the connection. With `"autoMigrate": true` the start also applies the migrations and imports `build/seed.sql` into an empty database. A successful start logs a line like:
+The process connects to the database, applies the pending migrations, imports `build/seed.sql` into an empty database, and then listens. Once the schema is ready it logs `Backend initialised: <engine> @ <host>:<port>/<database>`, and a successful start ends with a line like:
 
 ```
 Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)
@@ -137,22 +143,22 @@ The first part of the line is the address you can use on the server itself; the 
 
 ## The Installation Wizard
 
-Open the address in a browser. While the database holds no tables, the application shows the `Backend Setup` dialog
-with the engine, host, port, and database name from the configuration:
+Open the address in a browser. The backend has already created the tables and imported the demo data, so the application asks for the first administrator:
 
-1. Check the values and choose `Initialize Database`. The backend applies the migrations, the dialog reports `Setting up database tables …` and then `Database setup complete.`
-2. The `Finish Installation` dialog follows. It asks for the `Admin User` (`Username`, `Password`, `Confirm`, `Display Name`) and an `Initial Group` (`Group Name`).
+1. The `Finish Installation` dialog asks for the `Admin User` (`Username`, `Password`, `Confirm`, `Display Name`) and an `Initial Group` (`Group Name`).
 
 ![The Finish Installation dialog](../../images/en/administration/first-run.png)
 
 *`Finish Installation` creates the first administrator and one group in a single step; `Finish Installation` at the bottom submits both.*
-3. Afterwards the `Sign In` dialog appears. Log in with the administrator account you just created.
+2. Afterwards the `Sign In` dialog appears. Log in with the administrator account you just created.
+
+`Backend Setup` appears instead when no usable configuration exists or the backend cannot reach the database. It shows the engine, host, port, and database name from the configuration and offers `Initialize Database`, which applies the pending migrations, and `Reset Database`, which drops every table and rebuilds the schema.
 
 ![The Backend Setup dialog with engine, host, port and database](../../images/en/administration/backend-setup.png)
 
-*The `Backend Setup` dialog shows the configured connection and offers to create the schema. The database itself has to exist already.*
+*The `Backend Setup` dialog shows the configured connection and offers to create the tables. The database itself has to exist already.*
 
-`Reset Database` in the same dialog drops every table and rebuilds the schema. Use it only on a fresh installation or with a backup at hand; see [Backup, Restore and Upgrades](backup-restore-upgrades.md).
+`Reset Database` is meant for a fresh installation or for use with a backup at hand; see [Backup, Restore and Upgrades](backup-restore-upgrades.md).
 
 When the dialog reports `Backend configuration is missing or invalid.`, the backend could not read `backend-config.json`. The message names what is missing; correct the file and restart the process.
 
@@ -161,7 +167,7 @@ When the dialog reports `Backend configuration is missing or invalid.`, the back
 1. Stop the backend.
 2. Unpack the new version into a new directory.
 3. Copy your `backend-config.json` and the `public/uploads` directory from the old installation.
-4. Start the backend with `node server.js`. `"autoMigrate": true` applies the pending migrations on start; otherwise the browser asks once and `Initialize Database` applies them.
+4. Start the backend with `node server.js`. The pending migrations run on start, before the process begins listening.
 
 A migration file that was edited after it ran fails the checksum check and blocks the start; the database then has to be rebuilt from a backup. [Backup, Restore and Upgrades](backup-restore-upgrades.md) explains the recovery path.
 

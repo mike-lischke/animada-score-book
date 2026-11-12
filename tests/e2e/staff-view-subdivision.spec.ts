@@ -62,7 +62,7 @@ test.describe("Staff view subdivision rendering", () => {
         const subdivisionSnapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Staff Subdivision",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 100,
                 instrumentId: "0",
@@ -71,8 +71,6 @@ test.describe("Staff view subdivision rendering", () => {
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 16,
-                        beatGroups: [4, 4, 4, 4],
                     },
                     events: [
                         {
@@ -131,7 +129,7 @@ test.describe("Staff view subdivision rendering", () => {
         const mixedLengthsSnapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Staff Mixed Lengths",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 32 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 101,
                 instrumentId: "0",
@@ -140,8 +138,6 @@ test.describe("Staff view subdivision rendering", () => {
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        stepResolution: 32,
-                        beatGroups: [8, 8, 8, 8],
                     },
                     // Explicit note durations: 16th, half, 32nd, 8th, quarter, 32nd.
                     events: [
@@ -237,13 +233,13 @@ test.describe("Staff view subdivision rendering", () => {
         const snapshot = {
             version: arrangementSnapshotVersion,
             title: "E2E Tuplet With Rests",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
             tracks: [{
                 id: 102,
                 instrumentId: "0",
                 measures: [{
                     number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    meter: { beats: 4, beatUnits: 4 },
                     events: [
                         ...Array.from({ length: 8 }, (_, index) => {
                             return {

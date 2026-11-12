@@ -10,6 +10,7 @@ import { MeasureProjection, ProjectedItemKind, modelEventAt } from "../../src/co
 import { NoteLength } from "../../src/core/rest-notation.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
+import { StepGrid } from "../../src/core/StepGrid.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
@@ -29,7 +30,7 @@ import {
  * @returns The note style id covering the step, or undefined.
  */
 const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined => {
-    const stepsPerBar = measure.meter.stepResolution;
+    const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
     const start = { numerator: step, denominator: stepsPerBar };
 
     const event = measure.events.find((candidate) => {
@@ -195,7 +196,7 @@ describe("GridMeasureEditor setSelectionNoteStyle", { concurrent: false }, () =>
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
         const entries = [0, 1, 2].map((step) => {
-            return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+            return noteEntry(measure, { numerator: step, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) });
         });
 
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(true);
@@ -236,7 +237,7 @@ describe("GridMeasureEditor setSelectionNoteStyle", { concurrent: false }, () =>
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
         const entries = [0, 1].map((step) => {
-            return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+            return noteEntry(measure, { numerator: step, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) });
         });
 
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(true);
@@ -252,7 +253,7 @@ describe("GridMeasureEditor setSelectionNoteStyle", { concurrent: false }, () =>
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
         const measure = track.measures[0];
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
             return noteEntry(measure, { numerator: step, denominator: stepsPerBar });
         });
@@ -537,7 +538,7 @@ describe("GridMeasureEditor subdivision editing", { concurrent: false }, () => {
         setCellNote(model, track.id, 1, 2, "high");
 
         const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
-            return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+            return noteEntry(measure, { numerator: step, denominator: StepGrid.stepsPerBarOfMeter(measure.meter) });
         });
 
         const created = editor.createSubdivisionForSelection(entries, 5);
@@ -601,7 +602,7 @@ describe("GridMeasureEditor input", { concurrent: false }, () => {
      */
     const renderRow = (): HTMLElement => {
         const measure = model.arrangement!.tracks[0].measures[0];
-        const stepsPerBar = measure.meter.stepResolution;
+        const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const row = document.createElement("div");
         row.className = "grid-measure-row";
         input.scoreElementRegistry.createRef({

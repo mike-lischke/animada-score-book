@@ -57,6 +57,8 @@ interface IResolvedPermission {
     ownerId: number | null;
     /** All group assignments, collected from the entity and all ancestors (groupId → writable). */
     groupEntries: Map<number, boolean>;
+    /** The World group id, or undefined if the group does not exist. */
+    worldGroupId?: number;
 }
 
 export interface ITokenPayload {
@@ -357,7 +359,7 @@ export class Auth {
         }
 
         // Also include the World group — everyone is a member.
-        const worldId = await this.getWorldGroupId();
+        const worldId = resolved.worldGroupId;
 
         if (worldId !== undefined) {
             userGroupIds.add(worldId);
@@ -417,7 +419,7 @@ export class Auth {
             }
         }
 
-        const worldId = await this.getWorldGroupId();
+        const worldId = resolved.worldGroupId;
 
         if (worldId !== undefined) {
             userGroupIds.add(worldId);
@@ -478,6 +480,7 @@ export class Auth {
     /**
      * Adds a group assignment to an entity. If the group is already assigned,
      * the writable flag is updated (only upgraded — never downgraded via this function).
+     * The World group always stays read-only, so a write grant for it is stored as read.
      *
      * @param entityType The entity type.
      * @param entityId The entity id.
@@ -486,6 +489,18 @@ export class Auth {
      */
     public async addEntityGroup(entityType: EntityType, entityId: number,
         groupId: number, writable: boolean): Promise<void> {
+        const worldGroupId = await this.getWorldGroupId();
+
+        if (groupId === worldGroupId) {
+            await this.adapter.execute(
+                `INSERT INTO entity_groups (entity_type, entity_id, group_id, writable) VALUES (?, ?, ?, 0) ` +
+                `ON DUPLICATE KEY UPDATE writable = 0`,
+                [entityType, entityId, groupId],
+            );
+
+            return;
+        }
+
         await this.adapter.execute(
             `INSERT INTO entity_groups (entity_type, entity_id, group_id, writable) ` +
             `VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE writable = GREATEST(writable, VALUES(writable))`,
@@ -754,14 +769,21 @@ export class Auth {
      * @returns The resolved permission state.
      */
     private async resolvePermission(entityType: EntityType, entityId: number): Promise<IResolvedPermission> {
-        const [ownerId, groupEntries] = await Promise.all([
+        const [ownerId, groupEntries, worldGroupId] = await Promise.all([
             this.resolveOwner(entityType, entityId),
             this.collectGroupEntries(entityType, entityId, new Map()),
+            this.getWorldGroupId(),
         ]);
+
+        // Everybody is a member of the World group, so a write grant there would open the entity to the public.
+        if (worldGroupId !== undefined && groupEntries.has(worldGroupId)) {
+            groupEntries.set(worldGroupId, false);
+        }
 
         return {
             ownerId,
             groupEntries,
+            worldGroupId,
         };
     }
 
