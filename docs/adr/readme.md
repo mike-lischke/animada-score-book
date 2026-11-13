@@ -40,3 +40,4 @@ ADRs document only durable, cross-module decisions or invariants that would be h
 | ADR-0019 | accepted | Represent selection as a granularity-locked filled rectangle | selection, drag selection, selection granularity, Shift extension, staff virtualization |
 | ADR-0020 | accepted | Publish one mutation signal per edit and one view-only signal for measure layout | arrangement edits, undo recording, autosave, viewer refresh, measure resize, new requisitions |
 | ADR-0021 | accepted | Derive the step grid from the meter instead of storing it | step resolution, grid construction, meter, note addressing, subdivisions, snapshots, migration, auto-scroll |
+| ADR-0022 | accepted | Support one SQL dialect, the one MySQL and MariaDB share | database engine, adapter, SQL dialect, PostgreSQL, migrations, seed data, backend configuration |

@@ -21,7 +21,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 import type { IDatabaseConfig } from "../src/server/database.js";
-import { DatabaseEngine } from "../src/server/database.js";
 
 const migrationsDir = resolve(process.cwd(), "migrations");
 
@@ -31,73 +30,20 @@ export interface IMigrationRow {
 }
 
 /**
- * Parses a migration SQL file and returns only the statements for the given engine.
- * Sections are delimited by `-- \\@mysql` and `-- \\@postgres` markers.
- * SQL before the first marker runs on all engines.
+ * Extracts rows from the result of a mysql2 query, which returns the tuple `[rows, fields]`.
  *
- * @param sql The raw SQL content of the migration file.
- * @param engine The target engine ("mysql" or "postgres").
- *
- * @returns The engine-specific SQL statements concatenated.
- */
-export const parseMigrationSql = (sql: string, engine: string): string => {
-    const lines = sql.split("\n");
-    const sections: Array<{ engine: string | null; lines: string[]; }> = [];
-    let currentEngine: string | null = null;
-    let currentLines: string[] = [];
-
-    for (const line of lines) {
-        const match = line.match(/^-- @(mysql|postgres)\s*$/);
-
-        if (match) {
-            if (currentLines.length > 0) {
-                sections.push({ engine: currentEngine, lines: currentLines });
-            }
-
-            currentEngine = match[1];
-            currentLines = [];
-        } else {
-            currentLines.push(line);
-        }
-    }
-
-    if (currentLines.length > 0) {
-        sections.push({ engine: currentEngine, lines: currentLines });
-    }
-
-    const resultLines: string[] = [];
-
-    for (const section of sections) {
-        if (section.engine === null || section.engine === engine) {
-            resultLines.push(...section.lines);
-        }
-    }
-
-    return resultLines.join("\n");
-};
-
-/**
- * Extracts rows from a raw driver query result.
- * mysql2 returns a tuple `[rows, fields]`, while pg returns an object `{ rows, fields }`.
- *
- * @param result The raw query result from either mysql2 or pg.
+ * @param result The raw query result.
  *
  * @returns The array of result rows (may be empty).
  */
 export const extractRows = <T>(result: unknown): T[] => {
-    if (result == null) {
+    if (!Array.isArray(result)) {
         return [];
     }
 
-    if (Array.isArray(result)) {
-        const first: unknown = result[0];
+    const first: unknown = result[0];
 
-        return Array.isArray(first) ? (first as T[]) : [];
-    }
-
-    const obj = result as Record<string, unknown>;
-
-    return Array.isArray(obj.rows) ? (obj.rows as T[]) : [];
+    return Array.isArray(first) ? (first as T[]) : [];
 };
 
 /**
@@ -195,10 +141,6 @@ export const runMigrations = async (config: IDatabaseConfig): Promise<string> =>
 
     console.log(`Branch: ${branch}, database: ${effectiveDb}`);
 
-    if (config.engine === DatabaseEngine.Postgres) {
-        return runPostgresMigrations(config, effectiveDb);
-    }
-
     return runMySqlMigrations(config, effectiveDb);
 };
 
@@ -230,52 +172,7 @@ const runMySqlMigrations = async (config: IDatabaseConfig, dbName: string): Prom
         });
 
         try {
-            await applyMigrations(dbPool, "mysql");
-        } finally {
-            await dbPool.end();
-        }
-    } finally {
-        await serverPool.end();
-    }
-
-    return dbName;
-};
-
-const runPostgresMigrations = async (config: IDatabaseConfig, dbName: string): Promise<string> => {
-    const pg = await import("pg");
-    const serverPool = new pg.Pool({
-        host: config.host,
-        port: config.port,
-        database: "postgres",
-        user: config.user,
-        password: config.password,
-        max: 1,
-    });
-
-    try {
-        // Ensure database exists (Postgres has no IF NOT EXISTS for CREATE DATABASE).
-        const result = await serverPool.query(
-            "SELECT 1 FROM pg_database WHERE datname = $1",
-            [dbName],
-        );
-
-        if (result.rows.length === 0) {
-            // Cannot use parameterised identifiers — sanitise the dbName (already derived from our config).
-            await serverPool.query(`CREATE DATABASE "${dbName}"`);
-        }
-
-        // Connect to the target database.
-        const dbPool = new pg.Pool({
-            host: config.host,
-            port: config.port,
-            database: dbName,
-            user: config.user,
-            password: config.password,
-            max: 1,
-        });
-
-        try {
-            await applyMigrations(dbPool, "postgres");
+            await applyMigrations(dbPool);
         } finally {
             await dbPool.end();
         }
@@ -293,12 +190,9 @@ export interface IMigrationPool {
 /**
  * Applies all pending migrations.
  *
- * Works with both mysql2 and pg raw driver pools — each has a compatible `query(sql, params?)` method.
- *
- * @param pool A database pool with a query method.
- * @param engine The database engine ("mysql" or "postgres").
+ * @param pool A mysql2 pool with a query method.
  */
-const applyMigrations = async (pool: IMigrationPool, engine: string): Promise<void> => {
+const applyMigrations = async (pool: IMigrationPool): Promise<void> => {
     await pool.query(
         `CREATE TABLE IF NOT EXISTS migration_history (
             filename    VARCHAR(255) NOT NULL PRIMARY KEY,
@@ -368,11 +262,10 @@ const applyMigrations = async (pool: IMigrationPool, engine: string): Promise<vo
     for (const file of pending) {
         const filePath = join(migrationsDir, file);
         const rawSql = readFileSync(filePath, "utf-8");
-        const engineSql = parseMigrationSql(rawSql, engine);
         const fileChecksum = checksum(rawSql);
 
         console.log(`  Running: ${file}`);
-        await pool.query(engineSql);
+        await pool.query(rawSql);
 
         await pool.query(
             "INSERT INTO migration_history (filename, checksum) VALUES (?, ?)",

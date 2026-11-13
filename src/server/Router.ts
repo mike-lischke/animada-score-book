@@ -18,7 +18,6 @@ import {
     DatabaseEngine, isValidDatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig,
 } from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
-import { PostgresAdapter } from "./postgres-adapter.js";
 import { type IServerConfig } from "./config.js";
 import { getConfigStatus } from "./config.js";
 import { RequestContext } from "./RequestContext.js";
@@ -369,9 +368,6 @@ export class Router {
      */
     public createAdapter(engine?: DatabaseEngine): IDatabaseAdapter {
         switch (engine ?? this.config.database.engine) {
-            case DatabaseEngine.Postgres:
-                return new PostgresAdapter();
-
             case DatabaseEngine.MySQL:
             case DatabaseEngine.MariaDB:
             default:

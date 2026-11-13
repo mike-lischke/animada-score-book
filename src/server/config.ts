@@ -142,6 +142,14 @@ export const loadConfig = (): IServerConfig => {
         : undefined;
 
     // Environment variables take precedence over saved config.
+    const requestedEngine: string | undefined = process.env.DB_ENGINE ?? raw.database?.engine;
+    const engine = requestedEngine !== undefined && isValidDatabaseEngine(requestedEngine)
+        ? requestedEngine
+        : DatabaseEngine.MySQL;
+    const engineError = requestedEngine !== undefined && !isValidDatabaseEngine(requestedEngine)
+        ? `The database engine "${requestedEngine}" is not supported. Use "mysql" or "mariadb".`
+        : undefined;
+
     const merged: IServerConfig = {
         host: process.env.HOST ?? raw.host ?? "0.0.0.0",
         port: process.env.PORT ? Number(process.env.PORT) : (raw.port ?? 3100),
@@ -150,9 +158,7 @@ export const loadConfig = (): IServerConfig => {
             ? process.env.TRUST_PROXY === "true"
             : (raw.trustProxy ?? false),
         database: {
-            engine: process.env.DB_ENGINE && isValidDatabaseEngine(process.env.DB_ENGINE)
-                ? process.env.DB_ENGINE
-                : raw.database?.engine ?? DatabaseEngine.MySQL,
+            engine,
             host: process.env.DB_HOST ?? raw.database?.host ?? "",
             port: process.env.DB_PORT ? Number(process.env.DB_PORT) : (raw.database?.port ?? 0),
             database: process.env.DB_NAME ?? raw.database?.database ?? "",
@@ -181,7 +187,9 @@ export const loadConfig = (): IServerConfig => {
         },
     };
 
-    currentStatus = statusOf(merged, fileError);
+    currentStatus = engineError === undefined
+        ? statusOf(merged, fileError)
+        : { loaded: false, error: engineError };
 
     return merged;
 };

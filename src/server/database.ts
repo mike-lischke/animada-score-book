@@ -7,7 +7,6 @@
 export enum DatabaseEngine {
     MySQL = "mysql",
     MariaDB = "mariadb",
-    Postgres = "postgres",
 }
 
 const databaseEngineValues = Object.values(DatabaseEngine) as string[];
@@ -41,7 +40,7 @@ export interface ITestConnectionResult {
 }
 
 /**
- * Abstraction over different database engines (MySQL, MariaDB, PostgreSQL).
+ * Abstraction over the MariaDB and MySQL engines, which one adapter serves.
  */
 export interface IDatabaseAdapter {
     /**
@@ -98,7 +97,6 @@ export interface IDatabaseAdapter {
 
     /**
      * Executes an INSERT statement and returns the generated id.
-     * For MySQL this delegates to execute(); for Postgres it appends RETURNING id.
      *
      * @param sql    The INSERT statement.
      * @param params The statement parameters.

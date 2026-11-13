@@ -1,5 +1,5 @@
 -- Seed data for Animada Score Book
--- Generated: 2026-10-26T13:04:15.083Z
+-- Generated: 2026-11-13T14:38:44.484Z
 
 -- Folders
 INSERT INTO folders (id, parentid, name) VALUES

@@ -5,7 +5,7 @@ description: Project-wide coding guidelines and conventions for the Animada Scor
 # Animada Score Book — Project Instructions
 
 Score management and arrangement app for Samba/Bateria groups.
-Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/PostgreSQL), Vitest + Playwright tests.
+Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/MariaDB), Vitest + Playwright tests.
 
 ## Machine Rules — Highest Priority
 
@@ -37,7 +37,7 @@ Checking → Setup → AdminSetup → Login → Running
 | `src/components/ui/` | Feature components: `Arrangement/`, `Bar/` (Grid + Staff views), `Note/`, `Track/`, `Header/` (compact header + arrangement identity), `Navigation/` (app footer + score navigator), `GuideRail/`, `InstrumentBrowser/`, `NotificationCenter/`, `Print/`, `composites/` |
 | `src/components/ui/framework/` | Custom UI component library: `UIComponent` (base class), `Container` (flex layout), `Dialog`, `Button`, `Menu/`, `TreeGrid`, `Tabview/`, `Popup`, `Tooltip`, etc. |
 | `src/ui/` | Top-level UI modules: `ScoreLibrary` (lazy-loaded tree-grid), `SettingsDialog`, `LoginDialog`, `SelectionManager`, `ModeManager`, `MouseHandler`, `AnimationEngine`, admin editors |
-| `src/server/` | Node.js backend: `backend.ts` (entry), `Router.ts` (flat `?action=` dispatch), `Auth.ts` + `AuthRoutes.ts` (JWT, scrypt, refresh tokens), `ScoreRoutes.ts`, `AdminRoutes.ts`, `StaticRoutes.ts`, `mysql-adapter.ts`/`postgres-adapter.ts` (canonical schema in `createTablesSQL`), `config.ts` |
+| `src/server/` | Node.js backend: `backend.ts` (entry), `Router.ts` (flat `?action=` dispatch), `Auth.ts` + `AuthRoutes.ts` (JWT, scrypt, refresh tokens), `ScoreRoutes.ts`, `AdminRoutes.ts`, `StaticRoutes.ts`, `mysql-adapter.ts` (canonical schema in `createTablesSQL`), `config.ts` |
 | `tests/` | `tests/core/` (domain unit tests), `tests/ui/` (component tests via `@testing-library/preact`), `tests/player/` (audio engine), `tests/server/` (auth unit tests), `tests/integration/` (cross-layer), `tests/e2e/` (Playwright), `tests/temp/` (throwaway debug tests) |
 
 ### Data Flow
@@ -227,14 +227,9 @@ The backend server does NOT auto-reload. Whenever files in `src/server/` change,
 
 ## Database Migrations
 
-The `createTablesSQL` array in `src/server/mysql-adapter.ts` is the canonical schema. Whenever server code changes reference new database columns or tables that may not exist in the user's running database, ALWAYS explicitly tell the user they need to run manual SQL migrations.
+The SQL files in `migrations/` are the canonical schema. `00000000T000000_baseline.sql` holds the complete schema; every later change gets its own timestamped file. Whenever server code changes reference new database columns or tables, ALWAYS add a migration file and tell the user they need to apply it.
 
-Known schema drift for the `users` table:
-- `refresh_token_hash VARCHAR(256) NULL`
-- `auth_type VARCHAR(16) NULL`
-- `group_id INT UNSIGNED NULL` (FK → `groups.id`)
-
-MySQL does not support `IF NOT EXISTS` for `ALTER TABLE ADD COLUMN` — check with `SHOW COLUMNS FROM users` first.
+MySQL does not support `IF NOT EXISTS` for `ALTER TABLE ADD COLUMN` — check with `SHOW COLUMNS FROM <table>` first.
 
 ---
 

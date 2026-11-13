@@ -18,7 +18,6 @@ import { resolve } from "node:path";
 
 interface IBackendConfig {
     database: {
-        engine: string;
         host: string;
         port: number;
         database: string;
@@ -87,7 +86,7 @@ const main = async (): Promise<void> => {
         return;
     }
 
-    const { engine, host, port, user, password, database: baseName } = config.database;
+    const { host, port, user, password, database: baseName } = config.database;
 
     const localBranches = getLocalBranches();
 
@@ -104,56 +103,30 @@ const main = async (): Promise<void> => {
 
     const prefix = `${baseName}__`;
 
-    if (engine === "postgres") {
-        const pg = await import("pg");
-        const pool = new pg.Pool({
-            host,
-            port,
-            database: "postgres",
-            user,
-            password,
-            max: 1,
-        });
+    const mysql2 = await import("mysql2/promise");
+    const pool = mysql2.createPool({
+        host,
+        port,
+        user,
+        password,
+        waitForConnections: true,
+        connectionLimit: 1,
+    });
 
-        try {
-            const result = await pool.query(
-                "SELECT datname FROM pg_database WHERE datname LIKE $1",
-                [`${baseName}%`],
-            );
-            const dbNames = (result.rows as Array<{ datname: string; }>).map((r) => {
-                return r.datname;
+    try {
+        const result = await pool.query("SHOW DATABASES");
+        const rows = (result as [Array<{ Database: string; }>, unknown])[0];
+        const dbNames = rows
+            .map((r) => {
+                return r.Database;
+            })
+            .filter((name) => {
+                return name.startsWith(baseName);
             });
 
-            checkOrphans(dbNames, expectedDbs, prefix);
-        } finally {
-            await pool.end();
-        }
-    } else {
-        const mysql2 = await import("mysql2/promise");
-        const pool = mysql2.createPool({
-            host,
-            port,
-            user,
-            password,
-            waitForConnections: true,
-            connectionLimit: 1,
-        });
-
-        try {
-            const result = await pool.query("SHOW DATABASES");
-            const rows = (result as [Array<{ Database: string; }>, unknown])[0];
-            const dbNames = rows
-                .map((r) => {
-                    return r.Database;
-                })
-                .filter((name) => {
-                    return name.startsWith(baseName);
-                });
-
-            checkOrphans(dbNames, expectedDbs, prefix);
-        } finally {
-            await pool.end();
-        }
+        checkOrphans(dbNames, expectedDbs, prefix);
+    } finally {
+        await pool.end();
     }
 };
 

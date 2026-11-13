@@ -20,7 +20,6 @@ import { DatabaseEngine, isValidDatabaseEngine } from "../server/database.js";
 const engineLabels: Record<DatabaseEngine, string> = {
     [DatabaseEngine.MySQL]: "MySQL",
     [DatabaseEngine.MariaDB]: "MariaDB",
-    [DatabaseEngine.Postgres]: "PostgreSQL",
 };
 
 enum BackendSetupState {

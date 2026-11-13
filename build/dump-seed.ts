@@ -14,6 +14,8 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { createSeedSql, type ISeedFolder, type ISeedScore } from "./seed.js";
+
 const API = "http://127.0.0.1:3100/api";
 
 const fetchJson = async (action: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> => {
@@ -43,38 +45,7 @@ interface IScore {
     content: string;
 }
 
-const escapeSql = (s: string): string => {
-    return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-};
-
-/**
- * Appends a section with a multi-row insert, or a placeholder comment when there are no rows.
- *
- * @param lines The output buffer.
- * @param comment The section headline.
- * @param statement The insert statement, without values.
- * @param values The formatted value rows.
- */
-const pushInsert = (lines: string[], comment: string, statement: string, values: string[]): void => {
-    lines.push(comment);
-
-    if (values.length === 0) {
-        lines.push("-- No rows.");
-    } else {
-        lines.push(statement);
-        lines.push(values.join(",\n") + ";");
-    }
-
-    lines.push("");
-};
-
 const main = async (): Promise<void> => {
-    const lines: string[] = [
-        "-- Seed data for Animada Score Book",
-        `-- Generated: ${new Date().toISOString()}`,
-        "",
-    ];
-
     const folders: IFolder[] = [];
     const scores: IScore[] = [];
 
@@ -96,23 +67,21 @@ const main = async (): Promise<void> => {
     console.log("Collecting…");
     await collect(undefined);
 
-    const folderValues = folders.map((f) => {
-        const pid = f.parentid === -1 || f.parentid === null ? "NULL" : String(f.parentid);
+    // The folder list API names the root level -1, which the seed script replaces by NULL.
+    const seedFolders: ISeedFolder[] = folders.map((folder) => {
+        const isRoot = folder.parentid === null || folder.parentid === -1;
 
-        return `  (${f.id}, ${pid}, '${escapeSql(f.name)}')`;
+        return { id: folder.id, parentid: isRoot ? null : folder.parentid, name: folder.name };
     });
-    pushInsert(lines, "-- Folders", "INSERT INTO folders (id, parentid, name) VALUES", folderValues);
 
-    const scoreValues = scores.map((s) => {
-        const fid = s.folderid === null ? "NULL" : String(s.folderid);
-
-        return `  (${s.id}, ${fid}, '${escapeSql(s.name)}', '${escapeSql(s.content)}')`;
+    const seedScores: ISeedScore[] = scores.map((score) => {
+        return { id: score.id, folderid: score.folderid, name: score.name, content: score.content };
     });
-    pushInsert(lines, "-- Scores", "INSERT INTO scores (id, folderid, name, content) VALUES", scoreValues);
 
+    const seedSql = createSeedSql(seedFolders, seedScores);
     const dumpPath = resolve(process.cwd(), "build", "seed.sql");
 
-    writeFileSync(dumpPath, lines.join("\n"), "utf-8");
+    writeFileSync(dumpPath, seedSql, "utf-8");
     console.log(`Dump written: ${dumpPath} (${folders.length} folders, ${scores.length} scores)`);
 };
 

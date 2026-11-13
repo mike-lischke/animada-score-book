@@ -13,13 +13,12 @@ Run this after modifying any file under `src/server/`.
 
 ## 1. Check for Schema Changes
 
-Review the git diff (or recent edits) for changes to `createTablesSQL` in `mysql-adapter.ts` or `postgres-adapter.ts`.
+Review the git diff (or recent edits) for changes that add columns, tables, or constraints, and for schema changes in `migrations/` or `mysql-adapter.ts`.
 If any new columns, tables, or constraints were added:
 
 - **Tell the user** they need to run a manual SQL migration.
 - Quote the exact `ALTER TABLE` or `CREATE TABLE` statement needed.
 - Reminder: MySQL does not support `IF NOT EXISTS` for `ALTER TABLE ADD COLUMN` — tell the user to check with `SHOW COLUMNS FROM <table>` first.
-- Note that `postgres-adapter.ts` must stay in sync with `mysql-adapter.ts` — flag any drift.
 
 ## 2. Restart Reminder
 
