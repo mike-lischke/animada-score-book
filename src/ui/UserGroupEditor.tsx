@@ -70,7 +70,7 @@ interface IUserGroupEditorState {
     loading: boolean;
 
     /** Form fields. */
-    formUsername: string;
+    formEmail: string;
     formDisplayName: string;
     formPassword: string;
 
@@ -105,7 +105,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formErrorMessage: "",
             errorMessage: "",
             loading: false,
-            formUsername: "",
+            formEmail: "",
             formDisplayName: "",
             formPassword: "",
             formGroupIds: new Set(),
@@ -126,7 +126,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formMemberFilter: "",
             editingGroupMembers: [],
             errorMessage: "",
-            formUsername: "",
+            formEmail: "",
             formDisplayName: "",
             formPassword: "",
             formGroupIds: new Set(),
@@ -168,10 +168,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                 orientation={Orientation.TopDown}
                                 className="user-group-item-content"
                             >
-                                <Label caption={u.displayName || u.username} />
+                                <Label caption={u.displayName || u.email} />
                                 <Label
                                     className="text-xs text-base-content/50"
-                                    caption={`@${u.username}`}
+                                    caption={u.email}
                                 />
                             </Container>
                             {u.isAdmin && (
@@ -394,7 +394,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     }
 
     private renderEditorForm(): ComponentChild {
-        const { editorMode, formUsername, formDisplayName, formPassword, formGroupIds, formGroupName,
+        const { editorMode, formEmail, formDisplayName, formPassword, formGroupIds, formGroupName,
             formGroupPassword, formGroupAdminId, formMemberFilter, formErrorMessage, users,
             groups, editingGroupId, editingGroupMembers, } =
             this.state;
@@ -417,7 +417,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
             for (const u of users) {
                 adminItems.push({
-                    label: `${u.displayName || u.username} (@${u.username})`,
+                    label: `${u.displayName || u.email} <${u.email}>`,
                     onClick: () => {
                         this.setState({ formGroupAdminId: u.id });
                     },
@@ -430,7 +430,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 })
                 : undefined;
             const adminCaption = selectedAdmin
-                ? `${selectedAdmin.displayName || selectedAdmin.username} (@${selectedAdmin.username})`
+                ? `${selectedAdmin.displayName || selectedAdmin.email} <${selectedAdmin.email}>`
                 : "None";
 
             const existingIds = new Set(editingGroupMembers.map((m) => {
@@ -446,12 +446,12 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                     return true;
                 }
 
-                return u.username.toLowerCase().includes(filter)
+                return u.email.toLowerCase().includes(filter)
                     || u.displayName.toLowerCase().includes(filter);
             });
             const addMemberItems: IDropdownItem[] = availableUsers.map((u) => {
                 return {
-                    label: `${u.displayName || u.username} (@${u.username})`,
+                    label: `${u.displayName || u.email} <${u.email}>`,
                     onClick: () => {
                         this.handleAddMember(u.id);
                     },
@@ -575,7 +575,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
                                         const f = formMemberFilter.toLowerCase();
 
-                                        return m.username.toLowerCase().includes(f)
+                                        return m.email.toLowerCase().includes(f)
                                             || m.displayName.toLowerCase().includes(f);
                                     })
                                     .map((m) => {
@@ -590,10 +590,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                                     orientation={Orientation.TopDown}
                                                     style={{ flex: 1, minWidth: 0 }}
                                                 >
-                                                    <Label caption={m.displayName || m.username} />
+                                                    <Label caption={m.displayName || m.email} />
                                                     <Label
                                                         className="text-xs text-base-content/50"
-                                                        caption={`@${m.username}`}
+                                                        caption={m.email}
                                                     />
                                                 </Container>
                                                 <Button
@@ -669,13 +669,13 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             mainAlignment={ChildAlignment.SpaceBetween}
                             crossAlignment={ChildAlignment.Center}
                         >
-                            <Label className="form-row-label" caption="Username" />
+                            <Label className="form-row-label" caption="Email" />
                             <Input
-                                placeholder="Username"
+                                placeholder="you@example.com"
                                 autoFocus={isCreate}
-                                value={formUsername}
+                                value={formEmail}
 
-                                onChange={this.handleFormUsernameChange}
+                                onChange={this.handleFormEmailChange}
                             />
                         </Container>
 
@@ -795,12 +795,8 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         const { dataModel } = this.props;
 
         try {
-            const users = await dataModel.listUsers();
-            this.setState({
-                users: users.filter((u) => {
-                    return u.username !== "anonymous";
-                })
-            });
+            // The backend leaves the anonymous system account out: it is a permission reference, not a person.
+            this.setState({ users: await dataModel.listUsers() });
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
         }
@@ -856,7 +852,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             pendingGroups: [],
             editorMode: EditorMode.Create,
             editingUserId: 0,
-            formUsername: "",
+            formEmail: "",
             formDisplayName: "",
             formPassword: "",
             formGroupIds: new Set(),
@@ -872,7 +868,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         this.setState({
             editorMode: EditorMode.Edit,
             editingUserId: user.id,
-            formUsername: user.username,
+            formEmail: user.email,
             formDisplayName: user.displayName,
             formPassword: "",
             formGroupIds: groupIds,
@@ -1010,7 +1006,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         this.setState({
             editingGroupMembers: [...editingGroupMembers, {
                 id: user.id,
-                username: user.username,
+                email: user.email,
                 displayName: user.displayName,
             }],
         });
@@ -1215,10 +1211,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
     private async handleSave(): Promise<void> {
         const {
-            users, editorMode, editingUserId, formUsername, formDisplayName, formPassword, formGroupIds
+            users, editorMode, editingUserId, formEmail, formDisplayName, formPassword, formGroupIds
         } = this.state;
 
-        const username = formUsername.trim();
+        const email = formEmail.trim().toLowerCase();
         const displayName = formDisplayName.trim();
 
         const { dataModel } = this.props;
@@ -1237,7 +1233,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 const targetUser = users.find((u) => {
                     return u.id === editingUserId;
                 });
-                void NotificationCenter.showInfo(`Password reset for @${targetUser?.username ?? editingUserId}.`);
+                void NotificationCenter.showInfo(`Password reset for ${targetUser?.email ?? editingUserId}.`);
             } catch (e) {
                 this.setState({ formErrorMessage: (e as Error).message });
             }
@@ -1245,14 +1241,14 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             return;
         }
 
-        if (!username) {
-            this.setState({ formErrorMessage: "Username is required." });
+        if (!email) {
+            this.setState({ formErrorMessage: "Email address is required." });
 
             return;
         }
 
-        if (username.length < 3) {
-            this.setState({ formErrorMessage: "Username must be at least 3 characters." });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.setState({ formErrorMessage: "Please enter a valid email address." });
 
             return;
         }
@@ -1269,7 +1265,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 const idMap = await this.persistPendingGroups();
 
                 const newId = await dataModel.createUser(
-                    username, formPassword, displayName || username,
+                    email, formPassword, displayName || email,
                 );
 
                 for (const groupId of formGroupIds) {
@@ -1278,7 +1274,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                     await dataModel.addUserToGroup(newId, realId);
                 }
 
-                void NotificationCenter.showInfo(`User "${displayName || username}" created.`);
+                void NotificationCenter.showInfo(`Activation email sent to ${email}.`);
             } catch (e) {
                 this.setState({ formErrorMessage: (e as Error).message });
 
@@ -1290,7 +1286,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 const idMap = await this.persistPendingGroups();
 
                 await dataModel.updateUser(editingUserId, {
-                    displayName: displayName || username,
+                    displayName: displayName || email,
                 });
 
                 const currentIds = await this.loadUserGroupIds(editingUserId);
@@ -1309,7 +1305,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                     }
                 }
 
-                void NotificationCenter.showInfo(`User "${displayName || username}" updated.`);
+                void NotificationCenter.showInfo(`User "${displayName || email}" updated.`);
             } catch (e) {
                 this.setState({ errorMessage: (e as Error).message });
 
@@ -1355,7 +1351,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         }
 
         const closure = await this.confirmDialogRef.current?.show(
-            `Delete user "${user.displayName || user.username}"? This cannot be undone.`,
+            `Delete user "${user.displayName || user.email}"? This cannot be undone.`,
             { accept: "Delete" },
             "Delete User",
             description.length > 0 ? description : undefined,
@@ -1369,7 +1365,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
         try {
             await dataModel.deleteUser(user.id);
-            void NotificationCenter.showInfo(`User "${user.displayName || user.username}" deleted.`);
+            void NotificationCenter.showInfo(`User "${user.displayName || user.email}" deleted.`);
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
 
@@ -1389,9 +1385,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         await this.loadUsers();
     }
 
-    private handleFormUsernameChange = (e: InputEvent): void => {
+    private handleFormEmailChange = (e: InputEvent): void => {
         const target = e.target as HTMLInputElement;
-        this.setState({ formUsername: target.value });
+        this.setState({ formEmail: target.value });
     };
 
     private handleFormDisplayNameChange = (e: InputEvent): void => {

@@ -13,6 +13,9 @@ import { DatabaseEngine, isValidDatabaseEngine, type IDatabaseConfig } from "./d
 const configPath = resolve(process.cwd(), "backend-config.json");
 export const uploadsPath = resolve(process.cwd(), "public", "uploads", "instruments");
 
+/** The images the confirmation mails carry, relative to the directory the process runs in. */
+export const mailImagesPath = resolve(process.cwd(), "public", "mail");
+
 export interface IServerConfig {
     host: string;
     port: number;
@@ -21,6 +24,9 @@ export interface IServerConfig {
 
     /** Public account creation. */
     registration: IRegistrationConfig;
+
+    /** The outgoing mail server that delivers the confirmation links. */
+    mail: IMailConfig;
 
     /** The curated scores a demo may offer without a session. */
     demo: IDemoConfig;
@@ -37,6 +43,41 @@ export interface IRegistrationConfig {
     /** Default false: an installation that is not asked to stays closed. */
     enabled: boolean;
 }
+
+/**
+ * The SMTP account that delivers the mail a new account needs to confirm its address. An installation without one
+ * cannot create accounts at all, because every account — including the initial admin — starts unconfirmed.
+ */
+export interface IMailConfig {
+    /** SMTP host. Empty means no mail can be sent. */
+    host: string;
+
+    port: number;
+
+    /** True for an implicitly encrypted connection (usually port 465), false to upgrade with STARTTLS. */
+    secure: boolean;
+
+    user: string;
+    password: string;
+
+    /** The From address of the mails, for example `Animada Score Book <no-reply@example.com>`. */
+    from: string;
+
+    /**
+     * Origin the confirmation links name, for example `https://scores.example.com`. Left out, the link names the
+     * origin the account request came in on, which is the right one for a host that serves site and backend.
+     */
+    publicUrl?: string;
+}
+
+/**
+ * @param mail The configured mail account.
+ *
+ * @returns Whether the backend can send mail with it.
+ */
+export const isMailConfigured = (mail: IMailConfig): boolean => {
+    return mail.host.length > 0 && mail.from.length > 0;
+};
 
 /** The curated demo catalog. */
 export interface IDemoConfig {
@@ -123,6 +164,17 @@ export const loadConfig = (): IServerConfig => {
             enabled: process.env.REGISTRATION_ENABLED !== undefined
                 ? process.env.REGISTRATION_ENABLED === "true"
                 : (raw.registration?.enabled ?? false),
+        },
+        mail: {
+            host: process.env.MAIL_HOST ?? raw.mail?.host ?? "",
+            port: process.env.MAIL_PORT ? Number(process.env.MAIL_PORT) : (raw.mail?.port ?? 587),
+            secure: process.env.MAIL_SECURE !== undefined
+                ? process.env.MAIL_SECURE === "true"
+                : (raw.mail?.secure ?? false),
+            user: process.env.MAIL_USER ?? raw.mail?.user ?? "",
+            password: process.env.MAIL_PASSWORD ?? raw.mail?.password ?? "",
+            from: process.env.MAIL_FROM ?? raw.mail?.from ?? "",
+            publicUrl: process.env.MAIL_PUBLIC_URL ?? raw.mail?.publicUrl,
         },
         demo: {
             scoreIds: demoScoreIdsEnv ?? raw.demo?.scoreIds ?? [],

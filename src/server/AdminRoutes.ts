@@ -6,6 +6,8 @@
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { Auth, isValidEntityType } from "./Auth.js";
+import { EmailConfirmation } from "./EmailConfirmation.js";
+import { ConfirmationReason } from "./Mailer.js";
 import { type RequestContext } from "./RequestContext.js";
 
 export class AdminRoutes {
@@ -21,21 +23,22 @@ export class AdminRoutes {
         }
 
         const rows = await this.ctx.auth.adapter.query(
-            `SELECT u.id, u.username, u.display_name, u.created_at, u.updated_at,
+            `SELECT u.id, u.email, u.display_name, u.created_at, u.updated_at,
                 (ug.user_id IS NOT NULL) AS is_admin,
                 (SELECT MAX(la.created_at) FROM login_audit la WHERE la.user_id = u.id) AS last_login
          FROM users u
          LEFT JOIN user_groups ug ON u.id = ug.user_id
              AND ug.group_id = (SELECT id FROM \`groups\` WHERE name = ?)
-         ORDER BY u.username`,
-            [Auth.adminGroupName],
+         WHERE u.email != ?
+         ORDER BY u.email`,
+            [Auth.adminGroupName, Auth.anonymousEmail],
         );
 
         this.ctx.sendJson(res, {
             users: rows.map((u) => {
                 return {
                     id: u.id,
-                    username: u.username,
+                    email: u.email,
                     displayName: u.display_name,
                     isAdmin: Boolean(u.is_admin),
                     lastLogin: u.last_login,
@@ -46,6 +49,13 @@ export class AdminRoutes {
         });
     };
 
+    /**
+     * Creates an account for somebody else. Like every account of this installation, it stays unusable until the
+     * person it belongs to opens the confirmation link the backend mails.
+     *
+     * @param req The incoming HTTP request.
+     * @param res The response to write to.
+     */
     public async handleCreateUser(req: IncomingMessage, res: ServerResponse) {
         const authUser = this.ctx.getAuthUser(req);
 
@@ -55,19 +65,25 @@ export class AdminRoutes {
             return;
         }
 
-        const body = await this.ctx.readJsonBody(req);
-        const username = String(body.username ?? "").trim();
-        const password = String(body.password ?? "");
-        const displayName = String(body.displayName ?? username).trim();
-
-        if (!username || !password) {
-            this.ctx.sendError(res, "Username and password required");
+        if (!EmailConfirmation.isAvailable(this.ctx)) {
+            this.ctx.sendError(
+                res,
+                "Creating an account needs a mail account. Add the mail settings to backend-config.json and "
+                + "restart the backend.",
+                503,
+                "mailMissing",
+            );
 
             return;
         }
 
-        if (username.length < 3) {
-            this.ctx.sendError(res, "Username must be at least 3 characters");
+        const body = await this.ctx.readJsonBody(req);
+        const email = Auth.normalizeEmail(String(body.email ?? ""));
+        const password = String(body.password ?? "");
+        const displayName = String(body.displayName ?? "").trim() || email;
+
+        if (!Auth.isValidEmail(email)) {
+            this.ctx.sendError(res, "Please enter a valid email address.");
 
             return;
         }
@@ -79,33 +95,35 @@ export class AdminRoutes {
         }
 
         const existing = await this.ctx.auth.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM users WHERE username = ?",
-            [username],
+            "SELECT COUNT(*) AS cnt FROM users WHERE email = ?",
+            [email],
         );
 
         if ((existing[0]?.cnt ?? 0) > 0) {
-            this.ctx.sendError(res, "Username already exists");
+            this.ctx.sendError(res, "That email address is already registered.", 409);
 
             return;
         }
 
-        const groupCollision = await this.ctx.auth.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM `groups` WHERE name = ?",
-            [username],
-        );
-
-        if ((groupCollision[0]?.cnt ?? 0) > 0) {
-            this.ctx.sendError(res, "A group with this name already exists");
-
-            return;
-        }
-
-        const passwordHash = await Auth.hashPassword(password);
         const result = await this.ctx.auth.adapter.insertReturningId(
-            `INSERT INTO users (username, password_hash, display_name)
-         VALUES (?, ?, ?)`,
-            [username, passwordHash, displayName],
+            "INSERT INTO users (email, password_hash, display_name) VALUES (?, ?, ?)",
+            [email, await Auth.hashPassword(password), displayName],
         );
+
+        const sent = await EmailConfirmation.request(this.ctx, req, {
+            email,
+            purpose: ConfirmationReason.Activation,
+            displayName,
+            invitedBy: await this.creatorName(authUser.userId),
+        });
+
+        if (!sent) {
+            // The account never existed without a confirmation link, so the failed attempt leaves nothing behind.
+            await this.ctx.auth.adapter.execute("DELETE FROM users WHERE id = ?", [result.insertId]);
+            this.ctx.sendError(res, "The confirmation mail could not be sent. Please try again later.", 502);
+
+            return;
+        }
 
         this.ctx.sendJson(res, { success: true, id: result.insertId });
     };
@@ -207,7 +225,7 @@ export class AdminRoutes {
 
         const rows = await this.ctx.auth.adapter.query(
             "SELECT g.id, g.name, g.description, g.color, g.admin_id AS adminId," +
-            " COALESCE(NULLIF(u.display_name, ''), u.username) AS adminName," +
+            " COALESCE(NULLIF(u.display_name, ''), u.email) AS adminName," +
             " (g.password_hash IS NOT NULL) AS hasPassword," +
             " g.last_login AS lastLogin, g.created_at AS createdAt" +
             " FROM `groups` g LEFT JOIN users u ON u.id = g.admin_id ORDER BY g.name",
@@ -262,17 +280,6 @@ export class AdminRoutes {
 
         if (!name) {
             this.ctx.sendError(res, "Group name required");
-
-            return;
-        }
-
-        const userCollision = await this.ctx.auth.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM users WHERE username = ?",
-            [name],
-        );
-
-        if ((userCollision[0]?.cnt ?? 0) > 0) {
-            this.ctx.sendError(res, "A user with this name already exists");
 
             return;
         }
@@ -365,19 +372,6 @@ export class AdminRoutes {
             this.ctx.sendError(res, "No fields to update");
 
             return;
-        }
-
-        if (name) {
-            const userCollision = await this.ctx.auth.adapter.query<{ cnt: number; }>(
-                "SELECT COUNT(*) AS cnt FROM users WHERE username = ?",
-                [name],
-            );
-
-            if ((userCollision[0]?.cnt ?? 0) > 0) {
-                this.ctx.sendError(res, "A user with this name already exists");
-
-                return;
-            }
         }
 
         const updates: string[] = [];
@@ -586,11 +580,11 @@ export class AdminRoutes {
         }
 
         const rows = await this.ctx.auth.adapter.query(
-            `SELECT u.id, u.username, u.display_name
+            `SELECT u.id, u.email, u.display_name
          FROM users u
          JOIN user_groups ug ON u.id = ug.user_id
          WHERE ug.group_id = ?
-         ORDER BY u.username`,
+         ORDER BY u.email`,
             [groupId],
         );
 
@@ -598,7 +592,7 @@ export class AdminRoutes {
             members: rows.map((u) => {
                 return {
                     id: u.id,
-                    username: u.username,
+                    email: u.email,
                     displayName: u.display_name,
                 };
             }),
@@ -696,4 +690,19 @@ export class AdminRoutes {
 
         this.ctx.sendJson(res, { success: true });
     };
+
+    /**
+     * @param userId The administrator who creates an account.
+     *
+     * @returns The name to mention in the mail that announces the account, or undefined when the row is gone.
+     */
+    private async creatorName(userId: number): Promise<string | undefined> {
+        const rows = await this.ctx.auth.adapter.query<{ displayName: string; email: string; }>(
+            "SELECT display_name AS displayName, email FROM users WHERE id = ?",
+            [userId],
+        );
+        const name = rows[0] as { displayName: string; email: string; } | undefined;
+
+        return name === undefined ? undefined : (name.displayName.trim() || name.email);
+    }
 }

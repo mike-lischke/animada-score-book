@@ -110,7 +110,7 @@ describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
     it("login success sets auth state and fires authChanged", async () => {
         const loginResponse = {
             token: "test-token",
-            user: { id: 1, username: "admin", displayName: "Admin", isAdmin: true },
+            user: { id: 1, email: "admin@example.com", displayName: "Admin", isAdmin: true },
             capabilities: {
                 canEditScores: true, canManageUsers: true,
                 canManageInstruments: true, canExportMP3: true,
@@ -124,11 +124,11 @@ describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
             },
         } as Response);
 
-        const result = await model.login("admin", "admin");
+        const result = await model.login("admin@example.com", "admin");
 
         expect(result).toBe(true);
         expect(model.authenticated).toBe(true);
-        expect(model.user?.username).toBe("admin");
+        expect(model.user?.email).toBe("admin@example.com");
         expect(model.canWriteScores).toBe(true);
         expect(authChangedCalls).toBe(1);
     });
@@ -154,7 +154,7 @@ describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
             ok: true,
             json: () => {
                 return Promise.resolve({
-                    token: "t", user: { id: 1, username: "u", displayName: "U", isAdmin: false },
+                    token: "t", user: { id: 1, email: "u@example.com", displayName: "U", isAdmin: false },
                     capabilities: {
                         canEditScores: true, canManageUsers: false,
                         canManageInstruments: false, canExportMP3: false
@@ -195,7 +195,7 @@ describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
             json: () => {
                 return Promise.resolve({
                     token: "my-access-token", user: {
-                        id: 1, username: "u",
+                        id: 1, email: "u@example.com",
                         displayName: "U", isAdmin: false
                     },
                     capabilities: {
@@ -2219,7 +2219,7 @@ describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () 
     /** What the backend answers a login with, for an account that may edit scores. */
     const sessionBody = {
         token: "test-token",
-        user: { id: 1, username: "u", displayName: "U", isAdmin: false },
+        user: { id: 1, email: "u@example.com", displayName: "U", isAdmin: false },
         capabilities: {
             canEditScores: true, canManageUsers: false, canManageInstruments: false, canExportMP3: false,
         },

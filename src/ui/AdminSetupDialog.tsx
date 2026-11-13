@@ -14,44 +14,44 @@ import { Input } from "../components/ui/framework/Input.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
-import { type ICapabilities, type IUserInfo, type ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
-
-interface IAdminSetupDialogProperties extends ICommonUIProperties {
-    dataModel: ScoreBookDataModel;
-
-    /** Called when the initial admin has been created. */
-    onSetupComplete: () => void;
-}
 
 interface IAdminSetupDialogState {
-    username: string;
+    email: string;
     password: string;
     confirmPassword: string;
     displayName: string;
     groupName: string;
     errorMessage: string;
+
+    /** A neutral confirmation, such as the note that a new link went out. */
+    notice: string;
     loading: boolean;
+
+    /** The address a confirmation link was sent to, once the form has been submitted. */
+    pendingEmail: string;
 }
 
 /**
- * First-time setup dialog: creates the initial admin user when no users exist yet.
+ * First-time setup dialog: asks for the initial admin and mails the link that finishes the installation. Until that
+ * link is opened, the installation holds no account at all, so the dialog stays open and explains what to do.
  */
-export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, IAdminSetupDialogState> {
+export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSetupDialogState> {
     private dialogRef = createRef<Dialog | null>();
-    private displayNameRef = createRef<HTMLElement | null>();
-    private setupSucceeded = false;
+    private groupNameRef = createRef<HTMLElement | null>();
 
-    public constructor(props: IAdminSetupDialogProperties) {
+    public constructor(props: ICommonUIProperties) {
         super(props);
 
         this.state = {
-            username: "",
+            email: "",
             password: "",
             confirmPassword: "",
             displayName: "",
             groupName: "",
             errorMessage: "",
+            notice: "",
             loading: false,
+            pendingEmail: "",
         };
     }
 
@@ -59,41 +59,85 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
      * Opens the dialog and resets all fields.
      */
     public open(): void {
-        this.setupSucceeded = false;
         this.setState({
-            username: "",
+            email: "",
             password: "",
             confirmPassword: "",
             displayName: "",
             groupName: "",
             errorMessage: "",
+            notice: "",
             loading: false,
+            pendingEmail: "",
         }, () => {
             this.dialogRef.current?.open();
         });
     }
 
     public render(): ComponentChild {
-        const { username, password, confirmPassword, displayName, groupName, errorMessage, loading }
-            = this.state;
+        const { loading, pendingEmail } = this.state;
+
+        let content: ComponentChild;
+        let actions: ComponentChild[];
+        if (pendingEmail === "") {
+            content = this.renderForm(loading);
+            actions = [
+                <Button
+                    id="admin-setup-create"
+                    type="button"
+                    key="create"
+                    caption="Finish Installation"
+                    isDefault
+                    disabled={loading}
+                    onClick={this.handleCreateClick}
+                />,
+            ];
+        } else {
+            content = this.renderPending(pendingEmail);
+            actions = [
+                <Button
+                    id="admin-setup-resend"
+                    type="button"
+                    key="resend"
+                    caption="Send Again"
+                    isDefault
+                    disabled={loading}
+                    onClick={this.handleSendAgain}
+                />,
+            ];
+        }
 
         return (
             <Dialog
                 ref={this.dialogRef}
                 id="adminSetupDialog"
                 onClose={this.handleClose}
-                actions={[
-                    <Button
-                        id="admin-setup-create"
-                        type="button"
-                        key="create"
-                        caption="Finish Installation"
-                        isDefault
-                        disabled={loading}
-                        onClick={this.handleCreateClick}
-                    />,
-                ]}
+                actions={actions}
             >
+                {content}
+            </Dialog>
+        );
+    }
+
+    /**
+     * @param value The address as typed.
+     *
+     * @returns Whether the value has the shape of an email address. The backend checks again.
+     */
+    private static looksLikeEmail(value: string): boolean {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+
+    /**
+     * @param loading Whether a request is running, which disables the fields.
+     *
+     * @returns The form that asks for the administrator.
+     */
+    private renderForm(loading: boolean): ComponentChild {
+        const { email, password, confirmPassword, displayName, groupName, errorMessage } = this.state;
+
+        return (
+            <>
                 <Container
                     className="font-bold text-lg"
                     orientation={Orientation.LeftToRight}
@@ -107,7 +151,6 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     Finish Installation
                 </Container>
 
-                {/* Admin User block */}
                 <Label
                     caption="Admin User"
                     className="font-semibold"
@@ -122,13 +165,13 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     >
                         <Label
                             className="form-row-label"
-                            caption="Username"
+                            caption="Email"
                             style={{ minWidth: "100px" }}
                         />
                         <Input
-                            id="admin-username"
-                            value={username}
-                            placeholder="Choose an admin username"
+                            id="admin-email"
+                            value={email}
+                            placeholder="you@example.com"
                             autoFocus
                             autoComplete
                             disabled={loading}
@@ -208,7 +251,6 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     </Container>
                 </Container>
 
-                {/* Initial Group block */}
                 <Label
                     caption="Initial Group"
                     className="font-semibold"
@@ -228,14 +270,14 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                         />
                         <Input
                             id="admin-group"
-                            innerRef={this.displayNameRef}
+                            innerRef={this.groupNameRef}
                             value={groupName}
                             placeholder="My first group"
                             autoComplete
                             disabled={loading}
                             style={{ padding: "3px" }}
                             onChange={this.handleChange}
-                            onConfirm={this.handleDisplayNameConfirm}
+                            onConfirm={this.handleGroupNameConfirm}
                         />
                     </Container>
                 </Container>
@@ -252,7 +294,70 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                         />
                     </Container>
                 )}
-            </Dialog>
+            </>
+        );
+    }
+
+    /**
+     * @param email The address the confirmation link was sent to.
+     *
+     * @returns What the operator sees while the link waits in the inbox.
+     */
+    private renderPending(email: string): ComponentChild {
+        const { errorMessage, notice } = this.state;
+        const explanation = `We sent a confirmation link to ${email}. Open it to create the administrator and `
+            + "finish the installation.";
+        const reloadHint = "The installation is complete as soon as the link has been opened. Then reload this page "
+            + "yourself — the application does not do that by itself.";
+        const resendHint = "Nothing arrived? `Send Again` mails a new link. The previous link stops working with it.";
+
+        return (
+            <>
+                <Container
+                    className="font-bold text-lg"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                    style={{ marginBottom: "12px" }}
+                >
+                    <Icon
+                        src={UIIcon.Account}
+                        style={{ fontSize: "24px", marginRight: "8px", color: "var(--color-primary)" }}
+                    />
+                    Check Your Inbox
+                </Container>
+
+                <Container className="form-card" orientation={Orientation.TopDown}>
+                    <Label caption={explanation} />
+                    <Label caption={reloadHint} />
+                    <Label className="text-sm text-base-content/60" caption={resendHint} />
+                </Container>
+
+                {notice && (
+                    <Container
+                        className="form-row"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Label
+                            caption={notice}
+                            style={{ color: "var(--color-success)", fontSize: "13px" }}
+                        />
+                    </Container>
+                )}
+
+                {errorMessage && (
+                    <Container
+                        className="form-row"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Label
+                            caption={errorMessage}
+                            style={{ color: "var(--color-error)", fontSize: "13px" }}
+                        />
+                    </Container>
+                )}
+            </>
         );
     }
 
@@ -260,8 +365,8 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
         const target = e.target as HTMLInputElement;
 
         switch (target.id) {
-            case "admin-username": {
-                this.setState({ username: target.value, errorMessage: "" });
+            case "admin-email": {
+                this.setState({ email: target.value, errorMessage: "" });
                 break;
             }
 
@@ -289,11 +394,16 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
         }
     };
 
-    private handleDisplayNameConfirm = (): void => {
+    private handleGroupNameConfirm = (): void => {
         void this.attemptCreate();
     };
 
     private handleCreateClick = (): void => {
+        void this.attemptCreate();
+    };
+
+    private handleSendAgain = (): void => {
+        // The backend replaces the pending confirmation, so the mail carries a new link and the old one stops working.
         void this.attemptCreate();
     };
 
@@ -302,21 +412,20 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
     };
 
     private async attemptCreate(): Promise<void> {
-        const { dataModel, onSetupComplete } = this.props;
-        const { username, password, confirmPassword, displayName, groupName, loading } = this.state;
+        const { email, password, confirmPassword, displayName, groupName, loading, pendingEmail } = this.state;
 
         if (loading) {
             return;
         }
 
-        if (!username.trim() || !password) {
-            this.setState({ errorMessage: "Username and password are required." });
+        if (!email.trim() || !password) {
+            this.setState({ errorMessage: "Email address and password are required." });
 
             return;
         }
 
-        if (username.trim().length < 3) {
-            this.setState({ errorMessage: "Username must be at least 3 characters." });
+        if (!AdminSetupDialog.looksLikeEmail(email.trim())) {
+            this.setState({ errorMessage: "Please enter a valid email address." });
 
             return;
         }
@@ -339,15 +448,16 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
             return;
         }
 
-        this.setState({ loading: true, errorMessage: "" });
+        this.setState({ loading: true, errorMessage: "", notice: "" });
 
+        const address = email.trim().toLowerCase();
         const res = await fetch("/api?action=createInitialAdmin", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                username: username.trim(),
+                email: address,
                 password,
-                displayName: displayName.trim() || username.trim(),
+                displayName: displayName.trim() || address,
                 groupName: groupName.trim() || undefined,
             }),
         });
@@ -357,21 +467,16 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
 
             this.setState({
                 loading: false,
-                errorMessage: data.error ?? "Failed to create admin user.",
+                errorMessage: data.error ?? "Failed to start the installation.",
             });
 
             return;
         }
 
-        const data = await res.json() as {
-            token: string; user: IUserInfo; capabilities: ICapabilities;
-        };
-
-        dataModel.setSession(data.token, data.user, data.capabilities);
-
-        this.setupSucceeded = true;
-        this.dialogRef.current?.close(false);
-
-        onSetupComplete();
+        this.setState({
+            loading: false,
+            pendingEmail: address,
+            notice: pendingEmail === "" ? "" : "A new confirmation link was sent.",
+        });
     }
 }

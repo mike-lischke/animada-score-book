@@ -29,7 +29,7 @@ interface ILoginDialogProperties extends ICommonUIProperties {
 
 interface ILoginDialogState {
     loginMode: LoginMode;
-    username: string;
+    email: string;
     password: string;
 
     /** Group login fields. */
@@ -59,7 +59,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
 
         this.state = {
             loginMode: LoginMode.User,
-            username: "",
+            email: "",
             password: "",
             groupName: "",
             groupPassword: "",
@@ -83,7 +83,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
         this.loginSucceeded = false;
         this.setState({
             loginMode: LoginMode.User,
-            username: "",
+            email: "",
             password: "",
             groupName: "",
             groupPassword: "",
@@ -100,7 +100,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
     }
 
     public render(): ComponentChild {
-        const { loginMode, username, password, groupName, groupPassword, groupNames, loadingGroups,
+        const { loginMode, email, password, groupName, groupPassword, groupNames, loadingGroups,
             errorMessage, requireLogin } = this.state;
 
         const groupDropdownItems: IDropdownItem[] = groupNames.map((name) => {
@@ -183,18 +183,18 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                             >
                                 <Label
                                     className="form-row-label"
-                                    caption="Username"
+                                    caption="Email"
                                     style={{ minWidth: "80px" }}
                                 />
                                 <Input
-                                    id="login-username"
-                                    value={username}
-                                    placeholder="Enter your username"
+                                    id="login-email"
+                                    value={email}
+                                    placeholder="Enter your email address"
                                     autoFocus
                                     autoComplete
                                     style={{ padding: "3px" }}
-                                    onChange={this.handleUsernameChange}
-                                    onConfirm={this.handleUsernameConfirm}
+                                    onChange={this.handleEmailChange}
+                                    onConfirm={this.handleEmailConfirm}
                                 />
                             </Container>
 
@@ -307,11 +307,11 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
         }
     }
 
-    private handleUsernameChange = (e: Event, props: { value?: string; }): void => {
-        this.setState({ username: props.value ?? "", errorMessage: "" });
+    private handleEmailChange = (e: Event, props: { value?: string; }): void => {
+        this.setState({ email: props.value ?? "", errorMessage: "" });
     };
 
-    private handleUsernameConfirm = (): void => {
+    private handleEmailConfirm = (): void => {
         this.passwordRef.current?.focus();
     };
 
@@ -352,7 +352,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
 
     private async attemptLogin(): Promise<void> {
         const { dataModel } = this.props;
-        const { loginMode, username, password, groupName, groupPassword } = this.state;
+        const { loginMode, email, password, groupName, groupPassword } = this.state;
 
         if (loginMode === LoginMode.Group) {
             if (!groupName.trim() || !groupPassword) {
@@ -376,13 +376,13 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             return;
         }
 
-        if (!username.trim() || !password) {
-            this.setState({ errorMessage: "Username and password are required." });
+        if (!email.trim() || !password) {
+            this.setState({ errorMessage: "Email address and password are required." });
 
             return;
         }
 
-        const success = await dataModel.login(username.trim(), password);
+        const success = await dataModel.login(email.trim(), password);
 
         if (success) {
             this.loginSucceeded = true;
@@ -392,6 +392,6 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             return;
         }
 
-        this.setState({ errorMessage: "Invalid username or password." });
+        this.setState({ errorMessage: "Invalid email address or password." });
     }
 }

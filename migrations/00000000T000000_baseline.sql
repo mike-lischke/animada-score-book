@@ -97,8 +97,10 @@ CREATE TABLE IF NOT EXISTS instrument_images (
 -- @mysql
 CREATE TABLE IF NOT EXISTS users (
     id                 INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    username           VARCHAR(255) NOT NULL,
+    email              VARCHAR(255) NOT NULL,
     password_hash      VARCHAR(512) NOT NULL,
+    email_verified     TINYINT(1)   NOT NULL DEFAULT 0,
+    email_verified_at  TIMESTAMP    NULL,
     refresh_token_hash VARCHAR(256) NULL,
     auth_type          VARCHAR(16)  NULL,
     group_id           INT UNSIGNED NULL,
@@ -107,14 +109,16 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_users_username (username)
+    UNIQUE KEY uk_users_email (email)
 ) ENGINE=InnoDB;
 
 -- @postgres
 CREATE TABLE IF NOT EXISTS users (
     id                 SERIAL PRIMARY KEY,
-    username           VARCHAR(255) NOT NULL UNIQUE,
+    email              VARCHAR(255) NOT NULL UNIQUE,
     password_hash      VARCHAR(512) NOT NULL,
+    email_verified     BOOLEAN NOT NULL DEFAULT FALSE,
+    email_verified_at  TIMESTAMP,
     refresh_token_hash VARCHAR(256),
     auth_type          VARCHAR(16),
     group_id           INT,
@@ -122,6 +126,35 @@ CREATE TABLE IF NOT EXISTS users (
     last_login         TIMESTAMP,
     created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- @mysql
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    email         VARCHAR(255) NOT NULL,
+    token_hash    VARCHAR(64)  NOT NULL,
+    purpose       VARCHAR(16)  NOT NULL,
+    password_hash VARCHAR(512) NULL,
+    display_name  VARCHAR(255) NULL,
+    group_name    VARCHAR(255) NULL,
+    site_origin   VARCHAR(255) NULL,
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_email_verifications_token (token_hash),
+    UNIQUE KEY uk_email_verifications_email (email)
+) ENGINE=InnoDB;
+
+-- @postgres
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id            SERIAL PRIMARY KEY,
+    email         VARCHAR(255) NOT NULL UNIQUE,
+    token_hash    VARCHAR(64)  NOT NULL UNIQUE,
+    purpose       VARCHAR(16)  NOT NULL,
+    password_hash VARCHAR(512),
+    display_name  VARCHAR(255),
+    group_name    VARCHAR(255),
+    site_origin   VARCHAR(255),
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- @mysql

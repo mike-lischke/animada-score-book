@@ -64,9 +64,10 @@ export class RequestContext {
      * @param res The HTTP response.
      * @param message The error message.
      * @param status The HTTP status code (default 400).
+     * @param code A machine-readable reason the client can branch on, if the message alone is not enough.
      */
-    public sendError(res: ServerResponse, message: string, status = 400): void {
-        this.sendJson(res, { error: message }, status);
+    public sendError(res: ServerResponse, message: string, status = 400, code?: string): void {
+        this.sendJson(res, code === undefined ? { error: message } : { error: message, code }, status);
     };
 
     /**
@@ -297,7 +298,7 @@ export class RequestContext {
     /**
      * Checks whether a key is currently rate-limited.
      *
-     * @param key The rate-limit key (e.g. `ip:username` or `ip:groupName`).
+     * @param key The rate-limit key (e.g. `ip:email` or `ip:groupName`).
      *
      * @returns True if the request should be blocked (HTTP 429).
      */
@@ -359,10 +360,10 @@ export class RequestContext {
     };
 
     /**
-     * Builds a rate-limit key from client IP and a discriminator (username or group name).
+     * Builds a rate-limit key from client IP and a discriminator (e-mail address or group name).
      *
      * @param req           The incoming HTTP request.
-     * @param discriminator The username or group name to include in the key.
+     * @param discriminator The e-mail address or group name to include in the key.
      *
      * @returns The rate-limit key.
      */

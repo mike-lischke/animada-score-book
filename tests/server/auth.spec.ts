@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { Auth, AccessLevel, EntityType, LoginAuditEvent } from "../../src/server/Auth.js";
+import { Auth, AccessLevel, EntityType, LoginAuditEvent, type ITokenPayload } from "../../src/server/Auth.js";
 import type { DbRow, IDatabaseAdapter, IDbExecuteResult, ITestConnectionResult } from "../../src/server/database.js";
 
 const adminsGroupId = 1;
@@ -100,14 +100,22 @@ class FakeDatabaseAdapter implements IDatabaseAdapter {
 
 describe("auth — JWT", () => {
     it("round-trip: access token", () => {
-        const payload = { userId: 1, username: "test", isAdmin: false };
+        const payload = { userId: 1, email: "test@example.com", isAdmin: false };
         const token = Auth.createAccessToken(payload);
         const decoded = Auth.verifyToken(token);
 
         expect(decoded).toBeDefined();
         expect(decoded!.userId).toBe(1);
-        expect(decoded!.username).toBe("test");
+        expect(decoded!.email).toBe("test@example.com");
         expect(decoded!.isAdmin).toBe(false);
+    });
+
+    it("rejects a token that names the account by its former field", () => {
+        const legacy = Auth.createAccessToken(
+            { userId: 1, username: "test", isAdmin: false } as unknown as ITokenPayload,
+        );
+
+        expect(Auth.verifyToken(legacy)).toBeUndefined();
     });
 
     it("refresh token: generates random raw and hash", () => {
@@ -131,6 +139,40 @@ describe("auth — JWT", () => {
 
     it("invalid token returns undefined", () => {
         expect(Auth.verifyToken("not.a.token")).toBeUndefined();
+    });
+});
+
+describe("auth — e-mail addresses", () => {
+    it("stores an address trimmed and in lower case", () => {
+        expect(Auth.normalizeEmail("  Someone@Example.COM ")).toBe("someone@example.com");
+    });
+
+    it("accepts an ordinary address", () => {
+        expect(Auth.isValidEmail("someone@example.com")).toBe(true);
+        expect(Auth.isValidEmail("first.last+tag@sub.example.org")).toBe(true);
+    });
+
+    it("refuses what is not an address", () => {
+        expect(Auth.isValidEmail("someone")).toBe(false);
+        expect(Auth.isValidEmail("someone@example")).toBe(false);
+        expect(Auth.isValidEmail("@example.com")).toBe(false);
+        expect(Auth.isValidEmail("someone@example.com ")).toBe(false);
+        expect(Auth.isValidEmail(`${"a".repeat(250)}@example.com`)).toBe(false);
+    });
+
+    it("never names the anonymous system account with a deliverable address", () => {
+        expect(Auth.isValidEmail(Auth.anonymousEmail)).toBe(true);
+        expect(Auth.anonymousEmail.endsWith(".invalid")).toBe(true);
+    });
+
+    it("stores only the hash of a confirmation token", () => {
+        const first = Auth.createEmailVerificationToken();
+        const second = Auth.createEmailVerificationToken();
+
+        expect(first.raw).not.toBe(second.raw);
+        expect(first.hash).toHaveLength(64);
+        expect(first.raw).not.toBe(first.hash);
+        expect(Auth.hashVerificationToken(first.raw)).toBe(first.hash);
     });
 });
 

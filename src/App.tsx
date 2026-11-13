@@ -142,7 +142,7 @@ interface IAppState {
     lockToken?: string;
 
     /** Conflict info when another user holds the lock. */
-    lockConflict?: { username: string; lockedAt: string; };
+    lockConflict?: { email: string; lockedAt: string; };
 
     /** When true, the printed document is rendered into the DOM and `window.print()` will be triggered. */
     printing: boolean;
@@ -371,8 +371,6 @@ export class App extends UIComponent<{}, IAppState> {
                 splashContent = (
                     <AdminSetupDialog
                         ref={this.adminSetupDialogRef}
-                        dataModel={this.dataModel}
-                        onSetupComplete={this.handleAdminSetupComplete}
                     />
                 );
 
@@ -1197,7 +1195,7 @@ export class App extends UIComponent<{}, IAppState> {
             const group = this.dataModel.activeGroup;
             const message = group
                 ? `Signed in as "${group.name}" (shared access)`
-                : `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`;
+                : `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.email}`;
             void requisitions.execute("showInfo", message);
         });
     };
@@ -1270,14 +1268,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         return true;
     }
-
-    /**
-     * Called when the backend setup dialog is closed.
-     * If setup completed successfully, proceed with app initialisation.
-     */
-    private handleAdminSetupComplete = (): void => {
-        void this.initializeApp();
-    };
 
     private handleBackendSetupComplete = async (): Promise<void> => {
         try {
@@ -1691,7 +1681,7 @@ export class App extends UIComponent<{}, IAppState> {
             });
         } else {
             items.push({
-                label: user?.displayName ?? user?.username ?? "",
+                label: user?.displayName ?? user?.email ?? "",
                 icon: <Icon src={UIIcon.Account} />,
             });
         }
@@ -2632,11 +2622,11 @@ export class App extends UIComponent<{}, IAppState> {
                 if (data.locked) {
                     this.setState({
                         editMode: false,
-                        lockConflict: { username: data.username!, lockedAt: data.lockedAt! },
+                        lockConflict: { email: data.email!, lockedAt: data.lockedAt! },
                     });
 
                     void requisitions.execute("showWarning",
-                        `Score is being edited by ${data.username}`
+                        `Score is being edited by ${data.email}`
                         + ` (since ${this.formatLockTimestamp(data.lockedAt!)})`);
 
                     return Promise.resolve(true);

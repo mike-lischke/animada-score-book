@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS score_locks (
     score_id   INT UNSIGNED NOT NULL,
     user_id    INT UNSIGNED NOT NULL,
-    username   VARCHAR(255) NOT NULL,
+    email      VARCHAR(255) NOT NULL,
     lock_token VARCHAR(64)  NOT NULL,
     locked_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (score_id),
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS score_locks (
 CREATE TABLE IF NOT EXISTS score_locks (
     score_id   INT NOT NULL REFERENCES scores(id) ON DELETE CASCADE,
     user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    username   VARCHAR(255) NOT NULL,
+    email      VARCHAR(255) NOT NULL,
     lock_token VARCHAR(64)  NOT NULL,
     locked_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (score_id)

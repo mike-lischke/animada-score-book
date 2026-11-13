@@ -39,7 +39,7 @@ interface IScoreLockResult {
     success: boolean;
     token?: string;
     locked?: boolean;
-    username?: string;
+    email?: string;
     lockedAt?: string;
 
     /** HTTP status the backend refused the lock with, or undefined when it was granted or unreachable. */
@@ -646,7 +646,7 @@ export type ScoreBookDataModelEntry =
 /** Mirrors IWhoamiResponse / ICapabilities from the backend. */
 export interface IUserInfo {
     id: number;
-    username: string;
+    email: string;
     displayName: string;
     isAdmin: boolean;
 
@@ -663,7 +663,7 @@ export interface IGroupInfo {
 /** A user row as returned by listUsers. */
 export interface IUserRow {
     id: number;
-    username: string;
+    email: string;
     displayName: string;
     isAdmin: boolean;
     lastLogin: string | null;
@@ -690,7 +690,7 @@ export interface IGroupRow {
 /** A group member as returned by listGroupMembers. */
 export interface IGroupMember {
     id: number;
-    username: string;
+    email: string;
     displayName: string;
 }
 
@@ -2856,15 +2856,15 @@ export class ScoreBookDataModel {
      * On success the access token, user info and capabilities are stored in memory.
      * The refresh token is stored by the backend in an httpOnly cookie.
      *
-     * @param username The username.
+     * @param email The email address of the account.
      * @param password The password.
      * @returns True if login was successful.
      */
-    public async login(username: string, password: string): Promise<boolean> {
+    public async login(email: string, password: string): Promise<boolean> {
         const res = await this.fetchApi("/api?action=login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ email, password }),
         }, false); // Don't attach auth header for login request.
 
         if (!res) {
@@ -3003,19 +3003,20 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Creates a new user. Admin-only.
+     * Creates a new user. Admin-only. The account stays unusable until its owner opens the confirmation link the
+     * backend mails to the address.
      *
-     * @param username    The username (min 3 chars).
+     * @param email       The email address of the account.
      * @param password    The password (min 6 chars).
      * @param displayName The display name.
      * @returns The new user's id.
      */
-    public async createUser(username: string, password: string, displayName: string,
+    public async createUser(email: string, password: string, displayName: string,
     ): Promise<number> {
         const res = await this.fetchApi("/api?action=createUser", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password, displayName }),
+            body: JSON.stringify({ email, password, displayName }),
         });
 
         if (!res) {

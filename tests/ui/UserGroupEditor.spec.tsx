@@ -52,11 +52,11 @@ const createMockDataModel = (overrides?: Partial<IMockDataModel>): ScoreBookData
 
 const sampleUsers: IUserRow[] = [
     {
-        id: 1, username: "admin", displayName: "Administrator", isAdmin: true,
+        id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true,
         lastLogin: "2025-01-01", createdAt: "2024-01-01", updatedAt: "2024-06-01"
     },
     {
-        id: 2, username: "editor", displayName: "Editor", isAdmin: false,
+        id: 2, email: "editor@example.com", displayName: "Editor", isAdmin: false,
         lastLogin: "2025-01-02", createdAt: "2024-02-01", updatedAt: "2024-07-01"
     },
 ];
@@ -180,7 +180,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         });
     });
 
-    it("renders user rows with display name, username and action buttons", async () => {
+    it("renders user rows with display name, address and action buttons", async () => {
         const dataModel = createMockDataModel({
             listUsers: vi.fn().mockResolvedValue(sampleUsers),
             listGroups: vi.fn().mockResolvedValue([]),
@@ -197,9 +197,9 @@ describe("UserGroupEditor", { concurrent: false }, () => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
 
             expect(dialog.textContent).toContain("Administrator");
-            expect(dialog.textContent).toContain("@admin");
+            expect(dialog.textContent).toContain("admin@example.com");
             expect(dialog.textContent).toContain("Editor");
-            expect(dialog.textContent).toContain("@editor");
+            expect(dialog.textContent).toContain("editor@example.com");
         });
     });
 
@@ -328,7 +328,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         const dataModel = createMockDataModel({
             listUsers: vi.fn().mockResolvedValue([]),
             listGroups: vi.fn().mockResolvedValue(sampleGroups),
-            user: { id: 5, username: "agent", displayName: "Agent", isAdmin: false, groupIds: [2] },
+            user: { id: 5, email: "agent@example.com", displayName: "Agent", isAdmin: false, groupIds: [2] },
         });
         const ref = createRef<UserGroupEditor>();
         const Wrapper: FunctionComponent = () => {
@@ -357,7 +357,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         const dataModel = createMockDataModel({
             listUsers: vi.fn().mockResolvedValue([]),
             listGroups: vi.fn().mockResolvedValue(sampleGroups),
-            user: { id: 1, username: "agent", displayName: "Agent", isAdmin: false, groupIds: [1, 2] },
+            user: { id: 1, email: "agent@example.com", displayName: "Agent", isAdmin: false, groupIds: [1, 2] },
         });
         const ref = createRef<UserGroupEditor>();
         const Wrapper: FunctionComponent = () => {
@@ -446,7 +446,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
             const popupContent = document.body.querySelector(".popup");
 
             expect(popupContent).toBeTruthy();
-            expect(popupContent!.textContent).toContain("Username");
+            expect(popupContent!.textContent).toContain("Email");
             expect(popupContent!.textContent).toContain("Display Name");
             expect(popupContent!.textContent).toContain("Password");
             expect(popupContent!.textContent).toContain("Group Membership");

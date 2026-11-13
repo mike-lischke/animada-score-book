@@ -198,7 +198,7 @@ export const setupAuthenticatedSession = async (page: Page): Promise<void> => {
             contentType: "application/json",
             body: JSON.stringify({
                 authenticated: true,
-                user: { id: 1, username: "test", displayName: "Test", isAdmin: true },
+                user: { id: 1, email: "test@example.com", displayName: "Test", isAdmin: true },
                 capabilities: {
                     canEditScores: true, canManageUsers: true,
                     canManageInstruments: true, canExportMP3: true

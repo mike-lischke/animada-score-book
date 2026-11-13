@@ -23,12 +23,12 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
 }> => {
     const users: Array<Record<string, unknown>> = [
         {
-            id: 1, username: "admin", displayName: "Administrator", isAdmin: true,
+            id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true,
             lastLogin: "2025-06-01T10:00:00Z", createdAt: "2024-01-01T00:00:00Z",
             updatedAt: "2024-06-01T00:00:00Z"
         },
         {
-            id: 2, username: "editor", displayName: "Editor", isAdmin: false,
+            id: 2, email: "editor@example.com", displayName: "Editor", isAdmin: false,
             lastLogin: "2025-06-02T12:00:00Z", createdAt: "2024-02-01T00:00:00Z",
             updatedAt: "2024-07-01T00:00:00Z"
         },
@@ -46,7 +46,7 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
     ];
 
     const groupMembers: Record<number, Array<Record<string, unknown>>> = {
-        1: [{ id: 1, username: "admin", displayName: "Administrator" }],
+        1: [{ id: 1, email: "admin@example.com", displayName: "Administrator" }],
         2: [],
     };
 
@@ -65,7 +65,7 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
                 status: 200, contentType: "application/json",
                 body: JSON.stringify({
                     authenticated: true,
-                    user: { id: 1, username: "admin", displayName: "Administrator", isAdmin: true },
+                    user: { id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true },
                     capabilities: {
                         canEditScores: true, canManageUsers: true,
                         canManageInstruments: true, canExportMP3: true,
@@ -297,7 +297,7 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
 
             if (user) {
                 groupMembers[groupId].push({
-                    id: userId, username: user.username, displayName: user.displayName,
+                    id: userId, email: user.email, displayName: user.displayName,
                 });
             }
 
@@ -404,11 +404,11 @@ test.describe("Users & Groups Dialog", () => {
         const dialog = page.locator("#userGroupEditorDialog");
 
         await expect(dialog).toContainText("Administrator");
-        await expect(dialog).toContainText("@admin");
+        await expect(dialog).toContainText("admin@example.com");
         await expect(dialog.locator(".text-accent")).toContainText("admin");
 
         await expect(dialog).toContainText("Editor");
-        await expect(dialog).toContainText("@editor");
+        await expect(dialog).toContainText("editor@example.com");
     });
 
     test("displays existing groups with lock icon for password-protected groups", async ({ page }) => {
@@ -449,7 +449,7 @@ test.describe("Users & Groups Dialog", () => {
         const popup = page.locator(".popup");
 
         await expect(popup).toBeVisible();
-        await expect(popup).toContainText("Username");
+        await expect(popup).toContainText("Email");
         await expect(popup).toContainText("Display Name");
         await expect(popup).toContainText("Password");
         await expect(popup).toContainText("Group Membership");
@@ -479,7 +479,7 @@ test.describe("Users & Groups Dialog", () => {
 
         await page.locator("#ug-add-user").click();
         const popup = page.locator(".popup");
-        await expect(popup).toContainText("Username");
+        await expect(popup).toContainText("Email");
 
         await page.locator("#userGroupEditorDialog").click({ position: { x: 20, y: 20 } });
 
@@ -515,7 +515,7 @@ test.describe("Users & Groups Dialog", () => {
         await expect(popup).toBeVisible();
 
         // Fill the form.
-        await popup.locator("input").nth(0).fill("newuser");
+        await popup.locator("input").nth(0).fill("newuser@example.com");
         await popup.locator("input").nth(1).fill("New User");
         await popup.locator("input").nth(2).fill("password123");
 
@@ -529,10 +529,10 @@ test.describe("Users & Groups Dialog", () => {
         const dialog = page.locator("#userGroupEditorDialog");
 
         await expect(dialog).toContainText("New User");
-        await expect(dialog).toContainText("@newuser");
+        await expect(dialog).toContainText("newuser@example.com");
     });
 
-    test("shows validation error when username is too short", async ({ page }) => {
+    test("shows validation error for an unusable address", async ({ page }) => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
@@ -546,7 +546,7 @@ test.describe("Users & Groups Dialog", () => {
         await popup.locator("input").nth(2).fill("password123");
         await popup.locator("button").filter({ hasText: "Create" }).click();
 
-        await expect(popup).toContainText("Username must be at least 3 characters");
+        await expect(popup).toContainText("Please enter a valid email address.");
     });
 
     test("shows validation error when password is too short", async ({ page }) => {
@@ -559,14 +559,14 @@ test.describe("Users & Groups Dialog", () => {
 
         await expect(popup).toBeVisible();
 
-        await popup.locator("input").nth(0).fill("newuser");
+        await popup.locator("input").nth(0).fill("newuser@example.com");
         await popup.locator("input").nth(2).fill("12345");
         await popup.locator("button").filter({ hasText: "Create" }).click();
 
         await expect(popup).toContainText("Password must be at least 6 characters");
     });
 
-    test("shows validation error when username is empty", async ({ page }) => {
+    test("shows validation error when the address is empty", async ({ page }) => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
@@ -578,7 +578,7 @@ test.describe("Users & Groups Dialog", () => {
 
         await popup.locator("button").filter({ hasText: "Create" }).click();
 
-        await expect(popup).toContainText("Username is required");
+        await expect(popup).toContainText("Email address is required");
     });
 
     // ---- Delete User ----
@@ -621,8 +621,8 @@ test.describe("Users & Groups Dialog", () => {
         // User should be removed from the list.
         const dialog = page.locator("#userGroupEditorDialog");
 
-        await expect(dialog).not.toContainText("@editor");
-        await expect(dialog).toContainText("@admin");
+        await expect(dialog).not.toContainText("editor@example.com");
+        await expect(dialog).toContainText("admin@example.com");
     });
 
     // ---- Create Group ----

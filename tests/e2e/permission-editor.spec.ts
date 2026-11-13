@@ -47,7 +47,7 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
         if (action === "whoami") {
             const body = JSON.stringify({
                 authenticated: true,
-                user: { id: 1, username: "admin", displayName: "Administrator", isAdmin: true },
+                user: { id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true },
                 capabilities: {
                     canEditScores: true, canManageUsers: true,
                     canManageInstruments: true, canExportMP3: true,
@@ -98,7 +98,7 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
         if (action === "listUsers") {
             const body = JSON.stringify({
                 users: [{
-                    id: 1, username: "admin", displayName: "Administrator", isAdmin: true,
+                    id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true,
                     lastLogin: null, createdAt: "", updatedAt: "",
                 }],
             });

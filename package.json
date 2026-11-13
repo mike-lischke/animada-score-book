@@ -27,6 +27,7 @@
         "playwright:install": "playwright install chromium",
         "generate-themes": "tsx build/generate-daisyui-themes.ts",
         "generate:fonts": "tsx build/generate-smufl-metrics.ts",
+        "generate:mail-assets": "tsx build/generate-mail-assets.ts",
         "verify:fonts": "tsx build/verify-smufl-fonts.ts",
         "start": "tsx src/server/backend.ts",
         "start-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts",
@@ -37,6 +38,7 @@
         "jsonwebtoken": "9.0.3",
         "mime-types": "3.0.2",
         "mysql2": "3.24.6",
+        "nodemailer": "10.5.0",
         "pg": "8.23.1"
     },
     "devDependencies": {
@@ -51,6 +53,7 @@
         "@types/jsonwebtoken": "9.0.10",
         "@types/mime-types": "3.0.1",
         "@types/node": "26.6.5",
+        "@types/nodemailer": "8.0.2",
         "@types/pg": "8.23.1",
         "@types/tabulator-tables": "6.3.6",
         "@typescript-eslint/parser": "8.72.0",

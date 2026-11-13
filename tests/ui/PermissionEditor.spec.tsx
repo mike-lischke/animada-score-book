@@ -50,7 +50,7 @@ const sampleGroups: IGroupRow[] = [
 
 const sampleUsers = [
     {
-        id: 1, username: "admin", displayName: "Administrator", isAdmin: true,
+        id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true,
         lastLogin: null, createdAt: "", updatedAt: ""
     },
 ];

@@ -31,7 +31,7 @@ test.describe("Settings — Permission Matrix Toggle", () => {
                     status: 200, contentType: "application/json",
                     body: JSON.stringify({
                         authenticated: true,
-                        user: { id: 1, username: "admin", displayName: "Administrator", isAdmin: true },
+                        user: { id: 1, email: "admin@example.com", displayName: "Administrator", isAdmin: true },
                         capabilities: {
                             canEditScores: true, canManageUsers: true,
                             canManageInstruments: true, canExportMP3: true,

@@ -633,9 +633,9 @@ export class ScoreRoutes {
         }
 
         const locks = await this.ctx.auth.adapter.query<{
-            user_id: number; username: string; lock_token: string; locked_at: string;
+            user_id: number; email: string; lock_token: string; locked_at: string;
         }>(
-            "SELECT user_id, username, lock_token, locked_at FROM score_locks WHERE score_id = ?",
+            "SELECT user_id, email, lock_token, locked_at FROM score_locks WHERE score_id = ?",
             [scoreId],
         );
 
@@ -678,7 +678,7 @@ export class ScoreRoutes {
                 this.ctx.sendJson(res, {
                     success: false,
                     locked: true,
-                    username: lock.username,
+                    email: lock.email,
                     lockedAt: lock.locked_at,
                 }, 409);
 
@@ -689,11 +689,11 @@ export class ScoreRoutes {
         }
 
         const token = randomBytes(tokenBytes).toString("hex");
-        const username = user.username;
+        const email = user.email;
 
         await this.ctx.auth.adapter.execute(
-            "INSERT INTO score_locks (score_id, user_id, username, lock_token) VALUES (?, ?, ?, ?)",
-            [scoreId, user.userId, username, token],
+            "INSERT INTO score_locks (score_id, user_id, email, lock_token) VALUES (?, ?, ?, ?)",
+            [scoreId, user.userId, email, token],
         );
 
         this.ctx.sendJson(res, { success: true, token });

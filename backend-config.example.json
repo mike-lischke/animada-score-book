@@ -13,6 +13,15 @@
     "registration": {
         "enabled": false
     },
+    "mail": {
+        "host": "",
+        "port": 587,
+        "secure": false,
+        "user": "",
+        "password": "",
+        "from": "Animada Score Book <no-reply@example.com>",
+        "publicUrl": ""
+    },
     "demo": {
         "scoreIds": [
             10005,

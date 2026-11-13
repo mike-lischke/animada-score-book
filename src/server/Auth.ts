@@ -8,10 +8,13 @@
  *
  * ## Authentication Flow
  *
- * 1. **Login**: Client sends username + password → server verifies via scrypt, returns a JWT access token.
+ * 1. **Login**: Client sends email + password → server verifies via scrypt, returns a JWT access token.
  * 2. **Request**: Client sends `Authorization: Bearer <token>` header on every subsequent request.
  * 3. **Refresh**: When the access token expires, client calls `/api?action=refresh` with the refresh token
  *    cookie to get a new access token.
+ *
+ * Every account starts unconfirmed: registration and the initial admin send a mail with a link, and only opening
+ * that link creates (or enables) the account. See `Mailer`.
  *
  * ## Permission Model
  *
@@ -63,7 +66,7 @@ interface IResolvedPermission {
 
 export interface ITokenPayload {
     userId: number;
-    username: string;
+    email: string;
     isAdmin: boolean;
 
     /** "user" for normal login, "group" for group-shared login. */
@@ -132,6 +135,12 @@ export class Auth {
 
     public static readonly refreshTokenExpirySeconds = 7 * 24 * 60 * 60; // 7 days
 
+    /** How long a confirmation link stays usable. */
+    public static readonly emailVerificationExpiryHours = 24;
+
+    /** Address of the system account a group login runs as. It is never a deliverable address. */
+    public static readonly anonymousEmail = "anonymous@system.invalid";
+
     private static readonly accessTokenExpiry = "15m";
 
     private static readonly scryptKeyLen = 64;
@@ -146,8 +155,6 @@ export class Auth {
 
         return secret;
     })();
-
-    private static readonly noUser = "anonymous";
 
     private currentAdapter: IDatabaseAdapter;
 
@@ -224,6 +231,45 @@ export class Auth {
         return jwt.sign(payload, Auth.jwtSecret, { expiresIn: Auth.accessTokenExpiry });
     }
 
+    /**
+     * @param value The address as a visitor typed it.
+     *
+     * @returns The address as it is stored and compared: trimmed and lower case.
+     */
+    public static normalizeEmail(value: string): string {
+        return value.trim().toLowerCase();
+    }
+
+    /**
+     * @param value The address to check.
+     *
+     * @returns Whether the value has the shape of an e-mail address.
+     */
+    public static isValidEmail(value: string): boolean {
+        return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+
+    /**
+     * Creates the secret of a confirmation link. Only its hash is stored, so reading the table does not allow
+     * confirming an address.
+     *
+     * @returns The token to place in the link and the hash to store.
+     */
+    public static createEmailVerificationToken(): { raw: string; hash: string; } {
+        const raw = crypto.randomBytes(32).toString("hex");
+
+        return { raw, hash: Auth.hashVerificationToken(raw) };
+    }
+
+    /**
+     * @param raw The token from a confirmation link.
+     *
+     * @returns The hash under which the token is stored.
+     */
+    public static hashVerificationToken(raw: string): string {
+        return crypto.createHash("sha256").update(raw).digest("hex");
+    }
+
     public static createRefreshToken(): { raw: string; hash: string; maxAge: number; } {
         const raw = crypto.randomBytes(32).toString("hex");
         const hash = crypto.createHash("sha256").update(raw).digest("hex");
@@ -241,14 +287,14 @@ export class Auth {
             const payload = decoded as unknown as Record<string, unknown>;
             if (payload.type === "refresh"
                 || typeof payload.userId !== "number"
-                || typeof payload.username !== "string"
+                || typeof payload.email !== "string"
                 || typeof payload.isAdmin !== "boolean") {
                 return undefined;
             }
 
             return {
                 userId: payload.userId,
-                username: payload.username,
+                email: payload.email,
                 isAdmin: payload.isAdmin,
                 authType: typeof payload.authType === "string" ? payload.authType : undefined,
                 groupId: typeof payload.groupId === "number" ? payload.groupId : undefined,
@@ -265,7 +311,7 @@ export class Auth {
      */
     public async hasUsers(): Promise<boolean> {
         const rows = await this.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM users WHERE username != ?", [Auth.noUser],
+            "SELECT COUNT(*) AS cnt FROM users WHERE email != ?", [Auth.anonymousEmail],
         );
 
         return (rows[0]?.cnt ?? 0) > 0;

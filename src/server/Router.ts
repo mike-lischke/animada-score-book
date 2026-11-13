@@ -13,6 +13,7 @@ import { resolve } from "node:path";
 import { runMigrations } from "../../build/migration.js";
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
+import { EmailConfirmation } from "./EmailConfirmation.js";
 import {
     DatabaseEngine, isValidDatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig,
 } from "./database.js";
@@ -181,6 +182,11 @@ export class Router {
 
                     case "register":
                         await this.authRoutes.handleRegister(req, res);
+
+                        break;
+
+                    case "confirmRegistration":
+                        await this.authRoutes.handleConfirmRegistration(req, res);
 
                         break;
 
@@ -381,7 +387,8 @@ export class Router {
      */
     public async seedAnonymousUser(targetAdapter: IDatabaseAdapter): Promise<void> {
         const rows = await targetAdapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM users WHERE username = 'anonymous'",
+            "SELECT COUNT(*) AS cnt FROM users WHERE email = ?",
+            [Auth.anonymousEmail],
         );
 
         if ((rows[0]?.cnt ?? 0) > 0) {
@@ -393,9 +400,9 @@ export class Router {
         const passwordHash = await Auth.hashPassword(randomPassword);
 
         await targetAdapter.insertReturningId(
-            `INSERT INTO users (username, password_hash, display_name)
-         VALUES (?, ?, ?)`,
-            ["anonymous", passwordHash, "Anonymous"],
+            `INSERT INTO users (email, password_hash, display_name, email_verified, email_verified_at)
+         VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)`,
+            [Auth.anonymousEmail, passwordHash, "Anonymous"],
         );
 
         console.log("Seeded anonymous system user.");
@@ -448,7 +455,8 @@ export class Router {
     private async handleHealth(res: ServerResponse) {
         const { engine, host, port, database } = this.config.database;
         const { loaded: configLoaded, error: configError } = getConfigStatus();
-        const responseBase = { configLoaded, configError, engine, host, port, database };
+        const mailConfigured = EmailConfirmation.isAvailable(this.ctx);
+        const responseBase = { configLoaded, configError, engine, host, port, database, mailConfigured };
 
         // Auth may not be injected yet during early startup.
         if (!this.authenticator) {
