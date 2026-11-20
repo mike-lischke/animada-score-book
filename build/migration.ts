@@ -91,6 +91,10 @@ const getCurrentBranch = (): string => {
  * For main and release branches the base name is used as-is.
  * For feature branches the pattern is `<baseName>__<branchName>`.
  *
+ * The result is handed back into the running configuration as the database name, so the derivation is idempotent: a
+ * name that already carries the suffix is returned unchanged. Without that, every further migration run (the reset
+ * from the setup dialog does one) would append the branch again.
+ *
  * @param baseName The database name from backend-config.json.
  * @param branch The branch name to derive the suffix from.
  *
@@ -101,7 +105,9 @@ export const deriveDbName = (baseName: string, branch: string): string => {
         return baseName;
     }
 
-    return `${baseName}__${sanitizeBranchName(branch)}`;
+    const suffix = `__${sanitizeBranchName(branch)}`;
+
+    return baseName.endsWith(suffix) ? baseName : `${baseName}${suffix}`;
 };
 
 /**
@@ -129,22 +135,51 @@ const branchDatabaseName = (baseName: string, branch: string): string => {
 };
 
 /**
+ * Decides whether the migration run may create the database it works on.
+ *
+ * Only a branch-specific database is ever created, and only when the caller asks for it (the backend start does, so
+ * switching to a feature branch needs no manual database). The configured database itself and every reset require the
+ * database to exist, since a reset that silently creates one would hide the reason the schema was missing.
+ *
+ * @param baseName The database name from backend-config.json.
+ * @param effectiveDb The name the migrations run against.
+ * @param allowBranchCreation Whether the caller permits creating a missing branch database.
+ *
+ * @returns True when a missing database may be created.
+ */
+export const mayCreateDatabase = (baseName: string, effectiveDb: string, allowBranchCreation: boolean): boolean => {
+    return allowBranchCreation && effectiveDb !== baseName;
+};
+
+export interface IRunMigrationsOptions {
+    /**
+     * Creates the branch-specific database when it does not exist yet. Passed by the backend start only.
+     */
+    createMissingBranchDatabase?: boolean;
+}
+
+/**
  * Runs all pending migrations and returns the effective database name.
  *
  * @param config The database config from backend-config.json.
+ * @param options Controls whether a missing branch database may be created.
  *
  * @returns The effective database name (may differ from config.database.database for feature branches).
  */
-export const runMigrations = async (config: IDatabaseConfig): Promise<string> => {
+export const runMigrations = async (config: IDatabaseConfig,
+    options: IRunMigrationsOptions = {}): Promise<string> => {
     const branch = getCurrentBranch();
     const effectiveDb = branchDatabaseName(config.database, branch);
+    const createDatabase = mayCreateDatabase(config.database, effectiveDb,
+        options.createMissingBranchDatabase === true);
 
     console.log(`Branch: ${branch}, database: ${effectiveDb}`);
 
-    return runMySqlMigrations(config, effectiveDb);
+    return runMySqlMigrations(config, effectiveDb, createDatabase);
 };
 
-const runMySqlMigrations = async (config: IDatabaseConfig, dbName: string): Promise<string> => {
+const runMySqlMigrations = async (config: IDatabaseConfig, dbName: string,
+    createDatabase: boolean): Promise<string> => {
     const mysql2 = await import("mysql2/promise");
     const serverPool = mysql2.createPool({
         host: config.host,
@@ -156,8 +191,26 @@ const runMySqlMigrations = async (config: IDatabaseConfig, dbName: string): Prom
     });
 
     try {
-        // Ensure database exists.
-        await serverPool.execute(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+        if (createDatabase) {
+            // Switching to a feature branch must not require creating its database by hand. The charset is stated so
+            // a VARCHAR counts characters, not bytes, whatever the server default is.
+            await serverPool.query(
+                `CREATE DATABASE IF NOT EXISTS \`${dbName}\` ` +
+                "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+            );
+        } else {
+            // Every other path works on a database that already exists.
+            const existing = await serverPool.query(
+                "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?", [dbName],
+            );
+            if (extractRows(existing).length === 0) {
+                throw new Error(`Database "${dbName}" does not exist. Create it before initialising the schema.`);
+            }
+        }
+
+        // The statement also corrects a database that an older start created without a charset. Database statements
+        // cannot be prepared, hence query() instead of execute().
+        await serverPool.query(`ALTER DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
 
         // Connect to the target database.
         const dbPool = mysql2.createPool({

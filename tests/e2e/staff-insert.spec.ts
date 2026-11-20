@@ -232,6 +232,33 @@ test.describe("staff entry mode switch", () => {
         await openInEditMode(page, mixedBarSnapshot, "e2e-staff-entry-mode");
     });
 
+    test("keeps the same note unchanged, advances overwrite, and leaves the mixer row in place", async ({ page }) => {
+        const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
+        await expect(runs).toHaveCount(13);
+
+        await runs.nth(0).click();
+        await page.keyboard.press("o");
+        const icon = page.locator(".track-controls").first().locator(".trackInstrumentIcon");
+        const before = await icon.boundingBox();
+        expect(before).not.toBeNull();
+
+        await page.keyboard.press("1");
+
+        const firstEvent = (await storedTrack(page)).measures[0].events[0];
+        expect(firstEvent.noteStyleId).toBe("1");
+        expect(firstEvent.duration).toEqual({ numerator: 1, denominator: 16 });
+
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+        await page.keyboard.press("ArrowRight");
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        await expect.poll(async () => {
+            const after = await icon.boundingBox();
+
+            return after === null ? undefined : Math.abs(after.y - before!.y);
+        }).toBeLessThanOrEqual(1);
+    });
+
     test("marks the values of the selection the mode switches to", async ({ page }) => {
         const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
         const marked = page.locator(".note-length-toolbar .note-length-button.du-btn-primary");

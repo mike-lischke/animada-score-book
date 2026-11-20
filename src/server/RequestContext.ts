@@ -252,50 +252,6 @@ export class RequestContext {
     };
 
     /**
-     * Generates a random hex colour string using the golden-angle distribution
-     * for visually pleasing hue spacing.
-     *
-     * @returns A hex colour string like "#a1b2c3".
-     */
-    public randomGroupColor(): string {
-        const goldenAngle = 137.508;
-        const hue = ((Math.random() * 360) + (goldenAngle * Math.random())) % 360;
-        const saturation = 45 + (Math.random() * 20);
-        const lightness = 40 + (Math.random() * 15);
-
-        const h = hue / 60;
-        const c = ((1 - Math.abs((2 * lightness / 100) - 1)) * saturation) / 100;
-        const x = c * (1 - Math.abs((h % 2) - 1));
-        const m = (lightness / 100) - (c / 2);
-
-        let r: number;
-        let g: number;
-        let b: number;
-
-        if (h < 1) {
-            r = c; g = x; b = 0;
-        } else if (h < 2) {
-            r = x; g = c; b = 0;
-        } else if (h < 3) {
-            r = 0; g = c; b = x;
-        } else if (h < 4) {
-            r = 0; g = x; b = c;
-        } else if (h < 5) {
-            r = x; g = 0; b = c;
-        } else {
-            r = c; g = 0; b = x;
-        }
-
-        const toHex = (v: number): string => {
-            const hex = Math.round((v + m) * 255).toString(16);
-
-            return hex.length === 1 ? "0" + hex : hex;
-        };
-
-        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-    };
-
-    /**
      * Checks whether a key is currently rate-limited.
      *
      * @param key The rate-limit key (e.g. `ip:email` or `ip:groupName`).

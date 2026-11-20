@@ -53,24 +53,106 @@
 }
 
 #libraryPaneContent {
+    gap: 8px;
     height: 100%;
     padding: 8px;
     width: 25vw;
     min-width: 250px;
+
+    .score-library-header {
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 8px;
+
+        .score-library-icon {
+            flex: 0 0 auto;
+            font-size: 32px;
+            color: var(--color-primary);
+        }
+
+        .score-library-header-actions {
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 4px;
+            margin-left: auto;
+        }
+    }
+
+    .score-library-selector {
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 2px;
+
+        .score-library-tag-selector {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        /* The drag handle of the tag combination. */
+        .score-library-drag-handle {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            color: var(--color-base-content);
+            opacity: 0.4;
+        }
+    }
+
+    .score-library-sort {
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    /* The area below the score list that holds the favourite combinations. */
+    .score-library-favourites {
+        flex: 0 0 auto;
+        min-height: 64px;
+        padding: 8px;
+        border: 1px dashed var(--color-base-300);
+        border-radius: 8px;
+
+        .label {
+            font-size: 10pt;
+            opacity: 0.6;
+        }
+    }
 }
 
 #scoreTreeHost {
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
+
+    .score-list-empty {
+        margin: 4px 0 0 4px;
+        opacity: 0.7;
+    }
 
     .score-tree-entry {
         display: flex;
-        flex-direction: row;
-        align-items: center;
+        flex-direction: column;
+        justify-content: center;
         min-width: 0;
         width: 100%;
+        padding: 3px 0;
         font-size: 12pt;
         user-select: none;
+
+        .score-entry-main {
+            align-items: center;
+            gap: 4px;
+            min-width: 0;
+            width: 100%;
+        }
+
+        /* The badges wrap, so the row grows with them. */
+        .score-entry-tags {
+            align-items: center;
+            gap: 3px;
+            min-width: 0;
+            width: 100%;
+            margin-top: 2px;
+        }
 
         .btn {
             margin: 0;
@@ -97,7 +179,7 @@
             flex: 0 0 auto;
         }
 
-        > .action-box {
+        .action-box {
             display: flex;
             justify-content: flex-end;
             overflow: hidden;
@@ -121,7 +203,7 @@
             }
         }
 
-        &:hover > .action-box > .actionButton:hover .icon {
+        &:hover .action-box > .actionButton:hover .icon {
             color: var(--color-primary);
             border: 1px solid var(--color-primary);
             border-radius: 4px;
@@ -130,7 +212,6 @@
 
     .scoreTreeIcon {
         font-size: 24px;
-        margin-right: 8px;
 
         &.score {
             color: var(--color-primary);
@@ -517,3 +598,540 @@
 .ug-form {
     padding: 8px 12px;
 }
+
+/*
+ * The email confirmation dialog. The phone layout is a stacked sheet: a hero signet, the target address, the next
+ * steps and a note, followed by three full-width actions. Colors follow the theme, so every theme keeps its own
+ * accent.
+ */
+#emailConfirmationDialog {
+    .email-confirmation-compact {
+        gap: 16px;
+    }
+
+    .email-confirmation-hero {
+        text-align: center;
+        padding-top: 4px;
+    }
+
+    .email-confirmation-signet {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        width: 64px;
+        height: 64px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 65%, #1e3a8a));
+        box-shadow: 0 10px 24px color-mix(in srgb, var(--color-primary) 35%, transparent);
+
+        animation: email-confirmation-float 4s ease-in-out infinite;
+    }
+
+    .email-confirmation-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid var(--color-base-100);
+        background-color: #10b981;
+        color: #ffffff;
+    }
+
+    .email-confirmation-badge-ping {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background-color: #34d399;
+        opacity: 0.75;
+
+        animation: email-confirmation-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    /* The global icon size and color would paint the check too large and dark on the green badge. */
+    .email-confirmation-badge .icon {
+        width: 14px;
+        height: 14px;
+        min-width: 0;
+        min-height: 0;
+        color: #ffffff;
+    }
+
+    .email-confirmation-address-at {
+        font-size: 0.9rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .email-confirmation-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .email-confirmation-subtitle {
+        max-width: 34ch;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        opacity: 0.75;
+    }
+
+    .email-confirmation-address {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+        background-color: color-mix(in srgb, var(--color-primary) 9%, transparent);
+
+        color: var(--color-primary);
+        font-size: 0.8rem;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .email-confirmation-steps {
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid var(--color-base-300);
+        background-color: var(--color-base-100);
+    }
+
+    .email-confirmation-steps-caption {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.5;
+    }
+
+    .email-confirmation-step-number {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .email-confirmation-step-number-active {
+        color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    }
+
+    .email-confirmation-step-number-pending {
+        color: var(--color-warning);
+        background-color: color-mix(in srgb, var(--color-warning) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
+    }
+
+    /* The done markers use the same emerald as the signet badge, so both checks look alike. */
+    .email-confirmation-step-number-done {
+        color: #ffffff;
+        background-color: #10b981;
+        border: 1px solid #10b981;
+    }
+
+    .email-confirmation-step-number-done .icon {
+        color: #ffffff;
+    }
+
+    .email-confirmation-step-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .email-confirmation-step-description {
+        font-size: 0.78rem;
+        line-height: 1.45;
+        opacity: 0.65;
+    }
+
+    .email-confirmation-divider {
+        height: 1px;
+        margin-left: 38px;
+        background-color: var(--color-base-200);
+    }
+
+    .email-confirmation-note {
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--color-base-300);
+        background-color: color-mix(in srgb, var(--color-base-content) 5%, var(--color-base-100));
+        opacity: 0.9;
+    }
+
+    .email-confirmation-note-text {
+        font-size: 0.78rem;
+        line-height: 1.5;
+    }
+
+    .email-confirmation-status {
+        font-size: 0.78rem;
+        line-height: 1.5;
+        text-align: center;
+    }
+
+    .email-confirmation-status-error {
+        color: var(--color-error);
+    }
+
+    .email-confirmation-status-success {
+        color: var(--color-success);
+    }
+
+    /* The wide version: a setup header, a recipient box, two step cards and one action row. */
+    .email-confirmation-wide {
+        gap: 20px;
+    }
+
+    /* Reuses the phone's signet, only slightly smaller so it sits next to the header text. */
+    .email-confirmation-wide-signet {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+    }
+
+    .email-confirmation-step-chip {
+        padding: 2px 10px;
+        border-radius: 999px;
+
+        background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
+        color: var(--color-primary);
+
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .email-confirmation-pending {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+
+        font-size: 0.7rem;
+        opacity: 0.65;
+    }
+
+    .email-confirmation-pending-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: var(--color-primary);
+
+        animation: email-confirmation-pulse 2s ease-in-out infinite;
+    }
+
+    .email-confirmation-pending-dot-done {
+        background-color: var(--color-success);
+
+        animation: none;
+    }
+
+    .email-confirmation-wide-title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.015em;
+    }
+
+    .email-confirmation-wide-subtitle {
+        font-size: 0.875rem;
+        line-height: 1.55;
+        opacity: 0.75;
+    }
+
+    .email-confirmation-recipient {
+        padding: 14px 16px;
+        border-radius: 12px;
+        background-color: var(--color-base-200);
+    }
+
+    .email-confirmation-recipient-icon {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background-color: var(--color-base-300);
+
+        font-size: 1rem;
+        font-weight: 700;
+        opacity: 0.85;
+    }
+
+    .email-confirmation-recipient-label {
+        font-size: 0.7rem;
+        opacity: 0.6;
+    }
+
+    .email-confirmation-recipient-address {
+        font-size: 1.05rem;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+        user-select: all;
+    }
+
+    .email-confirmation-copy {
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 0.78rem;
+    }
+
+    .email-confirmation-wide-steps-heading {
+        font-size: 0.9rem;
+        font-weight: 600;
+
+        .icon {
+            color: var(--color-primary);
+        }
+    }
+
+    .email-confirmation-step-cards {
+        align-items: stretch;
+    }
+
+    .email-confirmation-card {
+        padding: 14px;
+        border-radius: 12px;
+        background-color: var(--color-base-200);
+    }
+
+    .email-confirmation-card-number {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .email-confirmation-card-number-active {
+        background-color: var(--color-primary);
+        color: var(--color-primary-content);
+    }
+
+    .email-confirmation-card-number-pending {
+        background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+        color: var(--color-warning);
+    }
+
+    .email-confirmation-card-number-done {
+        background-color: #10b981;
+        color: #ffffff;
+    }
+
+    .email-confirmation-card-number-done .icon {
+        color: #ffffff;
+    }
+
+    .email-confirmation-card-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.85;
+    }
+
+    .email-confirmation-card-icon-active {
+        color: var(--color-primary);
+    }
+
+    .email-confirmation-card-icon-pending {
+        color: var(--color-warning);
+    }
+
+    .email-confirmation-card-icon-done {
+        color: var(--color-success);
+    }
+
+    .email-confirmation-card-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    .email-confirmation-card-description {
+        font-size: 0.78rem;
+        line-height: 1.45;
+        opacity: 0.68;
+    }
+
+    .email-confirmation-wide-note {
+        padding: 14px 16px;
+        border-radius: 12px;
+        background-color: color-mix(in srgb, var(--color-base-content) 6%, var(--color-base-100));
+    }
+
+    .email-confirmation-wide-note-icon {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background-color: var(--color-base-300);
+        opacity: 0.85;
+    }
+
+    .email-confirmation-wide-note-title {
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .email-confirmation-wide-note-body {
+        font-size: 0.78rem;
+        line-height: 1.5;
+        opacity: 0.7;
+    }
+
+    .email-confirmation-actions-wide {
+        flex: 1 1 auto;
+    }
+
+    .email-confirmation-actions-wide .btn {
+        min-height: 40px;
+        gap: 8px;
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .email-confirmation-actions-wide .btn .icon {
+        color: inherit;
+    }
+
+    .email-confirmation-actions-wide .email-confirmation-resend {
+        padding: 0 8px;
+        color: var(--color-primary);
+        background-color: transparent;
+        border: 0;
+
+        &:hover {
+            background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+        }
+
+        &:disabled {
+            opacity: 0.5;
+        }
+    }
+
+    .email-confirmation-actions {
+        flex: 1 1 auto;
+    }
+
+    .email-confirmation-actions > .btn {
+        width: 100%;
+        min-height: 44px;
+        gap: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    /* Icons follow the text color of their button, so a primary button gets a light icon. */
+    .email-confirmation-actions > .btn .icon {
+        color: inherit;
+    }
+
+    /* The text link stays quieter than the two full-width buttons above it. */
+    .email-confirmation-actions > .email-confirmation-resend {
+        min-height: 36px;
+        background-color: transparent;
+        border: 0;
+        color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+
+        &:hover {
+            color: var(--color-primary);
+        }
+
+        &:disabled {
+            opacity: 0.5;
+        }
+    }
+
+    /* The stacked actions own their spacing, so the footer drops its edge alignment. */
+    .dialog-actions {
+        justify-content: stretch;
+        padding: 12px 16px 16px 16px;
+    }
+}
+
+/* The wide version carries a topical accent bar and keeps its actions inside the card without a divider. */
+#emailConfirmationDialog:has(.email-confirmation-wide) {
+    border-top: 3px solid var(--color-primary);
+
+    .dialog-content {
+        padding-top: 34px;
+    }
+
+    .dialog-actions {
+        border-top: 0;
+        padding: 0 32px 26px 32px;
+    }
+}
+
+/* The signet drifts slightly, the badge ring pulses, so the eye finds the dialog without aggressive motion. */
+@keyframes email-confirmation-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-6px);
+    }
+}
+
+@keyframes email-confirmation-ping {
+    60%,
+    100% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+}
+
+@keyframes email-confirmation-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #emailConfirmationDialog {
+        .email-confirmation-signet,
+        .email-confirmation-badge-ping,
+        .email-confirmation-pending-dot {
+            animation: none;
+        }
+    }
+}
+

@@ -16,6 +16,7 @@ import { loadConfig, uploadsPath } from "./config.js";
 import { type IDatabaseAdapter } from "./database.js";
 import { RequestContext } from "./RequestContext.js";
 import { Router, type IServerConfig } from "./Router.js";
+import { TagAccess } from "./TagAccess.js";
 
 let config: IServerConfig;
 let auth: Auth;
@@ -23,41 +24,22 @@ let auth: Auth;
 let router: Router;
 
 /**
- * Tells the operator when the demo catalog cannot be served, because the configuration or the database does not
- * line up. A demo that silently offers nothing is what makes the hint necessary.
+ * Tells the operator when the demo catalog cannot be served, because no score carries the `Demo Score` tag. A demo
+ * that silently opens the blank sheet is what makes the hint necessary.
  *
  * @param adapter The database adapter, after the schema is ready.
  */
 const reportDemoCatalog = async (adapter: IDatabaseAdapter): Promise<void> => {
-    const { scoreIds } = config.demo;
-
-    if (scoreIds.length === 0) {
-        console.log(
-            "No demo catalog configured. Add \"demo\": { \"scoreIds\": [...] } to backend-config.json "
-            + "to offer curated scores to visitors without an account.",
-        );
-
-        return;
-    }
-
-    const placeholders = scoreIds.map(() => {
-        return "?";
-    }).join(", ");
-
-    const rows = await adapter.query<{ id: number; }>(
-        `SELECT id FROM scores WHERE id IN (${placeholders})`,
-        scoreIds,
+    const rows = await adapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM score_tags st JOIN tags t ON t.id = st.tag_id WHERE t.system_key = ?",
+        [TagAccess.demoSystemKey],
     );
 
-    const existing = new Set(rows.map((row) => {
-        return row.id;
-    }));
-    const missing = scoreIds.filter((id) => {
-        return !existing.has(id);
-    });
-
-    if (missing.length > 0) {
-        console.warn(`The demo catalog lists scores that do not exist: ${missing.join(", ")}.`);
+    if ((rows[0]?.cnt ?? 0) === 0) {
+        console.log(
+            "No demo catalog: no score carries the \"Demo Score\" tag. An administrator assigns it to offer scores "
+            + "to visitors without an account.",
+        );
     }
 };
 
@@ -77,7 +59,9 @@ const main = (): void => {
             return undefined;
         }
 
-        return runMigrations(config.database).then((effectiveDb) => {
+        // The start may create the database of a feature branch. The configured database and every reset from the
+        // setup dialog require it to exist.
+        return runMigrations(config.database, { createMissingBranchDatabase: true }).then((effectiveDb) => {
             // Use the branch-specific database name.
             config.database.database = effectiveDb;
 

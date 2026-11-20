@@ -22,6 +22,7 @@ import { type IServerConfig } from "./config.js";
 import { getConfigStatus } from "./config.js";
 import { RequestContext } from "./RequestContext.js";
 import { ScoreRoutes } from "./ScoreRoutes.js";
+import { TagActions } from "./TagActions.js";
 import { AuthRoutes } from "./AuthRoutes.js";
 import { AdminRoutes } from "./AdminRoutes.js";
 import { StaticRoutes } from "./StaticRoutes.js";
@@ -32,6 +33,7 @@ export class Router {
     private authenticator?: Auth;
     private ctx!: RequestContext;
     private scoreRoutes!: ScoreRoutes;
+    private tagActions!: TagActions;
     private authRoutes!: AuthRoutes;
     private adminRoutes!: AdminRoutes;
     private staticRoutes!: StaticRoutes;
@@ -47,6 +49,7 @@ export class Router {
         this.authenticator = authenticator;
         this.ctx = new RequestContext(authenticator, this.config);
         this.scoreRoutes = new ScoreRoutes(this.ctx);
+        this.tagActions = new TagActions(this.ctx);
         this.authRoutes = new AuthRoutes(this.ctx);
         this.adminRoutes = new AdminRoutes(this.ctx);
         this.staticRoutes = new StaticRoutes(this.ctx);
@@ -99,8 +102,8 @@ export class Router {
 
                         break;
 
-                    case "listScoreFolderContent":
-                        await this.scoreRoutes.handleListScoreFolderContent(req, res);
+                    case "listScores":
+                        await this.tagActions.handleListScores(req, res);
 
                         break;
 
@@ -111,16 +114,6 @@ export class Router {
 
                     case "listDemoScores":
                         await this.scoreRoutes.handleListDemoScores(req, res);
-
-                        break;
-
-                    case "resetChildPermissions":
-                        await this.scoreRoutes.handleResetChildPermissions(req, res);
-
-                        break;
-
-                    case "addScoreFolder":
-                        await this.scoreRoutes.handleAddScoreFolder(req, res);
 
                         break;
 
@@ -144,8 +137,38 @@ export class Router {
 
                         break;
 
-                    case "move":
-                        await this.scoreRoutes.handleMove(req, res);
+                    case "listTags":
+                        await this.tagActions.handleListTags(req, res);
+
+                        break;
+
+                    case "listTagOwnerScopes":
+                        await this.tagActions.handleListTagOwnerScopes(req, res);
+
+                        break;
+
+                    case "createTag":
+                        await this.tagActions.handleCreateTag(req, res);
+
+                        break;
+
+                    case "updateTag":
+                        await this.tagActions.handleUpdateTag(req, res);
+
+                        break;
+
+                    case "deleteTag":
+                        await this.tagActions.handleDeleteTag(req, res);
+
+                        break;
+
+                    case "assignTag":
+                        await this.tagActions.handleAssignTag(req, res);
+
+                        break;
+
+                    case "unassignTag":
+                        await this.tagActions.handleUnassignTag(req, res);
 
                         break;
 
@@ -322,7 +345,7 @@ export class Router {
         }
 
         const rows = await targetAdapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM folders",
+            "SELECT COUNT(*) AS cnt FROM scores",
         );
 
         if ((rows[0]?.cnt ?? 0) > 0) {
@@ -548,7 +571,7 @@ export class Router {
         }
 
         const rows = await this.auth.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM folders",
+            "SELECT COUNT(*) AS cnt FROM scores",
         );
 
         const hasData = (rows[0]?.cnt ?? 0) > 0;

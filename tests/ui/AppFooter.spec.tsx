@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppFooter, type IAppFooterProps } from "../../src/components/ui/Navigation/AppFooter.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
+import { stableMarkup } from "../unit-test-helpers.js";
 
 describe("AppFooter", { concurrent: false }, () => {
     let renderResult: RenderResult | null = null;
@@ -57,7 +58,7 @@ describe("AppFooter", { concurrent: false }, () => {
     });
 
     it("renders the compact footer", () => {
-        expect(renderFooter({ compact: true })).toMatchSnapshot();
+        expect(stableMarkup(renderFooter({ compact: true }))).toMatchSnapshot();
     });
 
     it("places the Zen toggle immediately after the zoom controls", () => {

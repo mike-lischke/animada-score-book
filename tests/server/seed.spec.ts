@@ -5,46 +5,49 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createSeedSql, type ISeedFolder, type ISeedScore } from "../../build/seed.js";
-
-const folder: ISeedFolder = { id: 93, parentid: null, name: "Common Scores" };
+import { createSeedSql, type ISeedScore, type ISeedTag } from "../../build/seed.js";
 
 const score: ISeedScore = {
     id: 10005,
-    folderid: 93,
     name: "Rock 'n' Roll",
     content: "{\"path\":\"A\\\\B\"}",
 };
 
-describe("createSeedSql", () => {
-    it("writes a folder and a score insert", () => {
-        const sql = createSeedSql([folder], [score]);
+const tag: ISeedTag = { id: 7, name: "Set list", colorIndex: 4 };
 
-        expect(sql).toContain("-- Folders");
-        expect(sql).toContain("INSERT INTO folders (id, parentid, name) VALUES");
-        expect(sql).toContain("  (93, NULL, 'Common Scores');");
-        expect(sql).toContain("-- Scores");
-        expect(sql).toContain("INSERT INTO scores (id, folderid, name, content) VALUES");
+describe("createSeedSql", () => {
+    it("writes tags, scores and assignments", () => {
+        const sql = createSeedSql([score], [tag], [
+            { scoreId: 10005, tagId: 7 },
+            { scoreId: 10005, systemKey: "instrument:5" },
+        ]);
+
+        expect(sql).toContain("INSERT IGNORE INTO tags (id, name, color_index) VALUES");
+        expect(sql).toContain("  (7, 'Set list', 4);");
+        expect(sql).toContain("INSERT INTO scores (id, name, content) VALUES");
+        expect(sql).toContain("INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES (10005, 7);");
+    });
+
+    it("names a system tag by its key instead of an id", () => {
+        const sql = createSeedSql([score], [], [{ scoreId: 10005, systemKey: "instrument:5" }]);
+
+        expect(sql).toContain(
+            "INSERT IGNORE INTO score_tags (score_id, tag_id) SELECT 10005, id FROM tags " +
+            "WHERE system_key = 'instrument:5';",
+        );
     });
 
     it("escapes quotes and backslashes the way MySQL reads them", () => {
-        const sql = createSeedSql([], [score]);
+        const sql = createSeedSql([score], [tag], []);
 
         expect(sql).toContain("'Rock \\'n\\' Roll'");
         expect(sql).toContain("'{\"path\":\"A\\\\\\\\B\"}'");
     });
 
-    it("names the missing parent and folder as NULL", () => {
-        const sql = createSeedSql([folder], [{ ...score, folderid: null }]);
-
-        expect(sql).toContain("(93, NULL, 'Common Scores')");
-        expect(sql).toContain("(10005, NULL, 'Rock \\'n\\' Roll'");
-    });
-
     it("writes a placeholder instead of an empty insert", () => {
-        const sql = createSeedSql([], []);
+        const sql = createSeedSql([], [], []);
 
-        expect(sql.match(/-- No rows\./g)).toHaveLength(2);
-        expect(sql).not.toContain("INSERT INTO");
+        expect(sql.match(/-- No rows\./g)).toHaveLength(3);
+        expect(sql).not.toContain("INSERT");
     });
 });

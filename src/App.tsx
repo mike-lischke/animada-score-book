@@ -46,8 +46,7 @@ import { getSharedAudioContext } from "./core/audio-context.js";
 import { EntryHandoff, EntryMode } from "./core/EntryHandoff.js";
 import { AppMode, RunMode } from "./core/RunMode.js";
 import {
-    SbDmEntityType, ScoreBookChangeReason, ScoreBookDataModel, type IDemoScoreEntry, type ISbDmInstrument,
-    type ISbDmScore, type ISbDmScoreFolder
+    ScoreBookChangeReason, ScoreBookDataModel, type IDemoScoreEntry, type ISbDmInstrument, type ISbDmScore
 } from "./core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult,
@@ -64,6 +63,7 @@ import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions, type INotificationState } from "./supplement/Requisitions.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
+import { ConfirmationReloadResult } from "./ui/EmailConfirmationDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
@@ -111,16 +111,16 @@ enum AppPhase {
 }
 
 /**
- * The dialog components `App` has loaded so far, keyed by their class name.
+ * The dialog components `App` has loaded so far, keyed by the dialog they show.
  *
  * A dialog's module is imported when the user opens it the first time; from then on the loaded component stays mounted
- * and is opened through its ref. The PascalCase keys are deliberate: the render tree uses them directly as components.
+ * and is opened through its ref.
  */
 interface IAppDialogs {
-    SettingsDialog?: typeof SettingsDialog;
-    UserGroupEditor?: typeof UserGroupEditor;
-    PermissionEditor?: typeof PermissionEditor;
-    ReleaseNotesDialog?: typeof ReleaseNotesDialog;
+    settingsDialog?: typeof SettingsDialog;
+    userGroupEditor?: typeof UserGroupEditor;
+    permissionEditor?: typeof PermissionEditor;
+    releaseNotesDialog?: typeof ReleaseNotesDialog;
 }
 
 interface IAppState {
@@ -371,6 +371,8 @@ export class App extends UIComponent<{}, IAppState> {
                 splashContent = (
                     <AdminSetupDialog
                         ref={this.adminSetupDialogRef}
+                        compact={compactLayout}
+                        onContinue={this.handleAdminSetupContinue}
                     />
                 );
 
@@ -699,8 +701,8 @@ export class App extends UIComponent<{}, IAppState> {
                             {renderNotificationCenter()}
                         </Container>
                         <ValueDialog ref={this.valueDialogRef} />
-                        {dialogs.SettingsDialog &&
-                            <dialogs.SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
+                        {dialogs.settingsDialog &&
+                            <dialogs.settingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
                         }
                         <BackendDisconnectedDialog
                             ref={this.backendDisconnectedDialogRef}
@@ -715,15 +717,15 @@ export class App extends UIComponent<{}, IAppState> {
                         <BackendSetupDialog
                             ref={this.backendSetupDialogRef}
                         />
-                        {dialogs.UserGroupEditor &&
-                            <dialogs.UserGroupEditor
+                        {dialogs.userGroupEditor &&
+                            <dialogs.userGroupEditor
                                 ref={this.userGroupEditorRef}
                                 dataModel={this.dataModel}
                                 showUsers={this.dataModel.user?.isAdmin === true}
                             />
                         }
-                        {dialogs.PermissionEditor &&
-                            <dialogs.PermissionEditor
+                        {dialogs.permissionEditor &&
+                            <dialogs.permissionEditor
                                 ref={this.permissionEditorRef}
                                 dataModel={this.dataModel}
                                 confirmRef={this.confirmDialogRef}
@@ -766,7 +768,7 @@ export class App extends UIComponent<{}, IAppState> {
 
                 <ConfirmDialog ref={this.confirmDialogRef} />
                 <NewScoreDialog ref={this.newScoreDialogRef} />
-                {dialogs.ReleaseNotesDialog && <dialogs.ReleaseNotesDialog ref={this.releaseNotesDialogRef} />}
+                {dialogs.releaseNotesDialog && <dialogs.releaseNotesDialog ref={this.releaseNotesDialogRef} />}
                 <Dialog
                     id="exportDialog"
                     ref={this.exportDialogRef}
@@ -1198,6 +1200,42 @@ export class App extends UIComponent<{}, IAppState> {
                 : `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.email}`;
             void requisitions.execute("showInfo", message);
         });
+    };
+
+    /**
+     * Continues after the operator confirmed the installation link: checks whether the administrator exists and signs
+     * in with the credentials of the installation, so no second password entry is needed.
+     *
+     * @param email The address the administrator was created with.
+     * @param password The password that was entered during the installation.
+     *
+     * @returns How far the check got, which decides what the confirmation dialog shows next.
+     */
+    private handleAdminSetupContinue = async (email: string, password: string): Promise<ConfirmationReloadResult> => {
+        let hasUsers = false;
+        try {
+            const res = await fetch("/api?action=health");
+            const health = await res.json() as { hasUsers?: boolean; };
+            hasUsers = health.hasUsers === true;
+        } catch {
+            // An unreachable backend leaves the installation pending, which the dialog reports with a retry hint.
+        }
+
+        if (!hasUsers) {
+            return ConfirmationReloadResult.NotConfirmed;
+        }
+
+        if (!await this.dataModel.login(email, password)) {
+            // The credentials are gone (e.g. the page was reloaded in between), so the login dialog takes over.
+            await this.setStatePromise({ phase: AppPhase.Login });
+            void this.loginDialogRef.current?.show(true).then(this.handleLoginDialogResult);
+
+            return ConfirmationReloadResult.LoginRequired;
+        }
+
+        this.handleLoginSuccess();
+
+        return ConfirmationReloadResult.SignedIn;
     };
 
     /**
@@ -1634,7 +1672,7 @@ export class App extends UIComponent<{}, IAppState> {
      */
     private async resetBackend(requiresLogin: boolean): Promise<void> {
         const confirmed = await this.confirmDialogRef.current?.show(
-            "This will delete all scores, folders, users and groups.\n"
+            "This will delete all scores, users and groups.\n"
             + "The database tables will be recreated from scratch.",
             { accept: "Reset Database", refuse: "Cancel" },
             "Reset Database",
@@ -1889,183 +1927,102 @@ export class App extends UIComponent<{}, IAppState> {
         document.documentElement.setAttribute("data-theme", appliedTheme);
     }
 
-    private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,
-        parent?: ISbDmScoreFolder): Promise<boolean> => {
+    private handleScoreLibraryAction = async (action: string, data?: ISbDmScore,
+        tagIds?: number[]): Promise<boolean> => {
         const { editMode } = this.state;
 
-        // If no data is provided, it can be "addFolder" or "import".
-        if (!data || action === "addFolder") {
-            switch (action) {
-                case "addFolder": {
-                    const result = await this.valueDialogRef.current?.show(
-                        "addFolderDialog",
-                        "Add New Folder",
-                        UIIcon.Add,
-                        [{
-                            type: ValueEditorEntryType.Title,
-                            id: "folderNameDescription",
-                            content: "Name:",
-                        },
-                        {
-                            type: ValueEditorEntryType.Value,
-                            id: "folderName",
-                            content: "",
-                            placeholder: "Name of the new folder",
-                            displayWidth: 6,
-                        }],
-                    );
+        if (action === "new") {
+            // The drawer knows the active AND group, so a score created from a filtered list starts with its tags.
+            await this.handleNewSong(tagIds ?? []);
 
-                    if (result?.closure !== DialogResponseClosure.Accept) {
-                        return false;
-                    }
+            return true;
+        }
 
-                    const newFolderName = (result.data.folderName as IValueEditorValueEntry).content as string;
-                    if (!newFolderName) {
-                        return false;
-                    }
+        if (action === "import") {
+            // See if the clipboard has a valid score URL.
+            let content = "";
 
-                    if (newFolderName && newFolderName.trim().length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            if (navigator.clipboard?.readText) {
+                try {
+                    const clipboardText = await navigator.clipboard.readText();
+                    if (clipboardText && clipboardText.trim().length > 0) {
                         try {
-                            await this.dataModel.addScoreFolder(newFolderName.trim(), parent);
-                        } catch (error) {
-                            const message = convertErrorToString(error);
-                            alert(message);
-
-                            return false;
-                        }
-
-                        return true;
-                    }
-
-                    return false;
-
-                }
-
-                case "import": {
-                    if (parent) {
-                        // See if the clipboard has a valid score URL.
-                        let content = "";
-
-                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                        if (navigator.clipboard?.readText) {
-                            try {
-                                const clipboardText = await navigator.clipboard.readText();
-                                if (clipboardText && clipboardText.trim().length > 0) {
-                                    try {
-                                        new URL(clipboardText);
-                                        content = clipboardText;
-                                    } catch {
-                                        // Not a valid URL, ignore.
-                                    }
-                                }
-                            } catch {
-                                // Clipboard access denied (e.g. iOS permission not granted) — proceed
-                                // with an empty pre-fill so the user can still type the URL manually.
-                            }
-                        }
-
-                        const result = await this.valueDialogRef.current?.show(
-                            "importScoreDialog",
-                            "Import Score",
-                            UIIcon.CloudDownload,
-                            [{
-                                type: ValueEditorEntryType.Title,
-                                id: "importScoreDescription",
-                                content: `Score URL:`,
-                                displayWidth: 2,
-                            },
-                            {
-                                type: ValueEditorEntryType.Value,
-                                id: "scoreUrl",
-                                content,
-                                placeholder: "https://<host-name>/?t=...",
-                                displayWidth: 6,
-                            }],
-                        );
-
-                        if (result) {
-                            let url: string | undefined;
-
-                            if (result.closure === DialogResponseClosure.Accept) {
-                                url = (result.data.scoreUrl as IValueEditorValueEntry).content as string;
-                            }
-
-                            if (url && url.trim().length > 0) {
-                                try {
-                                    const params = new URL(url).searchParams;
-                                    const title = params.get("t") ?? "Imported Score";
-
-                                    // Migrate the BananaDrum link to the current
-                                    // schema version and store the result as a
-                                    // compact V2 snapshot.
-                                    const { arrangement } = ArrangementMigrator.migrateToArrangement(
-                                        params,
-                                        this.dataModel.instruments,
-                                    );
-                                    arrangement.title = title;
-                                    const content = stringifyPackedArrangement(arrangement.toSnapshot());
-                                    await this.dataModel.addScore(title, content, parent);
-
-                                    return true;
-                                } catch (error) {
-                                    const message = convertErrorToString(error);
-                                    alert(message);
-
-                                    return false;
-                                }
-                            }
+                            new URL(clipboardText);
+                            content = clipboardText;
+                        } catch {
+                            // Not a valid URL, ignore.
                         }
                     }
-
-                    return false;
+                } catch {
+                    // Clipboard access denied (e.g. iOS permission not granted) — proceed
+                    // with an empty pre-fill so the user can still type the URL manually.
                 }
-
-                default:
             }
 
+            const result = await this.valueDialogRef.current?.show(
+                "importScoreDialog",
+                "Import Score",
+                UIIcon.CloudDownload,
+                [{
+                    type: ValueEditorEntryType.Title,
+                    id: "importScoreDescription",
+                    content: `Score URL:`,
+                    displayWidth: 2,
+                },
+                {
+                    type: ValueEditorEntryType.Value,
+                    id: "scoreUrl",
+                    content,
+                    placeholder: "https://<host-name>/?t=...",
+                    displayWidth: 6,
+                }],
+            );
+
+            if (!result) {
+                return false;
+            }
+
+            let url: string | undefined;
+
+            if (result.closure === DialogResponseClosure.Accept) {
+                url = (result.data.scoreUrl as IValueEditorValueEntry).content as string;
+            }
+
+            if (!url || url.trim().length === 0) {
+                return false;
+            }
+
+            try {
+                const params = new URL(url).searchParams;
+                const title = params.get("t") ?? "Imported Score";
+
+                // Migrate the BananaDrum link to the current schema version and store the result as a compact
+                // snapshot.
+                const { arrangement } = ArrangementMigrator.migrateToArrangement(
+                    params,
+                    this.dataModel.instruments,
+                );
+                arrangement.title = title;
+                const packedContent = stringifyPackedArrangement(arrangement.toSnapshot());
+                await this.dataModel.addScore(title, packedContent);
+
+                return true;
+            } catch (error) {
+                const message = convertErrorToString(error);
+                void NotificationCenter.showError(message);
+
+                return false;
+            }
+        }
+
+        if (!data) {
             return false;
         }
 
         switch (action) {
-            case "edit": {
-                if (data.type === SbDmEntityType.ScoreFolder) {
-                    const result = await this.valueDialogRef.current?.show(
-                        "renameFolderDialog",
-                        "Rename Folder",
-                        UIIcon.Rename,
-                        [{
-                            type: ValueEditorEntryType.Title,
-                            id: "renameFolderDescription",
-                            content: "New name:",
-                            displayWidth: 2,
-                        },
-                        {
-                            type: ValueEditorEntryType.Value,
-                            id: "folderName",
-                            content: data.name,
-                            autoFocus: true,
-                            displayWidth: 6,
-                        }],
-                    );
-
-                    if (result) {
-                        let newName: string | undefined;
-
-                        if (result.closure === DialogResponseClosure.Accept) {
-                            newName = (result.data.folderName as IValueEditorValueEntry).content as string;
-                        }
-
-                        if (newName && newName.trim().length > 0) {
-                            await this.dataModel.renameEntry(data, newName.trim());
-                        }
-                    }
-                }
-
-                break;
-            }
-
             case "load": {
-                if (editMode && data.type === SbDmEntityType.Score) {
+                if (editMode) {
                     const exited = await this.confirmExitEditMode();
 
                     if (!exited) {
@@ -2073,20 +2030,21 @@ export class App extends UIComponent<{}, IAppState> {
                     }
                 }
 
+                const score = await this.dataModel.ensureScoreContent(data);
+                if (!score) {
+                    return false;
+                }
+
                 this.setState({ sidebarOpen: false }, () => {
                     escapeStack.remove(this.onSidebarEscape);
                 });
 
-                if (data.type === SbDmEntityType.Score) {
-                    this.loadScorebook(data);
-                }
+                this.loadScorebook(score);
 
                 break;
             }
 
             case "remove": {
-                await data.refresh?.();
-
                 const result = await this.confirmDialogRef.current?.show(
                     `Are you sure you want to delete '${data.name}'?`,
                     {
@@ -2105,7 +2063,7 @@ export class App extends UIComponent<{}, IAppState> {
                     await this.dataModel.deleteEntry(data);
                 } catch (error) {
                     const message = convertErrorToString(error);
-                    alert(message);
+                    void NotificationCenter.showError(message);
 
                     return false;
                 }
@@ -2114,9 +2072,7 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "managePerm": {
-                const row = document.querySelector<HTMLElement>(
-                    `.score-tree-entry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
-                );
+                const row = document.querySelector<HTMLElement>(`.score-tree-entry[data-score-id="${data.id}"]`);
 
                 if (row) {
                     void this.openPermissionEditor(row.getBoundingClientRect(), data);
@@ -2127,8 +2083,6 @@ export class App extends UIComponent<{}, IAppState> {
 
             default:
         }
-
-        ;
 
         return true;
     };
@@ -2520,7 +2474,7 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
-    private handleNewSong = async (): Promise<void> => {
+    private handleNewSong = async (tagIds: number[] = []): Promise<void> => {
         const instruments = [...this.dataModel.instruments].sort((left, right) => {
             return left.displayOrder - right.displayOrder || left.displayName.localeCompare(right.displayName);
         });
@@ -2572,15 +2526,16 @@ export class App extends UIComponent<{}, IAppState> {
             pulse: result.pulse,
             length: result.barCount,
             tempo: result.tempo,
-        });
+        }, tagIds);
     };
 
-    private startNewSong(instruments: ISbDmInstrument[], options: IArrangementCreationOptions): void {
+    private startNewSong(instruments: ISbDmInstrument[], options: IArrangementCreationOptions,
+        tagIds: number[] = []): void {
         if (this.arrangementPlayer) {
             this.arrangementPlayer.dispose();
         }
 
-        const arrangement = this.dataModel.startNewArrangement(instruments, options);
+        const arrangement = this.dataModel.startNewArrangement(instruments, options, tagIds);
 
         this.undoManager?.dispose();
         this.undoManager = this.createUndoManager();
@@ -2809,14 +2764,14 @@ export class App extends UIComponent<{}, IAppState> {
      */
     private async openSettingsDialog(): Promise<void> {
         const { dialogs } = this.state;
-        if (dialogs.SettingsDialog) {
+        if (dialogs.settingsDialog) {
             this.settingsDialogRef.current?.open();
 
             return;
         }
 
         const { SettingsDialog } = await import("./ui/SettingsDialog.js");
-        this.setState({ dialogs: { ...dialogs, SettingsDialog } }, () => {
+        this.setState({ dialogs: { ...dialogs, settingsDialog: SettingsDialog } }, () => {
             this.settingsDialogRef.current?.open();
         });
     }
@@ -2826,30 +2781,30 @@ export class App extends UIComponent<{}, IAppState> {
      */
     private async openUserGroupEditor(): Promise<void> {
         const { dialogs } = this.state;
-        if (dialogs.UserGroupEditor) {
+        if (dialogs.userGroupEditor) {
             this.userGroupEditorRef.current?.open();
 
             return;
         }
 
         const { UserGroupEditor } = await import("./ui/UserGroupEditor.js");
-        this.setState({ dialogs: { ...dialogs, UserGroupEditor } }, () => {
+        this.setState({ dialogs: { ...dialogs, userGroupEditor: UserGroupEditor } }, () => {
             this.userGroupEditorRef.current?.open();
         });
     }
 
     /**
-     * Opens the permission editor for a score or folder, importing its code on first use.
+     * Opens the permission editor for a score, importing its code on first use.
      *
      * @param target The rectangle the editor is anchored at.
-     * @param entry The score or folder the permissions belong to.
+     * @param entry The score the permissions belong to.
      */
-    private async openPermissionEditor(target: DOMRect, entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
+    private async openPermissionEditor(target: DOMRect, entry: ISbDmScore): Promise<void> {
         const { dialogs } = this.state;
-        if (!dialogs.PermissionEditor) {
+        if (!dialogs.permissionEditor) {
             const { PermissionEditor } = await import("./ui/PermissionEditor.js");
             await new Promise<void>((resolve) => {
-                this.setState({ dialogs: { ...dialogs, PermissionEditor } }, resolve);
+                this.setState({ dialogs: { ...dialogs, permissionEditor: PermissionEditor } }, resolve);
             });
         }
 
@@ -2861,14 +2816,14 @@ export class App extends UIComponent<{}, IAppState> {
      */
     private async openReleaseNotesDialog(): Promise<void> {
         const { dialogs } = this.state;
-        if (dialogs.ReleaseNotesDialog) {
+        if (dialogs.releaseNotesDialog) {
             this.releaseNotesDialogRef.current?.open();
 
             return;
         }
 
         const { ReleaseNotesDialog } = await import("./components/ui/composites/ReleaseNotesDialog.js");
-        this.setState({ dialogs: { ...dialogs, ReleaseNotesDialog } }, () => {
+        this.setState({ dialogs: { ...dialogs, releaseNotesDialog: ReleaseNotesDialog } }, () => {
             this.releaseNotesDialogRef.current?.open();
         });
     }

@@ -56,14 +56,14 @@ class FakeDatabaseAdapter implements IDatabaseAdapter {
             const key = `${String(params[0])}:${String(params[1])}`;
             const rows = Array.from((this.entityGroups.get(key) ?? new Map<number, boolean>()).entries())
                 .map(([groupId, writable]) => {
-                    return { group_id: groupId, writable: writable ? 1 : 0 };
+                    return { entityId: Number(params[1]), groupId, writable: writable ? 1 : 0 };
                 });
 
             return Promise.resolve(rows as unknown as T[]);
         }
 
         if (sql.includes("FROM scores")) {
-            return Promise.resolve([{ folderid: null }] as unknown as T[]);
+            return Promise.resolve([{ id: Number(params[0]) }] as unknown as T[]);
         }
 
         return Promise.resolve([] as T[]);
@@ -90,6 +90,10 @@ class FakeDatabaseAdapter implements IDatabaseAdapter {
     }
 
     public executeMultiple(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public executeTransaction(): Promise<void> {
         return Promise.resolve();
     }
 
@@ -193,8 +197,8 @@ describe("auth — Constants", () => {
 
     it("EntityType has expected values", () => {
         expect(EntityType.Score).toBe("score");
-        expect(EntityType.Folder).toBe("folder");
         expect(EntityType.Feature).toBe("feature");
+        expect(Object.values(EntityType)).toHaveLength(2);
     });
 });
 

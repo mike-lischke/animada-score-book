@@ -72,13 +72,12 @@ export class SelectionManager {
     /** Debounce timer id for persisting the selection to localStorage. */
     private saveDebounceId?: ReturnType<typeof setTimeout>;
 
-    /** Pending score-load callbacks that restore selection after the viewer renders. */
+    /** Pending arrangement-load callbacks that restore selection after the viewer renders. */
     private readonly scoreBookLoadedTimers = new Set<ReturnType<typeof setTimeout>>();
 
     /**
-     * Tracks whether the first scoreBookLoaded event (app startup) has already been processed.
-     * On the first load the persisted selection is restored; on subsequent loads (user opens a
-     * different song) the selection is cleared.
+     * Tracks whether the first arrangement load (app startup) has already been processed. On the first load the
+     * persisted selection is restored; on subsequent loads (user opens a different song) it is cleared.
      */
     private firstLoadDone = false;
 
@@ -1451,16 +1450,17 @@ export class SelectionManager {
 
     /**
      * Handles the scoreBookLoaded requisition.
-     * On the first call (app startup) the persisted selection is restored from localStorage.
-     * On subsequent ScoreLoaded events (user loads a different song) the selection is cleared.
-     * Non-structural changes like renames are ignored.
+     * Only an arrangement that was loaded decides about the selection: the first ScoreLoaded event (app startup)
+     * restores the persisted selection from localStorage, a later one (user opens a different song) clears it.
+     * Every other reason describes the score list rather than the loaded arrangement, so the selection is left
+     * alone — a tag combination that changes the list must not wipe the selection in the score.
      *
      * @param reason What triggered the event.
      *
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
-        if (reason === ScoreBookChangeReason.EntryRenamed) {
+        if (reason !== ScoreBookChangeReason.ScoreLoaded) {
             return Promise.resolve(true);
         }
 
@@ -1470,9 +1470,7 @@ export class SelectionManager {
             this.scoreBookLoadedTimers.delete(timerId);
 
             if (this.firstLoadDone) {
-                if (reason === ScoreBookChangeReason.ScoreLoaded) {
-                    this.clearSelection();
-                }
+                this.clearSelection();
             } else {
                 this.firstLoadDone = true;
                 this.restorePersistedSelection();

@@ -3,22 +3,28 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { Damping } from "../../src/core/ScoreBookDataModel.js";
 
 import type { IAudioData, Mutable } from "../../src/core/types/general.js";
 import type { Event as PlaybackEvent, IInterval } from "../../src/player/types.js";
 
+// A run that does not isolate its files shares one module graph between them. An earlier file may therefore already
+// have loaded the real collaborators, which the mocks below could not replace any more, so the graph starts clean.
+vi.hoisted(() => {
+    vi.resetModules();
+});
+
 class TestScoreBookDataModel extends ScoreBookDataModel {
-    private readonly _arrangement: ISbDmArrangement;
+    private readonly testArrangement: ISbDmArrangement;
 
     public constructor(arrangement: ISbDmArrangement) {
         super();
-        this._arrangement = arrangement;
+        this.testArrangement = arrangement;
     }
 
     public override get arrangement(): ISbDmArrangement {
-        return this._arrangement;
+        return this.testArrangement;
     }
 }
 
@@ -530,5 +536,12 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
 
         expect(player.playOrder).toEqual([1]);
         expect(player.scoreMetrics.performedBars).toBe(1);
+    });
+
+    afterAll(() => {
+        // Leave the real modules behind: the next file of this worker shares this module graph.
+        vi.doUnmock("../../src/player/TimeCoordinator.js");
+        vi.doUnmock("../../src/player/TrackPlayer.js");
+        vi.resetModules();
     });
 });

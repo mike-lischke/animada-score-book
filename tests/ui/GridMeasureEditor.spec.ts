@@ -11,7 +11,7 @@ import { NoteLength } from "../../src/core/rest-notation.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import { StepGrid } from "../../src/core/StepGrid.js";
-import type { IAudioData } from "../../src/core/types/general.js";
+import { EditEntryMode, type IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
 import type { IMeasureEditorInput } from "../../src/ui/MeasureEditor.js";
@@ -650,6 +650,40 @@ describe("GridMeasureEditor input", { concurrent: false }, () => {
         expect(noteAtStep(measure, 1)).toBe("1");
         expect(noteAtStep(measure, 4)).toBe("1");
         expect(noteAtStep(measure, 5)).toBeUndefined();
+    });
+
+    it("leaves an existing style unchanged in overwrite mode and advances the cursor", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        setCellNote(model, trackId, 1, 0, "1");
+        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+
+        editor.entryMode = EditEntryMode.Overwrite;
+        expect(editor.hitTest(cells[0])).toBe(true);
+        expect(editor.enterNote("1")).toBe(true);
+
+        expect(noteAtStep(measure, 0)).toBe("1");
+        expect(SelectionSerializer.coordinatesOf(
+            [...input.selectionManager.currentSelection.values()][0],
+        ).start).toEqual({ numerator: 1, denominator: 16 });
+    });
+
+    it("changes an existing note to style 2 repeatedly in overwrite mode", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        setCellNote(model, trackId, 1, 0, "1");
+        setCellNote(model, trackId, 1, 1, "1");
+        setCellNote(model, trackId, 1, 2, "1");
+        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+
+        editor.entryMode = EditEntryMode.Overwrite;
+        expect(editor.hitTest(cells[0])).toBe(true);
+        expect(editor.enterNote("2")).toBe(true);
+        expect(noteAtStep(measure, 0)).toBe("2");
+
+        expect(editor.enterNote("2")).toBe(true);
+        expect(noteAtStep(measure, 1)).toBe("2");
+
+        expect(editor.enterNote("2")).toBe(true);
+        expect(noteAtStep(measure, 2)).toBe("2");
     });
 
     it("drops the cursor when the selection is cleared", () => {

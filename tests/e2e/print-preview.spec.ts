@@ -47,10 +47,10 @@ const openPreview = async (page: Page): Promise<Locator> => {
  */
 const stubPrint = async (page: Page, tearDown = false): Promise<void> => {
     await page.evaluate((tearDownNow: boolean) => {
-        const target = window as unknown as { __printCalled: boolean; };
-        target.__printCalled = false;
+        const target = window as unknown as { asbPrintCalled: boolean; };
+        target.asbPrintCalled = false;
         window.print = () => {
-            target.__printCalled = true;
+            target.asbPrintCalled = true;
             if (tearDownNow) {
                 window.dispatchEvent(new Event("afterprint"));
             }
@@ -65,7 +65,7 @@ const stubPrint = async (page: Page, tearDown = false): Promise<void> => {
  */
 const printWasCalled = (page: Page): Promise<boolean> => {
     return page.evaluate(() => {
-        return (window as unknown as { __printCalled: boolean; }).__printCalled;
+        return (window as unknown as { asbPrintCalled: boolean; }).asbPrintCalled;
     });
 };
 

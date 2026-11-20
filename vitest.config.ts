@@ -8,6 +8,9 @@ export default defineConfig({
     },
     test: {
         logHeapUsage: true,
+        // The files share one module graph per worker instead of starting a fresh one each. Specs that mock modules
+        // or record generated ids have to account for that themselves, which they do.
+        isolate: false,
         pool: "threads",
         reporters: [["default", { summary: false }]],
         slowTestThreshold: 5000,

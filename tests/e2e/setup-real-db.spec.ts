@@ -6,11 +6,13 @@
 /* eslint-disable no-restricted-syntax */
 
 import { expect, test } from "@playwright/test";
+import { createConnection, type Connection } from "mysql2/promise";
 import { ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { resolve } from "node:path";
-import { createConnection, type Connection } from "mysql2/promise";
+
+import { TagAccess } from "../../src/server/TagAccess.js";
 
 const testDbName = "animada_e2e_setup_test";
 const dbUser = process.env.DB_USER ?? "root";
@@ -295,10 +297,11 @@ test.describe.serial("Setup: real database integration", () => {
 
         await page.click("#admin-setup-create");
 
-        // No account exists yet: the dialog points at the inbox instead.
-        await expect(page.locator("#adminSetupDialog")).toContainText("Check Your Inbox", { timeout: 15000 });
-        await expect(page.locator("#adminSetupDialog")).toContainText("testadmin@example.com");
-        await expect(page.locator("#adminSetupDialog")).toContainText("Then reload this page yourself");
+        // No account exists yet: a separate dialog points at the inbox instead.
+        const confirmation = page.locator("#emailConfirmationDialog");
+        await expect(confirmation).toContainText("Check your inbox", { timeout: 15000 });
+        await expect(confirmation).toContainText("testadmin@example.com");
+        await expect(confirmation).toContainText("Reload the page once you have confirmed the link");
 
         // The confirmation mail is the only way to finish the installation.
         await expect.poll(() => {
@@ -307,9 +310,9 @@ test.describe.serial("Setup: real database integration", () => {
 
         const firstLink = confirmationLink(mailSink!.messages[0]);
 
-        // `Send Again` mails a new link and retires the one that was sent before.
-        await page.click("#admin-setup-resend");
-        await expect(page.locator("#adminSetupDialog")).toContainText("A new confirmation link was sent.", {
+        // `Resend link` mails a new link and retires the one that was sent before.
+        await page.click("#email-confirmation-resend");
+        await expect(confirmation).toContainText("A new confirmation link was sent.", {
             timeout: 15000,
         });
         await expect.poll(() => {
@@ -319,10 +322,18 @@ test.describe.serial("Setup: real database integration", () => {
         const retired = await page.request.get(firstLink);
         expect(retired.status()).toBe(410);
 
-        await page.goto(confirmationLink(mailSink!.messages[1]));
+        // Opening the link in a second tab confirms the account; the setup tab stays where it is.
+        const confirmingTab = await page.context().newPage();
+        await confirmingTab.goto(confirmationLink(mailSink!.messages[1]));
 
         // The confirmation page sets the session cookie and leads back into the application.
-        await page.waitForURL(`${testBackendUrl}/`, { timeout: 20000 });
+        await confirmingTab.waitForURL(`${testBackendUrl}/`, { timeout: 20000 });
+        await expect(confirmingTab.locator("#appRoot")).toBeVisible({ timeout: 30000 });
+        await confirmingTab.close();
+
+        // `Reload page` finds the administrator and signs in with the credentials of the setup.
+        await page.click("#email-confirmation-reload");
+        await expect(page.locator("#emailConfirmationDialog")).toHaveCount(0, { timeout: 20000 });
         await expect(page.locator("#appRoot")).toBeVisible({ timeout: 30000 });
     });
 
@@ -340,8 +351,8 @@ test.describe.serial("Setup: real database integration", () => {
         });
 
         const tables = [
-            "folders", "scores", "instruments", "instrument_images", "users", "email_verifications",
-            "login_audit", "groups", "user_groups", "permissions", "entity_groups",
+            "scores", "instruments", "instrument_images", "users", "email_verifications",
+            "login_audit", "groups", "user_groups", "permissions", "entity_groups", "tags", "score_tags",
         ];
 
         for (const table of tables) {
@@ -353,14 +364,34 @@ test.describe.serial("Setup: real database integration", () => {
             expect(rows[0].cnt, `Table '${table}' should exist`).toBe(1);
         }
 
+        // The database must count characters, not bytes, so a VARCHAR limit is a character limit.
+        const [schemas] = await conn.query(
+            "SELECT DEFAULT_CHARACTER_SET_NAME AS characterSet, DEFAULT_COLLATION_NAME AS collation"
+            + " FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?",
+            [testDbName],
+        ) as [Array<{ characterSet: string; collation: string; }>, unknown];
+
+        expect(schemas[0].characterSet).toBe("utf8mb4");
+        expect(schemas[0].collation).toBe("utf8mb4_unicode_ci");
+
+        const [tagNameColumn] = await conn.query(
+            "SELECT CHARACTER_MAXIMUM_LENGTH AS maxLength FROM information_schema.COLUMNS"
+            + " WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tags' AND COLUMN_NAME = 'name'",
+            [testDbName],
+        ) as [Array<{ maxLength: number; }>, unknown];
+
+        // The column holds more than the backend accepts, so the announced limit and the column cannot disagree.
+        expect(tagNameColumn[0].maxLength).toBeGreaterThan(TagAccess.maxNameLength);
+
         // Verify users table has required columns.
         const [columns] = await conn.query(
-            "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'",
+            "SELECT COLUMN_NAME AS columnName FROM information_schema.COLUMNS"
+            + " WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users'",
             [testDbName],
-        ) as [Array<{ COLUMN_NAME: string; }>, unknown];
+        ) as [Array<{ columnName: string; }>, unknown];
 
         const columnNames = columns.map((c) => {
-            return c.COLUMN_NAME;
+            return c.columnName;
         });
 
         expect(columnNames).toContain("email");
@@ -371,13 +402,14 @@ test.describe.serial("Setup: real database integration", () => {
 
         // Verify the admin user was created by opening the confirmation link, and nothing is left pending.
         const [users] = await conn.query(
-            "SELECT email, display_name, email_verified FROM users WHERE email = ?",
+            "SELECT email, display_name AS displayName, email_verified AS emailVerified FROM users " +
+            "WHERE email = ?",
             ["testadmin@example.com"],
-        ) as [Array<{ email: string; display_name: string; email_verified: number; }>, unknown];
+        ) as [Array<{ email: string; displayName: string; emailVerified: number; }>, unknown];
 
         expect(users.length).toBe(1);
         expect(users[0].email).toBe("testadmin@example.com");
-        expect(Boolean(users[0].email_verified)).toBe(true);
+        expect(Boolean(users[0].emailVerified)).toBe(true);
 
         const [pending] = await conn.query(
             "SELECT COUNT(*) AS cnt FROM email_verifications",

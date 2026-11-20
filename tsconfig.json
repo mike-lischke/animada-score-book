@@ -21,7 +21,7 @@
         "strictNullChecks": true,
         "noImplicitOverride": true,
         "lib": [
-            "es2022",
+            "es2024",
             "dom",
             "dom.iterable",
         ],

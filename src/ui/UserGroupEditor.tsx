@@ -20,6 +20,7 @@ import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
 import { Popup } from "../components/ui/framework/Popup.js";
 import { NotificationCenter } from "../components/ui/NotificationCenter/NotificationCenter.js";
 import type { IGroupMember, IGroupRow, IUserRow, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import { TagPalette } from "../core/TagPalette.js";
 
 enum EditorMode {
     None,
@@ -732,18 +733,19 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                         return formGroupIds.has(g.id);
                                     })
                                     .map((g) => {
-                                        return { id: g.id, caption: g.name, color: g.color };
+                                        return { id: g.id, caption: g.name, colorIndex: g.colorIndex };
                                     })}
                                 completions={this.getAllGroups()
                                     .filter((g) => {
                                         return !formGroupIds.has(g.id);
                                     })
                                     .map((g) => {
-                                        return g.name;
+                                        return { caption: g.name, tagId: g.id };
                                     })}
+                                allowNew
                                 removable
-                                onAdd={(caption) => {
-                                    this.handleTagAdd(caption);
+                                onAdd={(completion) => {
+                                    this.handleTagAdd(completion.caption);
                                 }}
                                 onRemove={(id) => {
                                     const next = new Set(formGroupIds);
@@ -757,8 +759,8 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
                                     this.setState({ formGroupIds: next, pendingGroups: filtered });
                                 }}
-                                onBadgeColorChange={(id, color) => {
-                                    void this.handleGroupColorChange(id, color);
+                                onBadgeColourChange={(id, colorIndex) => {
+                                    void this.handleGroupColourChange(id, colorIndex);
                                 }}
                             />
                         </Container>
@@ -1159,7 +1161,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             return;
         }
 
-        // Create a new pending group with a random color.
+        // Consecutive pending groups start on different palette colours.
         const id = this.pendingIdCounter;
         this.pendingIdCounter = this.pendingIdCounter - 1;
 
@@ -1167,7 +1169,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             id,
             name: caption,
             description: "",
-            color: randomColor(),
+            colorIndex: Math.abs(id) % TagPalette.count,
             adminId: null,
             hasPassword: false,
             lastLogin: null,
@@ -1182,17 +1184,17 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         });
     }
 
-    private async handleGroupColorChange(groupId: number, color: string): Promise<void> {
+    private async handleGroupColourChange(groupId: number, colorIndex: number): Promise<void> {
         const { pendingGroups } = this.state;
 
-        // For pending groups, update the color locally.
+        // Pending groups live only in the form, so their colour changes locally.
         const pendingIndex = pendingGroups.findIndex((g) => {
             return g.id === groupId;
         });
 
         if (pendingIndex >= 0) {
             const updated = [...pendingGroups];
-            updated[pendingIndex] = { ...updated[pendingIndex], color };
+            updated[pendingIndex] = { ...updated[pendingIndex], colorIndex };
             this.setState({ pendingGroups: updated });
 
             return;
@@ -1202,7 +1204,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         const { dataModel } = this.props;
 
         try {
-            await dataModel.updateGroup(groupId, { color });
+            await dataModel.updateGroup(groupId, { colorIndex });
             await this.loadGroups();
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
@@ -1331,7 +1333,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         const idMap = new Map<number, number>();
 
         for (const pg of pendingGroups) {
-            const result = await dataModel.createGroup(pg.name, pg.description, pg.color);
+            const result = await dataModel.createGroup(pg.name, pg.description, pg.colorIndex);
 
             idMap.set(pg.id, result.id);
         }
@@ -1404,48 +1406,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         // Nothing special on close.
     };
 }
-
-/**
- * Generates a random hex color string using HSL for visually distinct colors.
- *
- * @returns A hex color string like "#a1b2c3".
- */
-const randomColor = (): string => {
-    const hue = Math.floor(Math.random() * 360);
-    const sat = 45 + Math.floor(Math.random() * 20);
-    const light = 40 + Math.floor(Math.random() * 15);
-
-    const h = hue / 60;
-    const c = ((1 - Math.abs((2 * light / 100) - 1)) * sat) / 100;
-    const x = c * (1 - Math.abs((h % 2) - 1));
-    const m = (light / 100) - (c / 2);
-
-    let r: number;
-    let g: number;
-    let b: number;
-
-    if (h < 1) {
-        r = c; g = x; b = 0;
-    } else if (h < 2) {
-        r = x; g = c; b = 0;
-    } else if (h < 3) {
-        r = 0; g = c; b = x;
-    } else if (h < 4) {
-        r = 0; g = x; b = c;
-    } else if (h < 5) {
-        r = x; g = 0; b = c;
-    } else {
-        r = c; g = 0; b = x;
-    }
-
-    const toHex = (v: number): string => {
-        const hex = Math.round((v + m) * 255).toString(16);
-
-        return hex.length === 1 ? "0" + hex : hex;
-    };
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
 
 /**
  * Determines whether a hex color is considered "light" (for choosing contrasting text).

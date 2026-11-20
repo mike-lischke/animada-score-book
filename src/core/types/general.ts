@@ -254,3 +254,15 @@ export enum TrackViewMode {
     Grid = "grid",
     Staff = "staff",
 }
+
+/**
+ * The order a score list shows its entries in. The user's choice for the score overview is stored in the UI
+ * settings.
+ */
+export enum ScoreListSortOrder {
+    /** Alphabetical by name, the default. */
+    NameAscending,
+
+    /** Reverse alphabetical by name. */
+    NameDescending,
+}

@@ -298,6 +298,8 @@ export class SmuflFontLoader {
             return false;
         }
 
+        // The cast reads the DOM global, whose name the property has to repeat.
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         const fontFace = (globalThis as { FontFace?: typeof FontFace; }).FontFace;
         if (fontFace === undefined) {
             this.unusable.add(entry.id);

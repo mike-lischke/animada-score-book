@@ -209,8 +209,8 @@ exports[`ToolsBar > matches the compact snapshot 1`] = `
   >
     <button
       class="btn du-btn imageOnly du-btn-ghost"
-      popovertarget="popover-2"
-      style="anchor-name: --anchor-1;"
+      popovertarget="popover-{id}"
+      style="anchor-name: --anchor-{id};"
       title="Placing tools"
     >
       <span
@@ -233,9 +233,9 @@ exports[`ToolsBar > matches the compact snapshot 1`] = `
     </button>
     <ul
       class="du-dropdown du-menu dropdown-popup"
-      id="popover-2"
+      id="popover-{id}"
       popover="auto"
-      style="position-anchor: --anchor-1;"
+      style="position-anchor: --anchor-{id};"
     >
       <li>
         <a

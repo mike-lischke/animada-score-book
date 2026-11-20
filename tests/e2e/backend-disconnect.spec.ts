@@ -52,11 +52,11 @@ const routeApiToggleable = async (page: Page): Promise<{ disconnect: () => void;
             return;
         }
 
-        if (action === "listScoreFolderContent") {
+        if (action === "listScores") {
             await route.fulfill({
                 status: 200,
                 contentType: "application/json",
-                body: JSON.stringify({ folders: [], scores: [] }),
+                body: JSON.stringify({ scores: [] }),
             });
 
             return;
@@ -79,6 +79,28 @@ const routeApiToggleable = async (page: Page): Promise<{ disconnect: () => void;
     };
 };
 
+/** A BananaDrum link the import dialog accepts, so the flow reaches the backend with one request. */
+const importUrl = "http://127.0.0.1:4173/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
+
+/**
+ * Opens the score library and runs the import for a fixed BananaDrum link, which is the request the disconnect
+ * tests need.
+ *
+ * @param page The page under test.
+ */
+const startImport = async (page: Page): Promise<void> => {
+    if (!(await page.locator("#scoreTreeHost").isVisible())) {
+        await page.locator("#scoreLibraryButton").click();
+        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
+    }
+
+    await page.locator("button[title='Import Score']").click();
+    await expect(page.locator("#importScoreDialog")).toBeVisible({ timeout: 5000 });
+
+    await page.locator("#importScoreDialog input[type='text']").first().fill(importUrl);
+    await page.locator("#importScoreDialog #accept").click();
+};
+
 test.describe("Backend disconnect handling", () => {
     let toggle: { disconnect: () => void; reconnect: () => void; };
 
@@ -96,20 +118,7 @@ test.describe("Backend disconnect handling", () => {
         // Simulate backend going down.
         toggle.disconnect();
 
-        // Open the score library sidebar.
-        await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
-
-        // Click "Add New Folder" — this opens the ValueDialog first.
-        await page.locator("button[title='Add New Folder']").click();
-        await expect(page.locator("#addFolderDialog")).toBeVisible({ timeout: 5000 });
-
-        // Fill in a folder name.
-        const nameInput = page.locator("#addFolderDialog input[type='text']").first();
-        await nameInput.fill("Test Folder");
-
-        // Click the accept button to trigger addScoreFolder → fetchApi → disconnect.
-        await page.locator("#addFolderDialog #accept").click();
+        await startImport(page);
 
         // The disconnect dialog should appear.
         await expect(page.locator("#backendDisconnectedDialog")).toBeVisible({ timeout: 5000 });
@@ -124,16 +133,7 @@ test.describe("Backend disconnect handling", () => {
         // Trigger disconnect.
         toggle.disconnect();
 
-        // Open score library and try to add a folder to trigger the error.
-        await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
-
-        await page.locator("button[title='Add New Folder']").click();
-        await expect(page.locator("#addFolderDialog")).toBeVisible({ timeout: 5000 });
-
-        const nameInput = page.locator("#addFolderDialog input[type='text']").first();
-        await nameInput.fill("Test Folder");
-        await page.locator("#addFolderDialog #accept").click();
+        await startImport(page);
 
         // Wait for the disconnect dialog.
         await expect(page.locator("#backendDisconnectedDialog")).toBeVisible({ timeout: 5000 });
@@ -159,16 +159,7 @@ test.describe("Backend disconnect handling", () => {
         // Trigger disconnect.
         toggle.disconnect();
 
-        // Open score library and try to add a folder.
-        await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
-
-        await page.locator("button[title='Add New Folder']").click();
-        await expect(page.locator("#addFolderDialog")).toBeVisible({ timeout: 5000 });
-
-        const nameInput = page.locator("#addFolderDialog input[type='text']").first();
-        await nameInput.fill("Test Folder");
-        await page.locator("#addFolderDialog #accept").click();
+        await startImport(page);
 
         // Disconnect dialog appears.
         await expect(page.locator("#backendDisconnectedDialog")).toBeVisible({ timeout: 5000 });
@@ -179,16 +170,11 @@ test.describe("Backend disconnect handling", () => {
         // Wait for the dialog to dismiss.
         await expect(page.locator("#backendDisconnectedDialog")).not.toBeVisible({ timeout: 15000 });
 
-        // Now retry adding a folder — it should work this time.
-        await page.locator("button[title='Add New Folder']").click();
-        await expect(page.locator("#addFolderDialog")).toBeVisible({ timeout: 5000 });
-
-        const retryInput = page.locator("#addFolderDialog input[type='text']").first();
-        await retryInput.fill("Recovered Folder");
-        await page.locator("#addFolderDialog #accept").click();
+        // Now retry the import — it should work this time.
+        await startImport(page);
 
         // The dialog should close (accept was clicked) and no disconnect dialog should appear.
-        await expect(page.locator("#addFolderDialog")).not.toBeVisible({ timeout: 3000 });
+        await expect(page.locator("#importScoreDialog")).not.toBeVisible({ timeout: 3000 });
         await expect(page.locator("#backendDisconnectedDialog")).not.toBeVisible();
 
         // App should still be running.

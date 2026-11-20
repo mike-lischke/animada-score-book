@@ -7,7 +7,7 @@ import type { IUISettings } from "../core/AppStorage.js";
 import type { INoteValue } from "../core/rest-notation.js";
 import type { IFraction, EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import type { Articulation } from "../core/articulation.js";
-import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
+import type { ISbDmScore, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import type { ISelectionDelta, ISelectionEntry, ISelectionRectChange } from "../ui/SelectionSerializer.js";
 
@@ -104,8 +104,14 @@ export interface IRequestTypeMap {
     "measureLayoutChanged": SimpleCallback;
     "timeParamsChanged": SimpleCallback;
     "scoreBookLoaded": (reason: ScoreBookChangeReason) => Promise<boolean>;
-    "scoreEntryUpdated": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
-    "permChanged": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
+    "scoreEntryUpdated": (entry: ISbDmScore) => Promise<boolean>;
+    "permChanged": (entry: ISbDmScore) => Promise<boolean>;
+
+    /** The tag catalogue changed: a tag was created, renamed, recoloured or deleted. */
+    "tagsChanged": SimpleCallback;
+
+    /** The tag assignments of one score changed, so its tag row has to follow. */
+    "scoreTagsChanged": (scoreId: number) => Promise<boolean>;
 
     "undoStackChanged": SimpleCallback;
 

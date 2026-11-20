@@ -31,19 +31,19 @@ const createMockDataModel = (overrides?: Partial<IMockDataModel>): ScoreBookData
 
 const sampleGroups: IGroupRow[] = [
     {
-        id: 1, name: "World", description: "Public access", color: "#808080",
+        id: 1, name: "World", description: "Public access", colorIndex: 0,
         adminId: null, hasPassword: false, lastLogin: null, createdAt: "2024-01-01"
     },
     {
-        id: 2, name: "Admins", description: "System administrators", color: "#ff0000",
+        id: 2, name: "Admins", description: "System administrators", colorIndex: 1,
         adminId: 1, hasPassword: true, lastLogin: null, createdAt: "2024-01-01"
     },
     {
-        id: 3, name: "Percussion", description: "", color: "#00ff00",
+        id: 3, name: "Percussion", description: "", colorIndex: 2,
         adminId: 1, hasPassword: false, lastLogin: null, createdAt: "2024-02-01"
     },
     {
-        id: 4, name: "Vocals", description: "", color: "#0000ff",
+        id: 4, name: "Vocals", description: "", colorIndex: 3,
         adminId: null, hasPassword: false, lastLogin: null, createdAt: "2024-03-01"
     },
 ];
@@ -57,7 +57,7 @@ const sampleUsers = [
 
 const createScoreEntry = (overrides?: Partial<ISbDmScore>): ISbDmScore => {
     return {
-        type: SbDmEntityType.Score, id: 100, name: "Test Score", content: "{}",
+        type: SbDmEntityType.Score, id: 100, name: "Test Score", content: "{}", tagIds: [],
         state: { initialized: true, isLeaf: true, expanded: true, expandedOnce: true },
         perm: { isOwner: true, canRead: true, canWrite: true, isWorld: true, groupIds: [1, 3] },
         ...overrides,

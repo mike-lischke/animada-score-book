@@ -24,7 +24,15 @@ export default defineConfig(
         files: ["*.ts", "*.tsx", "*.mjs" ],
     },
     {
-        ignores: ["dist/**", ".vscode/chrome/**"],
+        /* Tool configuration files set their tools up and follow those tools' own conventions. */
+        ignores: [
+            "dist/**",
+            ".vscode/chrome/**",
+            "eslint.config.mjs",
+            "vite.config.ts",
+            "vitest.config.ts",
+            "playwright.config.ts",
+        ],
     },
     {
         plugins: {
@@ -329,23 +337,14 @@ export default defineConfig(
                     ],
                 },
                 {
+                    /* Declarations of our own code. Object literal keys are data: numeric indexes, MIME types,
+                       HTTP headers and CSS properties come from external formats, so they stay unchecked. */
                     selector: "property",
                     format: ["camelCase"],
                 },
                 {
-                    selector: "property",
-                    format: [
-                        "camelCase",
-                        "UPPER_CASE",
-                    ],
-                },
-                {
-                    selector: "property",
+                    selector: "objectLiteralProperty",
                     format: null,
-                    filter: {
-                        regex: "^['\"].*['\"]$",
-                        match: false,
-                    },
                 },
             ],
             "@typescript-eslint/adjacent-overload-signatures": "error",

@@ -6,7 +6,10 @@
 import { cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type ITag, TagInput } from "../../src/components/ui/framework/TagInput.js";
+import {
+    type ITag, type ITagCompletion, TagInput
+} from "../../src/components/ui/framework/TagInput.js";
+import { TagPalette } from "../../src/core/TagPalette.js";
 
 describe("TagInput", () => {
     let renderResult: RenderResult | null;
@@ -64,6 +67,22 @@ describe("TagInput", () => {
         expect(onRemove).toHaveBeenCalledWith(42);
     });
 
+    it("keeps the close button away from a locked tag", () => {
+        const onRemove = vi.fn();
+        const tags: ITag[] = [
+            { id: 1, caption: "Caixa", locked: true },
+            { id: 2, caption: "Source" },
+        ];
+
+        renderResult = render(<TagInput tags={tags} removable onRemove={onRemove} />);
+        const removeButtons = renderResult.container.querySelectorAll("button");
+
+        expect(removeButtons.length).toBe(1);
+
+        removeButtons[0].click();
+        expect(onRemove).toHaveBeenCalledWith(2);
+    });
+
     it("renders a text input for adding new tags", () => {
         const tags: ITag[] = [];
 
@@ -74,24 +93,75 @@ describe("TagInput", () => {
         expect(input!.getAttribute("placeholder")).toBe("Add…");
     });
 
-    it("calls onAdd with trimmed input value when Enter is pressed", () => {
+    it("renders a plain tag list without input, close buttons and colour pickers when read only", () => {
+        const tags: ITag[] = [
+            { id: 1, caption: "Alpha", colorIndex: 1 },
+            { id: 2, caption: "Beta", locked: true },
+        ];
+        const onBadgeColourChange = vi.fn();
+
+        renderResult = render(
+            <TagInput tags={tags} readOnly removable onBadgeColourChange={onBadgeColourChange} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".du-badge").length).toBe(2);
+        expect(renderResult.container.querySelector("input")).toBeFalsy();
+        expect(renderResult.container.querySelector("button")).toBeFalsy();
+    });
+
+    it("passes the palette colour of the tag to the stylesheet", () => {
+        const tags: ITag[] = [{ id: 1, caption: "Alpha", colorIndex: 1 }];
+
+        renderResult = render(<TagInput tags={tags} readOnly />);
+        const badge = renderResult.container.querySelector<HTMLElement>(".tag-input-tag")!;
+
+        expect(badge.classList.contains("tag-input-tag-colored")).toBe(true);
+        expect(badge.style.getPropertyValue("--tag-color")).toBe(TagPalette.colourAt(1).color);
+    });
+
+    it("offers the palette per tag when colour changes are handled", () => {
+        const onBadgeColourChange = vi.fn();
+        const tags: ITag[] = [{ id: 1, caption: "Alpha", colorIndex: 1 }];
+
+        renderResult = render(<TagInput tags={tags} onBadgeColourChange={onBadgeColourChange} />);
+        const picker = renderResult.container.querySelector<HTMLSelectElement>(".tag-input-colour-picker")!;
+
+        expect(picker.querySelectorAll("option").length).toBe(TagPalette.count);
+
+        fireEvent.change(picker, { target: { value: "3" } });
+        expect(onBadgeColourChange).toHaveBeenCalledWith(1, 3);
+    });
+
+    it("calls onAdd with a caption when allowNew lets the input create a tag", () => {
+        const onAdd = vi.fn();
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} allowNew onAdd={onAdd} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "  Gamma  " } });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        expect(onAdd).toHaveBeenCalledWith({ caption: "Gamma" });
+    });
+
+    it("does not call onAdd for unknown text when allowNew is not set", () => {
         const onAdd = vi.fn();
         const tags: ITag[] = [];
 
         renderResult = render(<TagInput tags={tags} onAdd={onAdd} />);
         const input = renderResult.container.querySelector("input")!;
 
-        fireEvent.input(input, { target: { value: "  Gamma  " } });
+        fireEvent.input(input, { target: { value: "Gamma" } });
         fireEvent.keyDown(input, { key: "Enter" });
 
-        expect(onAdd).toHaveBeenCalledWith("Gamma");
+        expect(onAdd).not.toHaveBeenCalled();
     });
 
     it("clears the input after adding a tag", () => {
-        const onAdd = vi.fn();
         const tags: ITag[] = [];
 
-        renderResult = render(<TagInput tags={tags} onAdd={onAdd} />);
+        renderResult = render(<TagInput tags={tags} allowNew onAdd={vi.fn()} />);
         const input = renderResult.container.querySelector("input")!;
 
         fireEvent.input(input, { target: { value: "Delta" } });
@@ -104,7 +174,7 @@ describe("TagInput", () => {
         const onAdd = vi.fn();
         const tags: ITag[] = [];
 
-        renderResult = render(<TagInput tags={tags} onAdd={onAdd} />);
+        renderResult = render(<TagInput tags={tags} allowNew onAdd={onAdd} />);
         const input = renderResult.container.querySelector("input")!;
 
         fireEvent.keyDown(input, { key: "Enter" });
@@ -112,7 +182,9 @@ describe("TagInput", () => {
     });
 
     it("shows matching completions when typing", () => {
-        const completions = ["Apple", "Apricot", "Banana", "Cherry"];
+        const completions: ITagCompletion[] = [
+            { caption: "Apple" }, { caption: "Apricot" }, { caption: "Banana" }, { caption: "Cherry" },
+        ];
         const tags: ITag[] = [];
 
         renderResult = render(<TagInput tags={tags} completions={completions} />);
@@ -128,8 +200,8 @@ describe("TagInput", () => {
         expect(dropdown!.textContent).not.toContain("Banana");
     });
 
-    it("excludes already-tagged captions from completions", () => {
-        const completions = ["Apple", "Banana"];
+    it("leaves the tags on the entity out of the completions", () => {
+        const completions: ITagCompletion[] = [{ caption: "Apple", tagId: 1 }];
         const tags: ITag[] = [{ id: 1, caption: "Apple" }];
 
         renderResult = render(<TagInput tags={tags} completions={completions} />);
@@ -137,14 +209,54 @@ describe("TagInput", () => {
 
         fireEvent.input(input, { target: { value: "A" } });
 
-        const dropdown = renderResult.container.querySelector("ul");
+        expect(renderResult.container.querySelector("ul")).toBeFalsy();
+    });
 
-        expect(dropdown).toBeFalsy(); // Apple is already tagged, no other A-matches.
+    it("still offers a same-named tag of another owner that is not on the entity", () => {
+        const completions: ITagCompletion[] = [
+            { caption: "Apple", tagId: 1 },
+            { caption: "Apple", tagId: 2, owner: "Group" },
+        ];
+        const tags: ITag[] = [{ id: 1, caption: "Apple" }];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "App" } });
+
+        const dropdown = renderResult.container.querySelector("ul")!;
+
+        expect(dropdown.querySelectorAll("li").length).toBe(1);
+        expect(dropdown.textContent).toContain("Group");
+    });
+
+    it("shows the owner only next to a name that occurs more than once", () => {
+        const completions: ITagCompletion[] = [
+            { caption: "Caixa", tagId: 1, owner: "Global" },
+            { caption: "Caixa", tagId: 2, owner: "Group" },
+            { caption: "Surdo", tagId: 3, owner: "Global" },
+        ];
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "Ca" } });
+
+        const owners = Array.from(renderResult.container.querySelectorAll(".tag-input-completion-owner")).map((o) => {
+            return o.textContent;
+        });
+
+        expect(owners).toEqual(["Global", "Group"]);
+
+        fireEvent.input(input, { target: { value: "Su" } });
+
+        expect(renderResult.container.querySelector(".tag-input-completion-owner")).toBeFalsy();
     });
 
     it("selects a completion on click", () => {
         const onAdd = vi.fn();
-        const completions = ["Apple", "Apricot"];
+        const completions: ITagCompletion[] = [{ caption: "Apple", tagId: 7 }, { caption: "Apricot", tagId: 8 }];
         const tags: ITag[] = [];
 
         renderResult = render(<TagInput tags={tags} completions={completions} onAdd={onAdd} />);
@@ -155,11 +267,11 @@ describe("TagInput", () => {
         const firstCompletion = renderResult.container.querySelector("li a")!;
 
         fireEvent.mouseDown(firstCompletion);
-        expect(onAdd).toHaveBeenCalledWith("Apple");
+        expect(onAdd).toHaveBeenCalledWith({ caption: "Apple", tagId: 7 });
     });
 
     it("navigates completions with arrow keys", () => {
-        const completions = ["Apple", "Apricot"];
+        const completions: ITagCompletion[] = [{ caption: "Apple" }, { caption: "Apricot" }];
         const tags: ITag[] = [];
 
         renderResult = render(<TagInput tags={tags} completions={completions} />);
@@ -181,5 +293,83 @@ describe("TagInput", () => {
 
         active = renderResult.container.querySelector("li.du-active");
         expect(active?.textContent).toContain("Apple"); // Wraps around.
+    });
+
+    it("walks the completions backwards with ArrowUp", () => {
+        const completions: ITagCompletion[] = [{ caption: "Apple" }, { caption: "Apricot" }];
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "Ap" } });
+        fireEvent.keyDown(input, { key: "ArrowUp" });
+
+        const active = renderResult.container.querySelector("li.du-active");
+
+        expect(active?.textContent).toContain("Apricot"); // Wraps to the last entry.
+    });
+
+    it("ignores whitespace-only input", () => {
+        const onAdd = vi.fn();
+        const completions: ITagCompletion[] = [{ caption: "Apple", tagId: 7 }];
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} allowNew onAdd={onAdd} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "   " } });
+
+        expect(renderResult.container.querySelector("ul")).toBeFalsy();
+
+        fireEvent.keyDown(input, { key: "Enter" });
+        expect(onAdd).not.toHaveBeenCalled();
+    });
+
+    it("commits the highlighted completion on Enter", () => {
+        const onAdd = vi.fn();
+        const completions: ITagCompletion[] = [{ caption: "Apple", tagId: 7 }, { caption: "Apricot", tagId: 8 }];
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} onAdd={onAdd} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "Ap" } });
+        fireEvent.keyDown(input, { key: "ArrowDown" });
+        fireEvent.keyDown(input, { key: "ArrowDown" });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        expect(onAdd).toHaveBeenCalledWith({ caption: "Apricot", tagId: 8 });
+    });
+
+    it("takes the existing tag when its name is typed, whatever the case and accents", () => {
+        const onAdd = vi.fn();
+        const completions: ITagCompletion[] = [{ caption: "Café", tagId: 5 }];
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} allowNew onAdd={onAdd} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "cafe" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        expect(onAdd).toHaveBeenCalledWith({ caption: "Café", tagId: 5 });
+    });
+
+    it("does not commit a typed name that several tags share", () => {
+        const onAdd = vi.fn();
+        const completions: ITagCompletion[] = [
+            { caption: "Caixa", tagId: 1, owner: "Global" },
+            { caption: "Caixa", tagId: 2, owner: "Group" },
+        ];
+        const tags: ITag[] = [];
+
+        renderResult = render(<TagInput tags={tags} completions={completions} allowNew onAdd={onAdd} />);
+        const input = renderResult.container.querySelector("input")!;
+
+        fireEvent.input(input, { target: { value: "Caixa" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        expect(onAdd).not.toHaveBeenCalled();
     });
 });

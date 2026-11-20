@@ -7,7 +7,7 @@ import { uuid } from "../string-helpers.js";
 import type { Articulation } from "./articulation.js";
 import type { INoteValue } from "./rest-notation.js";
 import { RunMode } from "./RunMode.js";
-import type { EditEntryMode, IPoint, TrackViewMode } from "./types/general.js";
+import type { EditEntryMode, IPoint, ScoreListSortOrder, TrackViewMode } from "./types/general.js";
 
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
@@ -106,6 +106,9 @@ export interface IUISettings {
 
     /** Whether to show the permission matrix in the Score Library tree. Defaults to true. */
     showPermMatrix?: boolean;
+
+    /** The order the score overview lists its scores in. Defaults to A–Z. */
+    scoreListSortOrder?: ScoreListSortOrder;
 
     /** Whether edit mode was active when the app was last closed. */
     editMode?: boolean;

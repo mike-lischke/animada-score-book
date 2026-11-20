@@ -9,10 +9,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     ArrangementIdentity, ArrangementSaveState, type IArrangementIdentityProps,
 } from "../../src/components/ui/Header/ArrangementIdentity.js";
-import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
+import type { ITagInfo } from "../../src/core/types/tags.js";
 import { createInstrument } from "../unit-test-helpers.js";
 
 const statsCaption = "4/4 • 1 bar • 2 s";
+
+const tagCatalogue: ITagInfo[] = [
+    { id: 1, name: "Caixa", colorIndex: 1, editable: false, assignable: true, usageCount: 0 },
+    { id: 2, name: "Ensaio", colorIndex: 2, editable: true, assignable: true, usageCount: 0 },
+];
 
 describe("ArrangementIdentity", { concurrent: false }, () => {
     let renderResult: RenderResult | null = null;
@@ -36,6 +42,34 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
                 stats={statsCaption}
                 saveState={ArrangementSaveState.Unchanged}
                 {...overrides}
+            />,
+        );
+
+        return renderResult.container;
+    };
+
+    /**
+     * Renders the identity of a score that carries tags, on a model that only answers the two lookups it needs.
+     *
+     * @param tagIds The tags of the score.
+     *
+     * @returns The rendered container.
+     */
+    const renderWithTags = (tagIds: number[]): Element => {
+        const dataModel = {
+            findScore: () => {
+                return { tagIds };
+            },
+            tags: tagCatalogue,
+        } as unknown as ScoreBookDataModel;
+
+        renderResult = render(
+            <ArrangementIdentity
+                arrangement={{ id: 5, title: "Samba Test" } as ISbDmArrangement}
+                dataModel={dataModel}
+                editMode={false}
+                stats={statsCaption}
+                saveState={ArrangementSaveState.Unchanged}
             />,
         );
 
@@ -83,11 +117,32 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
         },
     );
 
-    it("shows the arrangement name and its stats below", () => {
+    it("shows the arrangement name and its stats in the title row", () => {
         const container = renderIdentity();
 
         expect(container.querySelector("#arrangementIdentityTitle")?.textContent).toBe("Samba Test");
         expect(container.querySelector("#scoreStats")?.textContent).toBe(statsCaption);
+        expect(container.querySelector(".arrangementIdentityRow #scoreStats")).not.toBeNull();
+    });
+
+    it("shows the tags of the loaded score below its name", () => {
+        const container = renderWithTags([1, 2]);
+        const badges = container.querySelectorAll(".arrangementIdentityTags .tag-input-tag");
+
+        expect(Array.from(badges, (badge) => {
+            return badge.textContent;
+        })).toEqual(["Caixa", "Ensaio"]);
+    });
+
+    it("counts the tags its line does not show", () => {
+        const container = renderWithTags([1, 2, 1, 2, 1, 2]);
+        const badges = container.querySelectorAll(".arrangementIdentityTags .tag-input-tag");
+        const captions = Array.from(badges, (badge) => {
+            return badge.textContent;
+        });
+
+        expect(captions.length).toBe(5);
+        expect(captions[4]).toBe("+2");
     });
 
     it("lets the title be edited in edit mode", () => {

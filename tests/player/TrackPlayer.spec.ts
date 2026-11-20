@@ -74,7 +74,7 @@ const makeNote = (
 const makeTrack = (opts?: {
     instrumentLoaded?: boolean;
     withPolyrhythmNote?: boolean;
-}): ISbDmTrack & { _notes: ISbDmNoteEvent[]; } => {
+}): ISbDmTrack & { testNotes: ISbDmNoteEvent[]; } => {
     const instrumentLoaded = opts?.instrumentLoaded ?? true;
     const timeParams: ITimeParamsBase = {
         timeSignature: "4/4",
@@ -101,7 +101,7 @@ const makeTrack = (opts?: {
         applyArrangementSnapshot: vi.fn(),
     };
 
-    const track: Mutable<ISbDmTrack> & { _notes: ISbDmNoteEvent[]; } = {
+    const track: Mutable<ISbDmTrack> & { testNotes: ISbDmNoteEvent[]; } = {
         type: SbDmEntityType.Track,
         id: 1,
         name: "Track 1",
@@ -134,13 +134,13 @@ const makeTrack = (opts?: {
             return undefined;
         },
         get notes() {
-            const ns = this._notes;
+            const ns = this.testNotes;
 
             return (function* () {
                 yield* ns;
             })();
         },
-        _notes: [],
+        testNotes: [],
         clear: vi.fn(),
     };
 
@@ -160,11 +160,11 @@ const makeTrack = (opts?: {
     (track.instrument as Mutable<ISbDmInstrument>).noteStyles = { [noteStyle.id]: noteStyle };
 
     const note = makeNote(track, { numerator: 0, denominator: 1 }, noteStyle);
-    track._notes.push(note);
+    track.testNotes.push(note);
 
     if (opts?.withPolyrhythmNote) {
         const polyNote = makeNote(track, { numerator: 1, denominator: 16 }, noteStyle);
-        track._notes.push(polyNote);
+        track.testNotes.push(polyNote);
     }
 
     const measureEvents: ISbDmNoteEvent[] = [];
@@ -177,10 +177,10 @@ const makeTrack = (opts?: {
             beats: 4,
             beatUnits: 4,
         },
-        events: track._notes.map((currentNote, index) => {
+        events: track.testNotes.map((currentNote, index) => {
             return {
-                start: { numerator: index, denominator: track._notes.length },
-                duration: { numerator: 1, denominator: track._notes.length },
+                start: { numerator: index, denominator: track.testNotes.length },
+                duration: { numerator: 1, denominator: track.testNotes.length },
                 noteStyleId: currentNote.audioData?.id,
             };
         }),
@@ -188,18 +188,18 @@ const makeTrack = (opts?: {
         noteEvents: measureEvents,
     };
 
-    track._notes.forEach((currentNote, index) => {
+    track.testNotes.forEach((currentNote, index) => {
         measureEvents.push({
             type: SbDmEntityType.NoteEvent,
             id: currentNote.id,
             measure,
             start: {
                 numerator: index,
-                denominator: track._notes.length,
+                denominator: track.testNotes.length,
             },
             duration: {
                 numerator: 1,
-                denominator: track._notes.length,
+                denominator: track.testNotes.length,
             },
             track,
             audioData: currentNote.audioData,

@@ -9,7 +9,9 @@ import { AppStorage } from "../../src/core/AppStorage.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
-import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, SbDmEntityType, type ISbDmScore, type ISbDmTrackPiece }
+    from "../../src/core/ScoreBookDataModel.js";
+import { TagCombination } from "../../src/core/TagCombination.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
 import { StepGrid } from "../../src/core/StepGrid.js";
 import type { IFraction, IMeasureEvent, IRangeArticulation, IRangeArticulationAnchor }
@@ -209,7 +211,7 @@ describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
         await model.login("u", "p");
 
         // Now the model has an access token. Spy on fetch again and call a
-        // method that goes through fetchApi internally (addScoreFolder).
+        // method that goes through fetchApi internally (addScore).
         const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
             ok: true,
             json: () => {
@@ -217,7 +219,7 @@ describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
             },
         } as Response);
 
-        await model.addScoreFolder("test");
+        await model.addScore("test", "{}");
 
         // The last fetch call should have the Authorization header.
         const lastCall = fetchSpy.mock.calls.at(-1) as [string, RequestInit];
@@ -336,6 +338,20 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
             return event.noteStyleId === undefined;
         })).toBe(true);
         expect(mutatedCalls).toBe(2);
+    });
+
+    it("setNoteAt reports no change when the exact note is entered again", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        expect(model.setNoteAt(track.id, 1, stepStart(0), stepDuration, "1")).toBe(true);
+        mutatedCalls = 0;
+
+        expect(model.setNoteAt(track.id, 1, stepStart(0), stepDuration, "1")).toBe(false);
+        expect(measure.events[0].noteStyleId).toBe("1");
+        expect(mutatedCalls).toBe(0);
     });
 
     it("setNoteAt keeps adjacent same-style notes as separate events", () => {
@@ -2211,6 +2227,26 @@ const responseOf = (status: number, body: unknown = {}): Response => {
     } as unknown as Response;
 };
 
+/** The filter a `listScores` request carries. */
+interface IListScoresRequest {
+    groups: number[][];
+}
+
+/** The assignment an `assignTag` request carries. */
+interface ITagAssignmentRequest {
+    scoreId: number;
+    tagId: number;
+}
+
+/**
+ * @param call One recorded fetch call.
+ *
+ * @returns The JSON body the call sent, as the shape the caller expects.
+ */
+const requestBodyOf = <T>(call: Parameters<typeof fetch>): T => {
+    return JSON.parse(String(call[1]?.body)) as T;
+};
+
 describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let authChangedCalls: number;
@@ -2321,6 +2357,9 @@ describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () 
         // A login clears that state, so the next refusal is answered with a refresh again.
         vi.spyOn(globalThis, "fetch")
             .mockResolvedValueOnce(responseOf(200, sessionBody))
+            // A login reloads the tag catalogue and the owner scopes, because both depend on the session.
+            .mockResolvedValueOnce(responseOf(200, { tags: [] }))
+            .mockResolvedValueOnce(responseOf(200, { scopes: [] }))
             .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
             .mockResolvedValueOnce(responseOf(200, { token: "fresh-token" }))
             .mockResolvedValueOnce(responseOf(200, { authenticated: true, ...sessionBody }))
@@ -2330,5 +2369,249 @@ describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () 
         const result = await model.lockScore(10996);
 
         expect(result.token).toBe("lock-token");
+    });
+});
+
+describe("ScoreBookDataModel — tags", { concurrent: false }, () => {
+    let model: ScoreBookDataModel;
+    let tagsChangedCalls: number;
+    let changedScoreIds: number[];
+    let errorMessages: string[];
+
+    const tagJson = {
+        id: 5, name: "Caixa", colorIndex: 2, systemKind: "instrument", instrumentTypeId: "5",
+        editable: false, assignable: true, usageCount: 0,
+    };
+
+    const perm = { isOwner: true, canRead: true, canWrite: true, isWorld: false, groupIds: [] };
+
+    const handleTagsChanged = (): Promise<boolean> => {
+        tagsChangedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    const handleScoreTagsChanged = (scoreId: number): Promise<boolean> => {
+        changedScoreIds.push(scoreId);
+
+        return Promise.resolve(true);
+    };
+
+    const handleShowError = (text: string): Promise<boolean> => {
+        errorMessages.push(text);
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        tagsChangedCalls = 0;
+        changedScoreIds = [];
+        errorMessages = [];
+
+        requisitions.register("tagsChanged", handleTagsChanged);
+        requisitions.register("scoreTagsChanged", handleScoreTagsChanged);
+        requisitions.register("showError", handleShowError);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("tagsChanged", handleTagsChanged);
+        requisitions.unregister("scoreTagsChanged", handleScoreTagsChanged);
+        requisitions.unregister("showError", handleShowError);
+    });
+
+    it("caches the catalogue and the owner scopes", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { tags: [tagJson] }))
+            .mockResolvedValueOnce(responseOf(200, { scopes: [{ name: "Global" }] }));
+
+        await model.reloadTags();
+
+        expect(model.tags).toHaveLength(1);
+        expect(model.tagOwnerScopes).toHaveLength(1);
+        expect(tagsChangedCalls).toBe(1);
+    });
+
+    it("asks for the catalogue and the owner scopes with the session token", async () => {
+        const fetchMock = vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, {
+                token: "test-token",
+                user: { id: 1, email: "u@example.com", displayName: "U", isAdmin: false },
+                capabilities: {
+                    canEditScores: true, canManageUsers: false, canManageInstruments: false, canExportMP3: false,
+                },
+            }))
+            .mockResolvedValueOnce(responseOf(200, { tags: [tagJson] }))
+            .mockResolvedValueOnce(responseOf(200, { scopes: [] }));
+
+        await model.login("u@example.com", "p");
+
+        // The login reloads the catalogue in the background, and the usable tags depend on the session.
+        await vi.waitFor(() => {
+            expect(model.tags).toHaveLength(1);
+        });
+
+        const sessionHeaders = fetchMock.mock.calls.filter(([url]) => {
+            const target = String(url);
+
+            return target.includes("action=listTags") || target.includes("action=listTagOwnerScopes");
+        }).map((call) => {
+            return (call[1]?.headers as Record<string, string>).Authorization;
+        });
+
+        expect(sessionHeaders).toEqual(["Bearer test-token", "Bearer test-token"]);
+    });
+
+    it("keeps the tag the backend reuses for a name the user already knows", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { created: false, tag: tagJson }))
+            .mockResolvedValueOnce(responseOf(200, { tags: [tagJson] }))
+            .mockResolvedValueOnce(responseOf(200, { scopes: [] }));
+
+        const created = await model.createTag("caixa");
+
+        expect(created?.id).toBe(5);
+        expect(model.tags).toHaveLength(1);
+    });
+
+    it("keeps the score entries it already had when a combination is applied", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { scores: [{ id: 1, name: "A", tagIds: [5], perm }] }))
+            .mockResolvedValueOnce(responseOf(200, { scores: [{ id: 1, name: "B", tagIds: [], perm }] }));
+
+        await model.queryScores(TagCombination.empty);
+        const score = model.scores[0];
+
+        await model.queryScores({ groups: [[5]] });
+
+        expect(model.scores[0]).toBe(score);
+        expect(score.name).toBe("B");
+        expect(score.tagIds).toEqual([]);
+    });
+
+    it("repeats the active combination when a save refreshes the list", async () => {
+        const fetchMock = vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { scores: [] }))
+            .mockResolvedValueOnce(responseOf(200, { success: true, id: 42 }))
+            .mockResolvedValueOnce(responseOf(200, { scores: [] }));
+
+        await model.queryScores({ groups: [[5]] });
+
+        model.startNewArrangement([createInstrument("5", 0, 0)]);
+        await model.saveArrangement();
+
+        const listCalls = fetchMock.mock.calls.filter(([url]) => {
+            return String(url).includes("action=listScores");
+        });
+        const refreshBody = requestBodyOf<IListScoresRequest>(listCalls[listCalls.length - 1]);
+
+        expect(refreshBody.groups).toEqual([[5]]);
+    });
+
+    it("assigns the tags a new arrangement was started with when it is first stored", async () => {
+        const fetchMock = vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { success: true, id: 42 }))
+            .mockResolvedValueOnce(responseOf(200, { success: true }))
+            .mockResolvedValueOnce(responseOf(200, { success: true }))
+            .mockResolvedValueOnce(responseOf(200, { scores: [] }));
+
+        model.startNewArrangement([createInstrument("5", 0, 0)], undefined, [5, 7]);
+        await model.saveArrangement();
+
+        const assignments = fetchMock.mock.calls.filter(([url]) => {
+            return String(url).includes("action=assignTag");
+        }).map((call) => {
+            return requestBodyOf<ITagAssignmentRequest>(call);
+        });
+
+        expect(assignments).toEqual([{ scoreId: 42, tagId: 5 }, { scoreId: 42, tagId: 7 }]);
+    });
+
+    it("mirrors an assignment in the score and in the catalogue", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { tags: [tagJson] }))
+            .mockResolvedValueOnce(responseOf(200, { scopes: [] }))
+            .mockResolvedValueOnce(responseOf(200, { scores: [{ id: 1, name: "A", tagIds: [], perm }] }))
+            .mockResolvedValueOnce(responseOf(200, { success: true }));
+
+        await model.reloadTags();
+        await model.queryScores(TagCombination.empty);
+
+        const assigned = await model.assignTag(1, 5);
+
+        expect(assigned).toBe(true);
+        expect(model.findScore(1)?.tagIds).toEqual([5]);
+        expect(model.tags[0].usageCount).toBe(1);
+        expect(changedScoreIds).toEqual([1]);
+    });
+
+    it("reports a refusal through the notification center", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+            responseOf(409, { error: "The score still uses the instrument of \"Caixa\"." }),
+        );
+
+        const removed = await model.unassignTag(1, 5);
+
+        expect(removed).toBe(false);
+        expect(errorMessages).toEqual(["The score still uses the instrument of \"Caixa\"."]);
+        expect(changedScoreIds).toEqual([]);
+    });
+
+    it("derives the instrument tags of the loaded arrangement", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { tags: [tagJson] }))
+            .mockResolvedValueOnce(responseOf(200, { scopes: [] }));
+        await model.reloadTags();
+
+        model.startNewArrangement([createInstrument("5", 7)]);
+
+        expect(model.arrangementInstrumentTagIds).toEqual([5]);
+    });
+});
+
+describe("ScoreBookDataModel — score list entries", { concurrent: false }, () => {
+    let model: ScoreBookDataModel;
+
+    const entry = (content: string): ISbDmScore => {
+        return {
+            type: SbDmEntityType.Score, id: 42, name: "Samba", content, tagIds: [],
+            state: { initialized: content.length > 0, isLeaf: true, expanded: true, expandedOnce: true },
+            perm: { isOwner: true, canRead: true, canWrite: true, isWorld: false, groupIds: [] },
+        };
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+    });
+
+    it("leaves an entry that already has its content alone", async () => {
+        const fetchSpy = vi.spyOn(globalThis, "fetch");
+        const score = entry("{\"v\":6}");
+
+        const loaded = await model.ensureScoreContent(score);
+
+        expect(loaded).toBe(score);
+        expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("fetches the content of an entry the list only named", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(responseOf(200, {
+            id: 42, name: "Samba", content: "{\"v\":6}", tagIds: [5],
+            perm: { isOwner: true, canRead: true, canWrite: true, isWorld: false, groupIds: [] },
+        }));
+        const score = entry("");
+
+        const loaded = await model.ensureScoreContent(score);
+
+        expect(loaded?.content).toBe("{\"v\":6}");
+        expect(loaded?.tagIds).toEqual([5]);
+    });
+
+    it("answers undefined when the score cannot be read", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(responseOf(403, { error: "Forbidden" }));
+
+        expect(await model.ensureScoreContent(entry(""))).toBeUndefined();
     });
 });

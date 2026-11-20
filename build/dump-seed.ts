@@ -4,7 +4,7 @@
  */
 
 /**
- * Creates a SQL dump of scores and folders from the database.
+ * Creates a SQL dump of the scores, the global tags and their assignments from the database.
  *
  * Usage: npx tsx build/dump-seed.ts
  */
@@ -14,75 +14,109 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { createSeedSql, type ISeedFolder, type ISeedScore } from "./seed.js";
+import { loadConfig } from "../src/server/config.js";
+import { InstrumentTags } from "../src/server/InstrumentTags.js";
+import { TagAccess } from "../src/server/TagAccess.js";
+import { resolveDatabaseName } from "./migration.js";
+import { createSeedSql, type ISeedScore, type ISeedScoreTag, type ISeedTag } from "./seed.js";
 
-const API = "http://127.0.0.1:3100/api";
-
-const fetchJson = async (action: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> => {
-    const res = await fetch(`${API}?action=${action}`, {
-        method: body ? "POST" : "GET",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-    });
-
-    if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-    }
-
-    return res.json() as Promise<Record<string, unknown>>;
-};
-
-interface IFolder {
+interface IScoreRow {
     id: number;
-    parentid: number | null;
-    name: string;
-}
-
-interface IScore {
-    id: number;
-    folderid: number | null;
     name: string;
     content: string;
 }
 
+interface ITagRow {
+    id: number;
+    name: string;
+    colorIndex: number;
+}
+
+interface IAssignmentRow {
+    scoreId: number;
+    tagId: number;
+    systemKey: string | null;
+    groupId: number | null;
+}
+
 const main = async (): Promise<void> => {
-    const folders: IFolder[] = [];
-    const scores: IScore[] = [];
+    const config = loadConfig();
+    const { host, port, user, password, database: baseName } = config.database;
+    const database = resolveDatabaseName(baseName);
 
-    const collect = async (parentId: number | undefined): Promise<void> => {
-        const data = await fetchJson("listScoreFolderContent", { parentid: parentId ?? -1 });
-        const fs = (data.folders ?? []) as IFolder[];
-        const sc = (data.scores ?? []) as IScore[];
+    const mysql2 = await import("mysql2/promise");
+    const pool = mysql2.createPool({ host, port, database, user, password, connectionLimit: 1 });
 
-        for (const f of fs) {
-            folders.push(f);
-            await collect(f.id);
+    try {
+        console.log(`Collecting from ${database}…`);
+
+        const [scoreRows] = await pool.query("SELECT id, name, content FROM scores");
+        const [tagRows] = await pool.query(
+            "SELECT id, name, color_index AS colorIndex FROM tags WHERE system_key IS NULL AND group_id IS NULL",
+        );
+        const [assignmentRows] = await pool.query(
+            "SELECT st.score_id AS scoreId, st.tag_id AS tagId, t.system_key AS systemKey, "
+            + "t.group_id AS groupId FROM score_tags st JOIN tags t ON t.id = st.tag_id",
+        );
+
+        const scores = scoreRows as IScoreRow[];
+        const tags = tagRows as ITagRow[];
+        const assignments = assignmentRows as IAssignmentRow[];
+
+        const seedScores: ISeedScore[] = scores.map((score) => {
+            return { id: score.id, name: score.name, content: score.content };
+        });
+        const seedTags: ISeedTag[] = tags.map((tag) => {
+            return { id: tag.id, name: tag.name, colorIndex: tag.colorIndex };
+        });
+
+        const seedAssignments: ISeedScoreTag[] = [];
+
+        for (const assignment of assignments) {
+            if (assignment.systemKey !== null) {
+                seedAssignments.push({ scoreId: assignment.scoreId, systemKey: assignment.systemKey });
+
+                continue;
+            }
+
+            if (assignment.groupId === null) {
+                seedAssignments.push({ scoreId: assignment.scoreId, tagId: assignment.tagId });
+
+                continue;
+            }
+
+            console.warn(
+                `Skipping a tag of group ${assignment.groupId} on score ${assignment.scoreId}: `
+                + "a dump only carries global tags.",
+            );
         }
 
-        for (const s of sc) {
-            scores.push(s);
+        // A score may have been stored before its instrument tags were derived, so they are completed here.
+        for (const score of scores) {
+            for (const typeId of InstrumentTags.readTypeIds(score.content)) {
+                const systemKey = TagAccess.instrumentSystemKey(typeId);
+
+                if (assignments.some((assignment) => {
+                    return assignment.scoreId === score.id && assignment.systemKey === systemKey;
+                })) {
+                    continue;
+                }
+
+                seedAssignments.push({ scoreId: score.id, systemKey });
+            }
         }
-    };
 
-    console.log("Collecting…");
-    await collect(undefined);
+        const seedSql = createSeedSql(seedScores, seedTags, seedAssignments);
+        const dumpPath = resolve(process.cwd(), "build", "seed.sql");
 
-    // The folder list API names the root level -1, which the seed script replaces by NULL.
-    const seedFolders: ISeedFolder[] = folders.map((folder) => {
-        const isRoot = folder.parentid === null || folder.parentid === -1;
-
-        return { id: folder.id, parentid: isRoot ? null : folder.parentid, name: folder.name };
-    });
-
-    const seedScores: ISeedScore[] = scores.map((score) => {
-        return { id: score.id, folderid: score.folderid, name: score.name, content: score.content };
-    });
-
-    const seedSql = createSeedSql(seedFolders, seedScores);
-    const dumpPath = resolve(process.cwd(), "build", "seed.sql");
-
-    writeFileSync(dumpPath, seedSql, "utf-8");
-    console.log(`Dump written: ${dumpPath} (${folders.length} folders, ${scores.length} scores)`);
+        writeFileSync(dumpPath, seedSql, "utf-8");
+        console.log(
+            `Dump written: ${dumpPath} (${seedScores.length} scores, ${seedTags.length} tags, `
+            + `${seedAssignments.length} assignments)`,
+        );
+    } finally {
+        await pool.end();
+    }
 };
 
 void main();

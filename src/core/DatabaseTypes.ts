@@ -17,26 +17,13 @@ export interface ISoundLibFsNode {
     children?: ISoundLibFsNode[];
 }
 
-/** Structure of a score lib folder entry as returned by the REST endpoint. */
-export interface IScoreLibFolderDBEntry {
+/** Structure of a score entry as the score list endpoint returns it. */
+export interface IScoreListEntry {
     id: number;
-    parentid: number;
     name: string;
-    hasChildren: boolean;
-    perm: ISbDmPermissionInfo;
-}
 
-/** Structure of a score lib snippet entry as returned by the REST endpoint. */
-export interface IScoreLibScoreDBEntry {
-    id: number;
-    folderid: number;
-    name: string;
-    content: string;
-    perm: ISbDmPermissionInfo;
-}
+    /** The tag ids of the score, restricted to the tags the caller can use. */
+    tagIds: number[];
 
-/** Structure of an entry returned by the folder list API. */
-export interface IScoreDBEntry {
-    folders: IScoreLibFolderDBEntry[];
-    scores: IScoreLibScoreDBEntry[];
+    perm: ISbDmPermissionInfo;
 }

@@ -3,11 +3,70 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-.tagInput {
+/* The colours themselves live in src/core/TagPalette.ts, which the callers pass in as variables. */
+.tag-input {
+    .tag-input-tag {
+        position: relative;
+        gap: 4px;
+
+        flex: 0 0 auto;
+        padding: 0 6px;
+        font-size: 8pt;
+        height: 18px;
+
+        &.tag-input-tag-colored {
+            border: none;
+            /* The tag colour, mixed into the surface of the theme. */
+            background-color: color-mix(in srgb, var(--tag-color) 20%, var(--color-base-100));
+
+            /* The tag colour again, mixed toward the text colour of the theme so the caption stays readable. */
+            color: color-mix(in srgb, var(--tag-color) 70%, var(--color-base-content));
+
+            .icon {
+                color: inherit;
+            }
+        }
+    }
+
+    /* The palette picker lies over the badge and opens on click. */
+    .tag-input-colour-picker {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
     .tag-input-close-button {
         z-index: 1;
         justify-self: center;
         height: 16px;
         width: 16px;
+    }
+
+    .tag-input-entry {
+        position: relative;
+        flex: 1;
+        min-width: 100px;
+    }
+
+    .tag-input-field {
+        width: 100%;
+    }
+
+    .tag-input-completions {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        left: 0;
+        z-index: 50;
+    }
+
+    /* The owner only appears next to a name that occurs more than once, so it stays unobtrusive. */
+    .tag-input-completion-owner {
+        margin-left: 6px;
+        font-size: 10px;
+        opacity: 0.6;
     }
 }

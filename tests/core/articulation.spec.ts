@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     Articulation, articulationOf, availableArticulations, resolveNoteStyleForArticulation,
+    resolveRequestedNoteStyle,
 } from "../../src/core/articulation.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
@@ -84,6 +85,17 @@ describe("articulationOf", () => {
 });
 
 describe("resolveNoteStyleForArticulation", () => {
+    it("keeps an exact style when the requested style carries no matching variant", () => {
+        const accentedCenter = makeStyle("1", true, Damping.Open, false, normalStick());
+        const plainEdge = makeStyle("2", false, Damping.Open, false, rimStick());
+        const noteStyles: Record<string, IAudioData> = {
+            "1": accentedCenter,
+            "2": plainEdge,
+        };
+
+        expect(resolveNoteStyleForArticulation(noteStyles, "2", Articulation.Accent)).toBeUndefined();
+    });
+
     it("resolves the accented and muted variant of the same voice", () => {
         const noteStyles: Record<string, IAudioData> = {
             "1": makeStyle("1", true, Damping.Open, false, normalStick()),
@@ -102,6 +114,20 @@ describe("resolveNoteStyleForArticulation", () => {
 
         expect(resolveNoteStyleForArticulation(noteStyles, "1", Articulation.Muted)).toBeUndefined();
         expect(resolveNoteStyleForArticulation(noteStyles, "1", Articulation.Ghost)).toBeUndefined();
+    });
+
+    it("keeps built-in ghost and muted styles exact", () => {
+        const ghostStyle = makeStyle("2", false, Damping.Open, true, normalStick());
+        const mutedStyle = makeStyle("3", false, Damping.Muted, false, normalStick());
+        const noteStyles: Record<string, IAudioData> = {
+            "2": ghostStyle,
+            "3": mutedStyle,
+        };
+
+        expect(resolveNoteStyleForArticulation(noteStyles, "2", Articulation.Ghost)).toBe("2");
+        expect(resolveNoteStyleForArticulation(noteStyles, "3", Articulation.Muted)).toBe("3");
+        expect(resolveNoteStyleForArticulation(noteStyles, "2", Articulation.Muted)).toBe("3");
+        expect(resolveNoteStyleForArticulation(noteStyles, "3", Articulation.Ghost)).toBe("2");
     });
 
     it("keeps an always-accented voice (e.g. Repinique Slap) as its own style", () => {
@@ -128,6 +154,28 @@ describe("resolveNoteStyleForArticulation", () => {
         };
 
         expect(resolveNoteStyleForArticulation(noteStyles, "nope", Articulation.Accent)).toBeUndefined();
+    });
+});
+
+describe("resolveRequestedNoteStyle", () => {
+    it("preserves an accented style when the requested voice is accented", () => {
+        const noteStyles: Record<string, IAudioData> = {
+            "1": makeStyle("1", true, Damping.Open, false, normalStick()),
+            "2": makeStyle("2", false, Damping.Muted, false, normalStick()),
+        };
+
+        expect(resolveRequestedNoteStyle(noteStyles, "1", Articulation.Accent)).toBe("1");
+        expect(resolveRequestedNoteStyle(noteStyles, "1", Articulation.Muted)).toBe("2");
+    });
+
+    it("keeps always-accented and ghost-only voices exact", () => {
+        const noteStyles: Record<string, IAudioData> = {
+            "7": makeStyle("7", true, Damping.Open, false, slapHand()),
+            "2": makeStyle("2", false, Damping.Open, true, normalStick()),
+        };
+
+        expect(resolveRequestedNoteStyle(noteStyles, "7", Articulation.Muted)).toBe("7");
+        expect(resolveRequestedNoteStyle(noteStyles, "2", Articulation.Accent)).toBe("2");
     });
 });
 

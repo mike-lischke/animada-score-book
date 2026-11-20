@@ -357,7 +357,20 @@ export class StaffMeasureEditor extends MeasureEditor {
 
         const existingNote = this.entryMode === EditEntryMode.Overwrite && this.hasNoteAt(cursor);
         if (existingNote || this.isSubdivisionSlot(cursor)) {
-            this.playNote(this.setNote(cursor, style.id));
+            const applied = this.setNote(cursor, style.id);
+            this.playNote(applied);
+            if (existingNote) {
+                const event = this.eventAt(cursor);
+                if (event !== undefined) {
+                    const inserted: IInsertedStaffEvent = {
+                        ...cursor,
+                        duration: event.duration,
+                        style,
+                    };
+                    this.advanceStaffCursor(inserted);
+                }
+            }
+
             this.focusInput();
 
             return true;

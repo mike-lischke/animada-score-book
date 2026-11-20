@@ -9,7 +9,7 @@ Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/MariaDB), Vit
 
 ## Machine Rules — Highest Priority
 
-Nothing on this computer changes without the explicit permission of the user: no shell environment variables (`export`, assigning `path`/`PATH`), no dotfiles, no installations, no `sudo`, no writes outside this repository. Tooling is Node.js/TypeScript only (`tsx`, Vitest, Playwright, the `npm` scripts) — no python, perl, sed or awk. The rules every AI model has to follow are in [`AGENTS.md`](../AGENTS.md).
+Nothing on this computer changes without the explicit permission of the user: no shell environment variables (`export`, assigning `path`/`PATH`), no dotfiles, no installations, no `sudo`, no writes outside this repository. All work stays inside this repository's folder: files are only read, created, changed or deleted there, temporary files, backups and scratch data included — the system temp directory is not a workspace, and a path outside needs the user's explicit permission for that case. Tooling is Node.js/TypeScript only (`tsx`, Vitest, Playwright, the `npm` scripts) — no python, perl, sed or awk. Files are read and changed with the editor tools (`view`, `edit`, `create`); shell commands run tooling, they do not write or rewrite source files through redirection or heredocs. The rules every AI model has to follow are in [`AGENTS.md`](../AGENTS.md).
 
 ---
 
@@ -94,6 +94,8 @@ All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns
 - Never add a suppression comment (`// @ts-ignore` or `// eslint-disable-next-line` or `// spell-checker: disable`) without first asking the user. If a suppression is necessary, add a comment explaining why it is safe and what the alternative would be.
 
 ### Git Commit Messages
+- Commit only on an explicit instruction. Finishing a task, a green test run or a finished phase is no reason to commit.
+- Present the commit message and wait for the user's approval before committing, even when no review of the message was asked for.
 - Use present tense, imperative mood: "Fix bug" not "Fixed bug" or "Fixes bug".
 - Always use english in commit messages, even if the codebase is otherwise multilingual.
 

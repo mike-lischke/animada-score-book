@@ -6,7 +6,9 @@
 import { createPool } from "mysql2/promise";
 import type { ExecuteValues, Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
-import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
+import type {
+    DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, IDbStatement, ITestConnectionResult,
+} from "./database.js";
 
 export class MySqlAdapter implements IDatabaseAdapter {
     private pool: Pool | undefined;
@@ -49,6 +51,9 @@ export class MySqlAdapter implements IDatabaseAdapter {
             database: config.database,
             user: config.user,
             password: config.password,
+            // State the connection charset instead of relying on the driver default: a tag name travels as
+            // characters, and a 4-byte instrument symbol must fit without the connection mangling it.
+            charset: "utf8mb4_unicode_ci",
             waitForConnections: true,
             connectionLimit: 10,
             connectTimeout: 10000,
@@ -137,6 +142,27 @@ export class MySqlAdapter implements IDatabaseAdapter {
         if (this.pool) {
             await this.pool.end();
             this.pool = undefined;
+        }
+    }
+
+    public async executeTransaction(statements: IDbStatement[]): Promise<void> {
+        const pool = this.getPoolOrThrow();
+        const connection = await pool.getConnection();
+
+        try {
+            await connection.beginTransaction();
+
+            for (const statement of statements) {
+                await connection.execute(statement.sql, statement.params as ExecuteValues[] | undefined);
+            }
+
+            await connection.commit();
+        } catch (e) {
+            await connection.rollback();
+
+            throw e;
+        } finally {
+            connection.release();
         }
     }
 

@@ -17,15 +17,18 @@ import { decomposeRestSpan } from "./rest-notation.js";
 import { computeIsTuplet, maxTupletLevels } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
-import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
+import type { IScoreListEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
+import { NameText } from "./NameText.js";
 import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
 import { StepGrid } from "./StepGrid.js";
+import { TagCombination } from "./TagCombination.js";
+import type { ITagCombination, ITagInfo, ITagOwnerScope } from "./types/tags.js";
 import type {
     IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent,
     IMeterSnapshot, IArticulationSymbol, IRangeArticulationAnchor, IRangeArticulationPlacement,
-    IRepeatBar, ISubdivision, Mutable
+    IRepeatBar, ISubdivision
 } from "./types/general.js";
 import { RangeArticulationKind, RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
@@ -171,9 +174,8 @@ export interface INoteArticulation {
 }
 
 /**
- * Describes the articulation that is baked into a specific audio sample.
- * This is purely descriptive — it tells the player which articulation
- * values the sample was recorded with, so the right sample can be
+ * Describes the articulation that is baked into a specific audio sample. This is purely descriptive — it tells
+ * the player which articulation values the sample was recorded with, so the right sample can be
  * selected for a given {@link INoteArticulation}.
  */
 export interface ISampleProfile {
@@ -293,6 +295,30 @@ export interface ISoundStyleMeta {
     readonly sampleProfile: ISampleProfile;
 }
 
+/**
+ * The job an instrument has in the bateria, which decides the colour of its tag. Instruments of one role share one
+ * colour.
+ */
+export enum InstrumentRole {
+    /** The surdos mark the pulse. */
+    GroundRhythm,
+
+    /** Caixa and repinique weave the pattern above the pulse. */
+    Carpet,
+
+    /** Agogô, chocalho and tamborim phrase above the pattern. */
+    Voice,
+
+    /** Hand drums with a pattern of their own, like the timbau or a repinique de mão. */
+    HandRhythm,
+
+    /** Apito and reco-reco, which mark breaks and add noise instead of notes. */
+    Effect,
+
+    /** Cavacinho and banjo, which carry the harmony. */
+    Accompaniment,
+}
+
 /** Defines the structure of the instrument metadata. */
 export interface IInstrumentMeta {
     /** A unique identifier for the sound. */
@@ -308,6 +334,9 @@ export interface IInstrumentMeta {
     readonly displayName: string;
     readonly icon: string;
     readonly color: string;
+
+    /** The role of the instrument, which decides the colour of its tag. Number cues name none, as they carry no tag. */
+    readonly role?: InstrumentRole;
 }
 
 export interface ITimeParamsView {
@@ -344,16 +373,16 @@ export interface ISbDmEntityState {
 }
 
 export enum ScoreBookChangeReason {
-    /** A score was loaded into the player — no structural change to the library. */
+    /** A score was loaded into the player — no change to the score list. */
     ScoreLoaded,
 
-    /** An entry was renamed — no structural change. */
+    /** A score was renamed — no change to the score list. */
     EntryRenamed,
 
-    /** An entry was deleted — the tree structure changed. */
+    /** A score was deleted, so the list lost an entry. */
     EntryDeleted,
 
-    /** The entire library was refreshed from the backend — the tree structure changed. */
+    /** The score list was rebuilt from the backend, for example for another tag combination. */
     LibraryRefreshed,
 }
 
@@ -361,7 +390,6 @@ export enum SbDmEntityType {
     SoundFolder,
     SoundFile,
     Score,
-    ScoreFolder,
     Track,
     TrackPiece,
     NoteEvent,
@@ -440,21 +468,15 @@ export interface ISbDmSoundFile {
     readonly name: string;
 }
 
-export interface ISbDmScoreFolder extends ISbDmVisual {
-    readonly type: SbDmEntityType.ScoreFolder;
-    readonly parent?: ISbDmScoreFolder;
-    readonly children: Array<ISbDmScoreFolder | ISbDmScore>;
-
-    name: string;
-}
-
-/** A score entry in the score library. */
+/** A score entry in the score list. */
 export interface ISbDmScore extends ISbDmVisual {
     readonly type: SbDmEntityType.Score;
-    readonly parent?: ISbDmScoreFolder;
     name: string;
     content: string;
     readonly description?: string;
+
+    /** The ids of the tags the current user can use on this score. */
+    tagIds: number[];
 }
 
 export interface ISbDmTrack extends ISbDmCommon {
@@ -618,7 +640,9 @@ export interface ISbDmArrangement extends ISbDmCommon {
 
 interface IScoreBookDataModelData {
     soundLib: Array<ISbDmSoundFolder | ISbDmSoundFile>;
-    scoreLib: Array<ISbDmScoreFolder | ISbDmScore>;
+
+    /** The scores matching the active tag combination. */
+    scores: ISbDmScore[];
     instruments: ISbDmInstrument[];
     numberSounds?: ISbDmInstrument;
 
@@ -630,7 +654,6 @@ interface IScoreBookDataModelData {
 export type ScoreBookDataModelEntry =
     | ISbDmSoundFolder
     | ISbDmSoundFile
-    | ISbDmScoreFolder
     | ISbDmScore
     | ISbDmTrack
     | ISbDmInstrument
@@ -676,7 +699,9 @@ export interface IGroupRow {
     id: number;
     name: string;
     description: string;
-    color: string;
+
+    /** The index of the group's colour in the fixed palette of `TagPalette`. */
+    colorIndex: number;
     adminId: number | null;
 
     /** The display name of the group's administrator, if it has one. */
@@ -906,20 +931,35 @@ export class ScoreBookDataModel {
 
     private data: IScoreBookDataModelData = {
         soundLib: [],
-        scoreLib: [],
+        scores: [],
         instruments: [],
     };
+
+    /** The tags the current user can use, as the backend last reported them. */
+    private tagCatalogue: ITagInfo[] = [];
+
+    /** The owner scopes the current user may create tags in. */
+    private tagScopes: ITagOwnerScope[] = [];
+
+    /**
+     * The tag combination the current score list was queried with. A refresh that is not a new selection — after a
+     * save or a deleted tag, for example — repeats it, so the list the user is looking at stays filtered.
+     */
+    private scoreListCombination: ITagCombination = TagCombination.empty;
+
+    /**
+     * The tags the current new arrangement starts with. They cannot be assigned before the arrangement has a score
+     * row, so they wait here until the first save created one.
+     */
+    private newArrangementTagIds: number[] = [];
 
     public async initialize(): Promise<void> {
         const promises: Array<Promise<void>> = [
             this.loadSoundLib(),
             this.loadInstruments(),
             this.loadNumberSounds(),
-            (async () => {
-                const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
-                await this.updateScoreLibFolder(freshList);
-                this.data.scoreLib = freshList;
-            })(),
+            this.reloadTags(),
+            this.queryScores(TagCombination.empty),
         ];
 
         await Promise.all(promises);
@@ -933,8 +973,25 @@ export class ScoreBookDataModel {
         return this.data.soundLib;
     }
 
-    public get scoreLib(): Array<ISbDmScoreFolder | ISbDmScore> {
-        return this.data.scoreLib;
+    /**
+     * @returns The scores matching the active tag combination.
+     */
+    public get scores(): ISbDmScore[] {
+        return this.data.scores;
+    }
+
+    /**
+     * @returns The tags the current user can use.
+     */
+    public get tags(): readonly ITagInfo[] {
+        return this.tagCatalogue;
+    }
+
+    /**
+     * @returns The owner scopes the current user may create tags in; an empty list means they cannot create any.
+     */
+    public get tagOwnerScopes(): readonly ITagOwnerScope[] {
+        return this.tagScopes;
     }
 
     public get instruments(): ISbDmInstrument[] {
@@ -985,6 +1042,7 @@ export class ScoreBookDataModel {
 
         this.data.arrangement = arrangement;
         this.applyArrangementPlaybackSettings(arrangement);
+        this.newArrangementTagIds = [];
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.ScoreLoaded);
 
         return arrangement;
@@ -996,14 +1054,16 @@ export class ScoreBookDataModel {
      *
      * @param instruments The instruments that should appear in the new arrangement.
      * @param options Optional initial title and timing parameters.
+     * @param tagIds The tags the score receives once it is first stored, typically the tags of the active filter.
      *
      * @returns The new arrangement.
      */
-    public startNewArrangement(instruments: ISbDmInstrument[],
-        options?: IArrangementCreationOptions): ISbDmArrangement {
+    public startNewArrangement(instruments: ISbDmInstrument[], options?: IArrangementCreationOptions,
+        tagIds: number[] = []): ISbDmArrangement {
         const arrangement = Arrangement.emptyArrangementWithInstruments(instruments, options);
         this.data.arrangement = arrangement;
         this.applyArrangementPlaybackSettings(arrangement);
+        this.newArrangementTagIds = [...tagIds];
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.ScoreLoaded);
 
         return arrangement;
@@ -1235,7 +1295,14 @@ export class ScoreBookDataModel {
         }
 
         let changed: boolean;
-        if (this.isSlotStart(measure, start)) {
+        const exactEvent = measure.events.find((event) => {
+            return compareFractions(event.start, start) === 0;
+        });
+        if (exactEvent !== undefined
+            && this.fractionsEqual(exactEvent.duration, duration)
+            && !this.isSlotStart(measure, start)) {
+            changed = this.setEventNoteStyle(measure, start, noteStyleId);
+        } else if (this.isSlotStart(measure, start)) {
             changed = this.setEventNoteStyle(measure, start, noteStyleId);
         } else if (duration.numerator <= 0) {
             return false;
@@ -2498,7 +2565,7 @@ export class ScoreBookDataModel {
         }
 
         const data = await res.json() as {
-            id: number; folderid: number | null; name: string; content: string;
+            id: number; name: string; content: string; tagIds: number[];
             perm: ISbDmPermissionInfo;
         };
 
@@ -2513,6 +2580,7 @@ export class ScoreBookDataModel {
                 isLeaf: true,
             },
             content: data.content,
+            tagIds: data.tagIds,
             perm: data.perm,
         };
 
@@ -2520,98 +2588,80 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Adds a new score folder to the data model.
+     * Makes sure a score list entry carries its content. The list names the scores and their tags, so the content
+     * only arrives when the score is actually opened.
      *
-     * @param name The name of the new folder.
-     * @param parent The parent folder to add the new folder to. If not given, the new folder is added to the root.
+     * @param score The entry to complete.
+     *
+     * @returns The same entry, or undefined when the backend could not deliver the score.
      */
-    public async addScoreFolder(name: string, parent?: ISbDmScoreFolder): Promise<void> {
-        // Before adding the new folder check if a folder with the same name already exists.
-        const siblings = parent ? parent.children : this.data.scoreLib;
-        const existing = siblings.find((entry) => {
-            return entry.type === SbDmEntityType.ScoreFolder && entry.name === name;
-        });
-
-        if (existing) {
-            throw new Error(`A folder named '${name}' already exists in the target location.`);
+    public async ensureScoreContent(score: ISbDmScore): Promise<ISbDmScore | undefined> {
+        if (score.content.length > 0) {
+            return score;
         }
 
-        const res = await this.fetchApi(`/api?action=addScoreFolder`, {
-            method: "POST",
-            headers: { Accept: "application/json" },
-            body: JSON.stringify({ name, parentid: parent?.id }),
-        });
-
-        if (!res) {
-            return;
+        const [fresh] = await this.fetchScoreById(score.id);
+        if (!fresh) {
+            return undefined;
         }
 
-        const { success, id } = await res.json() as { success: boolean; id: number; };
-        if (success) {
-            const newFolder: ISbDmScoreFolder = {
-                type: SbDmEntityType.ScoreFolder,
-                id,
-                name,
-                parent,
-                state: {
-                    initialized: true,
-                    isLeaf: true,
-                    expanded: false,
-                    expandedOnce: false,
-                },
-                children: [],
-            };
+        score.content = fresh.content;
+        score.tagIds = fresh.tagIds;
+        score.perm = fresh.perm;
 
-            if (!parent) {
-                this.data.scoreLib.push(newFolder);
-
-                return;
-            }
-
-            parent.children.push(newFolder);
-            await this.refreshScoreLib();
-        }
+        return score;
     }
 
-    public async addScore(name: string, content: string, parent?: ISbDmScoreFolder): Promise<void> {
+    /**
+     * Creates a new score in the backend and adds it to the score list.
+     *
+     * @param name The name of the new score.
+     * @param content The packed arrangement to store with it.
+     *
+     * @returns The new score entry, or undefined when the backend refused the request.
+     */
+    public async addScore(name: string, content: string): Promise<ISbDmScore | undefined> {
+        const storedName = NameText.normalize(name);
+
         const res = await this.fetchApi(`/api?action=addScore`, {
             method: "POST",
             headers: { Accept: "application/json" },
-            body: JSON.stringify({ name, content, folderId: parent?.id }),
+            body: JSON.stringify({ name: storedName, content }),
         });
 
         if (!res) {
-            return;
+            return undefined;
         }
 
         const { success, id } = await res.json() as { success: boolean; id: number; };
-        if (success) {
-            if (this.data.arrangement) {
-                (this.data.arrangement as Arrangement).id = id;
-            }
-
-            const newScore: ISbDmScore = {
-                type: SbDmEntityType.Score,
-                id,
-                name,
-                content,
-                parent,
-                state: {
-                    initialized: true,
-                    isLeaf: true,
-                    expanded: true,
-                    expandedOnce: true,
-                },
-            };
-
-            if (!parent) {
-                this.data.scoreLib.push(newScore);
-            } else {
-                parent.children.push(newScore);
-            }
-
-            await this.refreshScoreLib();
+        if (!success) {
+            return undefined;
         }
+
+        if (this.data.arrangement) {
+            (this.data.arrangement as Arrangement).id = id;
+        }
+
+        const newScore: ISbDmScore = {
+            type: SbDmEntityType.Score,
+            id,
+            name: storedName,
+            content,
+            tagIds: [],
+            state: {
+                initialized: true,
+                isLeaf: true,
+                expanded: true,
+                expandedOnce: true,
+            },
+        };
+
+        this.data.scores.push(newScore);
+        this.data.scores.sort((left, right) => {
+            return NameText.compare(left.name, right.name);
+        });
+
+        return newScore;
     }
 
     /**
@@ -2652,15 +2702,17 @@ export class ScoreBookDataModel {
         score.content = content;
     }
 
-    public async renameEntry(entry: ISbDmScoreFolder | ISbDmScore, newName: string): Promise<void> {
+    /**
+     * Renames a score, in the backend and in the list.
+     *
+     * @param entry The score to rename.
+     * @param newName The new name.
+     */
+    public async renameEntry(entry: ISbDmScore, newName: string): Promise<void> {
         const res = await this.fetchApi(`/api?action=renameEntry`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                type: entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score",
-                id: entry.id,
-                name: newName,
-            }),
+            body: JSON.stringify({ type: "score", id: entry.id, name: newName }),
         });
 
         if (!res) {
@@ -2702,71 +2754,33 @@ export class ScoreBookDataModel {
         return { ok: false, error: body.error ?? `HTTP ${res.status} ${res.statusText}` };
     }
 
-    public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
-        // Check if the entry has children.
-        if (entry.type === SbDmEntityType.ScoreFolder && entry.children.length > 0) {
-            throw new Error("Cannot delete a folder that still has children.");
-        }
-
+    public async deleteEntry(entry: ISbDmScore): Promise<void> {
         const res = await this.fetchApi(`/api?action=delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                type: entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score",
-                id: entry.id,
-            }),
+            body: JSON.stringify({ type: "score", id: entry.id }),
         });
 
         if (!res) {
             return;
         }
 
-        const parentChildren = entry.parent ? entry.parent.children : this.data.scoreLib;
-        const index = parentChildren.findIndex((e) => {
-            return e.id === entry.id;
+        const index = this.data.scores.findIndex((candidate) => {
+            return candidate.id === entry.id;
         });
 
         if (index >= 0) {
-            parentChildren.splice(index, 1);
+            this.data.scores.splice(index, 1);
             void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.EntryDeleted);
         }
     }
 
     /**
-     * Recursively clears explicit permissions and group assignments from all
-     * child folders and scores of the given folder, so they inherit from their
-     * respective parents. The folder's own permissions are left untouched.
-     *
-     * @param folderId The folder whose descendants should have their permissions reset.
-     *
-     * @returns The number of folders and scores that were reset.
-     */
-    public async resetChildPermissions(folderId: number): Promise<{ resetFolders: number; resetScores: number; }> {
-        const res = await this.fetchApi("/api?action=resetChildPermissions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ folderId }),
-        });
-
-        if (!res?.ok) {
-            if (!res) {
-                throw new Error("Backend unreachable.");
-            }
-
-            const data = await res.json() as { error?: string; };
-
-            throw new Error(data.error ?? "Failed to reset child permissions.");
-        }
-
-        return await res.json() as { resetFolders: number; resetScores: number; };
-    }
-
-    /**
-     * Fetches the explicit (non-inherited) permissions for an entity.
+     * Fetches the explicit permissions of a score.
      * Owners and admins can call this.
      *
-     * @param entityType "score" or "folder".
-     * @param entityId   The entity's database id.
+     * @param entityType The entity type, which is always "score".
+     * @param entityId The entity's database id.
      *
      * @returns The permission decomposition, or null if none exists.
      */
@@ -2786,12 +2800,12 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Sets permissions for a score library entity. Owner or admin only.
+     * Sets the permissions of a score. Owner or admin only.
      *
-     * @param entityType   "score" or "folder".
-     * @param entityId     The entity's database id.
-     * @param ownerId      The new owner id, or null to inherit from parent. Omit to leave unchanged.
-     * @param addGroups    Groups to add with writable flag.
+     * @param entityType The entity type, which is always "score".
+     * @param entityId The entity's database id.
+     * @param ownerId The new owner id, or null to drop the owner. Omit to leave it unchanged.
+     * @param addGroups Groups to add with writable flag.
      * @param removeGroups Group ids to remove from the entity.
      */
     public async setPermissions(entityType: string, entityId: number,
@@ -2922,9 +2936,11 @@ export class ScoreBookDataModel {
     public reset(): void {
         this.data = {
             soundLib: [],
-            scoreLib: [],
+            scores: [],
             instruments: [],
         };
+        this.tagCatalogue = [];
+        this.tagScopes = [];
 
         this.clearAuthState();
     }
@@ -2942,6 +2958,7 @@ export class ScoreBookDataModel {
 
         if (restored) {
             void requisitions.execute("authChanged", undefined);
+            void this.reloadTags();
         } else {
             await this.loadDemoCapabilities();
         }
@@ -2967,6 +2984,7 @@ export class ScoreBookDataModel {
         }
 
         void requisitions.execute("authChanged", undefined);
+        void this.reloadTags();
     }
 
     /**
@@ -3134,20 +3152,21 @@ export class ScoreBookDataModel {
     /**
      * Creates a new group. Admin-only.
      *
-     * @param name        The group name.
+     * @param name The group name.
      * @param description The group description (optional).
-     * @param color       The group color (optional, random if omitted).
-     * @param password    The group password (optional, no password if omitted).
-     * @param adminId     The user id of the group admin (optional, no admin if omitted).
-     * @returns The new group's id and color.
+     * @param colorIndex The palette index of the group colour (optional, the first palette colour if omitted).
+     * @param password The group password (optional, no password if omitted).
+     * @param adminId The user id of the group admin (optional, no admin if omitted).
+     *
+     * @returns The new group's id and colour index.
      */
-    public async createGroup(name: string, description: string, color?: string,
+    public async createGroup(name: string, description: string, colorIndex?: number,
         password?: string, adminId?: number | null,
-    ): Promise<{ id: number; color: string; }> {
+    ): Promise<{ id: number; colorIndex: number; }> {
         const body: Record<string, unknown> = { name, description };
 
-        if (color) {
-            body.color = color;
+        if (colorIndex !== undefined) {
+            body.colorIndex = colorIndex;
         }
 
         if (password) {
@@ -3168,28 +3187,29 @@ export class ScoreBookDataModel {
             throw new Error("Backend unreachable.");
         }
 
-        const data = await res.json() as { success?: boolean; id?: number; color?: string; error?: string; };
+        const data = await res.json() as { success?: boolean; id?: number; colorIndex?: number; error?: string; };
 
         if (data.error) {
             throw new Error(data.error);
         }
 
-        return { id: data.id!, color: data.color! };
+        return { id: data.id!, colorIndex: data.colorIndex! };
     }
 
     /**
      * Updates an existing group. Admin-only.
      *
-     * @param id                  The group id.
-     * @param fields              Fields to update.
-     * @param fields.name         The new name (optional).
-     * @param fields.description  The new description (optional).
-     * @param fields.color        The new color (optional).
-     * @param fields.password     The new password, or null to remove (optional).
-     * @param fields.adminId      The new admin user ID, or null to remove (optional).
+     * @param id The group id.
+     *
+     * @param fields Fields to update.
+     * @param fields.name The new name (optional).
+     * @param fields.description The new description (optional).
+     * @param fields.colorIndex The palette index of the new colour (optional).
+     * @param fields.password The new password, or null to remove (optional).
+     * @param fields.adminId The new admin user ID, or null to remove (optional).
      */
     public async updateGroup(id: number, fields: {
-        name?: string; description?: string; color?: string;
+        name?: string; description?: string; colorIndex?: number;
         password?: string | null; adminId?: number | null;
     },): Promise<void> {
         const body: Record<string, unknown> = { id };
@@ -3202,8 +3222,8 @@ export class ScoreBookDataModel {
             body.description = fields.description;
         }
 
-        if (fields.color !== undefined) {
-            body.color = fields.color;
+        if (fields.colorIndex !== undefined) {
+            body.colorIndex = fields.colorIndex;
         }
 
         if (fields.password !== undefined) {
@@ -3316,14 +3336,234 @@ export class ScoreBookDataModel {
      */
 
     /**
-     * Refreshes the root level of the score library from the backend.
-     * Useful after permission changes to reflect updated visibility.
+     * Rebuilds the score list from the backend for a tag combination. An empty combination lists every score the
+     * caller can read.
+     *
+     * @param combination The tags to filter by.
      */
-    public async refreshScoreLib(): Promise<void> {
-        const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
-        await this.updateScoreLibFolder(freshList);
-        this.data.scoreLib = freshList;
+    public async queryScores(combination: ITagCombination): Promise<void> {
+        this.scoreListCombination = TagCombination.normalize(combination);
+
+        const res = await this.fetchApi("/api?action=listScores", {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            body: JSON.stringify({ groups: combination.groups }),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { scores?: IScoreListEntry[]; };
+        const existing = new Map(this.data.scores.map((score) => {
+            return [score.id, score] as [number, ISbDmScore];
+        }));
+
+        this.data.scores = (data.scores ?? []).map((entry) => {
+            const score = existing.get(entry.id);
+
+            if (score) {
+                score.name = entry.name;
+                score.tagIds = entry.tagIds;
+                score.perm = entry.perm;
+
+                return score;
+            }
+
+            return {
+                type: SbDmEntityType.Score,
+                id: entry.id,
+                name: entry.name,
+                content: "",
+                tagIds: entry.tagIds,
+                perm: entry.perm,
+                state: {
+                    initialized: false,
+                    expanded: true,
+                    expandedOnce: true,
+                    isLeaf: true,
+                },
+            };
+        });
+
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.LibraryRefreshed);
+    }
+
+    /**
+     * Reloads the tag catalogue and the owner scopes of the current user. The usable tags depend on the session, so
+     * this runs whenever the login changes.
+     */
+    public async reloadTags(): Promise<void> {
+        const [tags, scopes] = await Promise.all([this.listTags(), this.listTagOwnerScopes()]);
+
+        this.tagCatalogue = tags;
+        this.tagScopes = scopes;
+
+        void requisitions.execute("tagsChanged", undefined);
+    }
+
+    /**
+     * @returns The tags the current user can use, as the backend lists them. Visitors without a session get none.
+     */
+    public async listTags(): Promise<ITagInfo[]> {
+        const res = await this.fetchApi("/api?action=listTags", {
+            headers: { Accept: "application/json" },
+        });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { tags?: ITagInfo[]; };
+
+        return data.tags ?? [];
+    }
+
+    /**
+     * @returns The owner scopes the current user may create tags in; an empty list means they cannot create any.
+     */
+    public async listTagOwnerScopes(): Promise<ITagOwnerScope[]> {
+        const res = await this.fetchApi("/api?action=listTagOwnerScopes", {
+            headers: { Accept: "application/json" },
+        });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { scopes?: ITagOwnerScope[]; };
+
+        return data.scopes ?? [];
+    }
+
+    /**
+     * Creates a tag in an owner scope. A name the user can already use answers with the existing tag, so the caller
+     * never has to know which of the two happened.
+     *
+     * @param name The name of the new tag.
+     * @param groupId The owner scope; undefined creates a global tag.
+     * @param colorIndex The index of the tag colour in the palette; without one the backend picks it.
+     *
+     * @returns The created or reused tag, or undefined when the backend refused the request.
+     */
+    public async createTag(name: string, groupId?: number, colorIndex?: number): Promise<ITagInfo | undefined> {
+        const res = await this.fetchApi("/api?action=createTag", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, groupId, colorIndex }),
+        }, true, true);
+
+        if (!res?.ok) {
+            return undefined;
+        }
+
+        const data = await res.json() as { tag: ITagInfo; };
+        await this.reloadTags();
+
+        return data.tag;
+    }
+
+    /**
+     * Renames a tag or changes its colour.
+     *
+     * @param id The tag to change.
+     * @param name The new name, or undefined to keep the current one.
+     * @param colorIndex The new palette index, or undefined to keep the current one.
+     *
+     * @returns The updated tag, or undefined when the backend refused the request.
+     */
+    public async updateTag(id: number, name?: string, colorIndex?: number): Promise<ITagInfo | undefined> {
+        const res = await this.fetchApi("/api?action=updateTag", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, name, colorIndex }),
+        }, true, true);
+
+        if (!res?.ok) {
+            return undefined;
+        }
+
+        const data = await res.json() as { tag: ITagInfo; };
+        await this.reloadTags();
+
+        return data.tag;
+    }
+
+    /**
+     * Deletes a tag. Its assignments go with it.
+     *
+     * @param id The tag to delete.
+     */
+    public async deleteTag(id: number): Promise<void> {
+        const res = await this.fetchApi("/api?action=deleteTag", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        await this.reloadTags();
+        await this.queryScores(this.scoreListCombination);
+    }
+
+    /**
+     * Puts a tag on a score. The change is saved immediately and is not part of the arrangement snapshot, so it is
+     * neither undoable nor does it mark the score as edited.
+     *
+     * @param scoreId The score to tag.
+     * @param tagId The tag to assign.
+     *
+     * @returns Whether the backend accepted the change.
+     */
+    public async assignTag(scoreId: number, tagId: number): Promise<boolean> {
+        return this.changeScoreTag("assignTag", scoreId, tagId);
+    }
+
+    /**
+     * Takes a tag off a score. The backend keeps an instrument tag whose instrument the score still uses.
+     *
+     * @param scoreId The score to change.
+     * @param tagId The tag to remove.
+     *
+     * @returns Whether the backend accepted the change.
+     */
+    public async unassignTag(scoreId: number, tagId: number): Promise<boolean> {
+        return this.changeScoreTag("unassignTag", scoreId, tagId);
+    }
+
+    /**
+     * @returns The instrument tag ids the loaded arrangement needs, resolved against the catalogue, so a track that
+     * was just added already shows its tag before the next save.
+     */
+    public get arrangementInstrumentTagIds(): number[] {
+        const arrangement = this.data.arrangement;
+        if (!arrangement) {
+            return [];
+        }
+
+        const typeIds = new Set(arrangement.tracks.map((track) => {
+            return track.instrument.typeId;
+        }));
+
+        return this.tagCatalogue.filter((tag) => {
+            return tag.instrumentTypeId !== undefined && typeIds.has(tag.instrumentTypeId);
+        }).map((tag) => {
+            return tag.id;
+        });
+    }
+
+    /**
+     * @param scoreId The score to look up.
+     *
+     * @returns The score list entry with that id, if the list holds it.
+     */
+    public findScore(scoreId: number): ISbDmScore | undefined {
+        return this.data.scores.find((score) => {
+            return score.id === scoreId;
+        });
     }
 
     /**
@@ -3423,7 +3663,8 @@ export class ScoreBookDataModel {
 
             (arrangement as Arrangement).id = data.id;
 
-            await this.refreshScoreLib();
+            await this.assignNewArrangementTags(data.id);
+            await this.queryScores(this.scoreListCombination);
 
             return content;
         }
@@ -3548,6 +3789,7 @@ export class ScoreBookDataModel {
         ScoreBookDataModel.storeAuthHints();
 
         void requisitions.execute("authChanged", undefined);
+        void this.reloadTags();
     }
 
     /**
@@ -3569,6 +3811,7 @@ export class ScoreBookDataModel {
         ScoreBookDataModel.storeAuthHints(group);
 
         void requisitions.execute("authChanged", undefined);
+        void this.reloadTags();
     }
 
     /**
@@ -3933,7 +4176,8 @@ export class ScoreBookDataModel {
 
     /**
      * Sets or clears the note style of the event starting exactly at the given position, keeping
-     * its duration. Used for subdivision slots, which must not be split or merged.
+     * its duration. Used for existing events of that exact length and subdivision slots, both of
+     * which must not be split or merged.
      *
      * @param measure The measure to edit.
      * @param start The exact start position of the event.
@@ -3950,7 +4194,12 @@ export class ScoreBookDataModel {
         }
 
         const event = measure.events[index];
-        if (event.noteStyleId === noteStyleId && this.sameArticulation(event.articulation, undefined)) {
+        const currentEffective = this.effectiveEventArticulation(measure, event);
+        const targetEffective = noteStyleId === undefined
+            ? undefined
+            : this.articulationOfStyle(measure.track.instrument.noteStyles[noteStyleId]);
+        if (event.noteStyleId === noteStyleId
+            && this.sameArticulation(currentEffective, targetEffective)) {
             return false;
         }
 
@@ -4082,6 +4331,31 @@ export class ScoreBookDataModel {
         }));
 
         return true;
+    }
+
+    private effectiveEventArticulation(measure: ISbDmTrackPiece,
+        event: IMeasureEvent): INoteArticulation | undefined {
+        if (event.articulation !== undefined) {
+            return event.articulation;
+        }
+
+        if (event.noteStyleId === undefined) {
+            return undefined;
+        }
+
+        return this.articulationOfStyle(measure.track.instrument.noteStyles[event.noteStyleId]);
+    }
+
+    private articulationOfStyle(style: IAudioData | undefined): INoteArticulation | undefined {
+        if (style?.sampleProfile === undefined) {
+            return undefined;
+        }
+
+        return {
+            damping: style.sampleProfile.builtInDamping,
+            accent: style.sampleProfile.builtInAccent,
+            ghost: style.sampleProfile.ghost,
+        };
     }
 
     private sameArticulation(a: INoteArticulation | undefined, b: INoteArticulation | undefined): boolean {
@@ -5151,22 +5425,24 @@ export class ScoreBookDataModel {
 
         (arrangement as Arrangement).id = data.id;
 
-        await this.refreshScoreLib();
+        await this.queryScores(this.scoreListCombination);
 
         // Re-serialize with the new ID so that AppStorage and future saves use the correct ID.
         return stringifyPackedArrangement((arrangement as Arrangement).toSnapshot());
     }
 
     /**
-     * Updates the score library entry name to match the arrangement title, if they differ.
-     * This keeps the library display in sync with the arrangement after a save.
+     * Updates the score list entry name to match the arrangement title, if they differ.
+     * This keeps the list display in sync with the arrangement after a save.
      *
      * @param scoreId The database ID of the score.
      * @param title   The current arrangement title.
      */
     private async syncScoreLibName(scoreId: number, title: string): Promise<void> {
-        const score = this.findScoreInLib(this.data.scoreLib, scoreId);
-        if (!score || score.name === title) {
+        const name = NameText.normalize(title);
+        const score = this.findScore(scoreId);
+
+        if (!score || score.name === name) {
             return;
         }
 
@@ -5174,30 +5450,78 @@ export class ScoreBookDataModel {
         const res = await this.fetchApi("/api?action=renameEntry", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "score", id: scoreId, name: title }),
+            body: JSON.stringify({ type: "score", id: scoreId, name }),
         });
 
         if (res) {
-            score.name = title;
+            score.name = name;
             void requisitions.execute("scoreEntryUpdated", score);
         }
     }
 
-    private findScoreInLib(entries: Array<ISbDmScoreFolder | ISbDmScore>, id: number): ISbDmScore | undefined {
-        for (const entry of entries) {
-            if (entry.type === SbDmEntityType.Score && entry.id === id) {
-                return entry;
-            }
+    /**
+     * Assigns the tags a new arrangement was started with. The score row exists only now, so the first save is the
+     * first moment a tag can be put on it. A refusal is reported by the assignment itself.
+     *
+     * @param scoreId The id of the score that was just created.
+     */
+    private async assignNewArrangementTags(scoreId: number): Promise<void> {
+        const tagIds = this.newArrangementTagIds;
+        this.newArrangementTagIds = [];
 
-            if (entry.type === SbDmEntityType.ScoreFolder) {
-                const found = this.findScoreInLib(entry.children, id);
-                if (found) {
-                    return found;
-                }
-            }
+        for (const tagId of tagIds) {
+            await this.assignTag(scoreId, tagId);
+        }
+    }
+
+    /**
+     * Sends a tag assignment change, reports a refusal through the notification center and mirrors the result in
+     * the cached catalogue and score entry.
+     *
+     * @param action The backend action, assignTag or unassignTag.
+     * @param scoreId The score to change.
+     * @param tagId The tag to assign or remove.
+     *
+     * @returns Whether the backend accepted the change.
+     */
+    private async changeScoreTag(action: "assignTag" | "unassignTag", scoreId: number,
+        tagId: number): Promise<boolean> {
+        const res = await this.fetchApi(`/api?action=${action}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scoreId, tagId }),
+        }, true, true);
+
+        if (!res?.ok) {
+            const data = res ? await res.json() as { error?: string; } : undefined;
+            void requisitions.execute("showError", data?.error ?? "The tag change was refused.");
+
+            return false;
         }
 
-        return undefined;
+        const score = this.findScore(scoreId);
+        if (score) {
+            score.tagIds = action === "assignTag"
+                ? Array.from(new Set([...score.tagIds, tagId]))
+                : score.tagIds.filter((id) => {
+                    return id !== tagId;
+                });
+        }
+
+        const tag = this.tagCatalogue.find((candidate) => {
+            return candidate.id === tagId;
+        });
+        if (tag) {
+            this.tagCatalogue = this.tagCatalogue.map((candidate) => {
+                return candidate.id === tagId
+                    ? { ...candidate, usageCount: candidate.usageCount + (action === "assignTag" ? 1 : -1) }
+                    : candidate;
+            });
+        }
+
+        void requisitions.execute("scoreTagsChanged", scoreId);
+
+        return true;
     }
 
     private async rewriteMigratedScore(score: ISbDmScore, arrangement: Arrangement): Promise<void> {
@@ -5310,103 +5634,6 @@ export class ScoreBookDataModel {
         // ExcitationMode enum value from this module.
         const { numberSounds } = await import("../support-sounds.js");
         this.data.numberSounds = new Instrument(numberSounds);
-    }
-
-    private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>,
-        parent?: ISbDmScoreFolder): Promise<boolean> {
-        const res = await this.fetchApi(`/api?action=listScoreFolderContent`, {
-            method: "POST",
-            headers: { Accept: "application/json" },
-            body: JSON.stringify({ parentid: parent?.id ?? -1 }),
-        });
-
-        if (!res) {
-            return false;
-        }
-
-        const data = (await res.json()) as IScoreDBEntry;
-
-        // Build a lookup of existing entries so we can update them in-place.
-        // Tree rows hold references to these objects — they must not be replaced.
-        const existingById = new Map<number, ISbDmScoreFolder | ISbDmScore>();
-        for (const entry of list) {
-            existingById.set(entry.id, entry);
-        }
-
-        // Build the new list in backend order. Entries found in the lookup are
-        // updated in-place; new entries are created. Entries not in the backend
-        // response are naturally dropped (no longer exist).
-        const newList: Array<ISbDmScoreFolder | ISbDmScore> = [];
-
-        data.folders.forEach((folder) => {
-            const existing = existingById.get(folder.id);
-            if (existing) {
-                existing.name = folder.name;
-                existing.perm = folder.perm;
-                newList.push(existing);
-
-                return;
-            }
-
-            const entry: ISbDmScoreFolder = {
-                type: SbDmEntityType.ScoreFolder,
-                id: folder.id,
-                name: folder.name,
-                parent,
-                state: {
-                    expanded: false,
-                    expandedOnce: false,
-                    initialized: false,
-                    isLeaf: !folder.hasChildren,
-                },
-                children: [],
-                perm: folder.perm,
-                refresh: async () => {
-                    (entry.state as Mutable<ISbDmEntityState>).initialized = true;
-
-                    const success = await this.updateScoreLibFolder(entry.children, entry);
-                    if (!success) {
-                        const state = entry.state as Mutable<ISbDmEntityState>;
-                        state.initialized = false;
-                        state.expandedOnce = false;
-                        state.expanded = false;
-                    }
-                },
-            };
-            newList.push(entry);
-        });
-
-        data.scores.forEach((score) => {
-            const existing = existingById.get(score.id) as ISbDmScore | undefined;
-            if (existing) {
-                existing.name = score.name;
-                existing.content = score.content;
-                existing.perm = score.perm;
-                newList.push(existing);
-
-                return;
-            }
-
-            newList.push({
-                type: SbDmEntityType.Score,
-                id: score.id,
-                name: score.name,
-                state: {
-                    initialized: true,
-                    expanded: true,
-                    expandedOnce: true,
-                    isLeaf: true,
-                },
-                parent,
-                content: score.content,
-                perm: score.perm,
-            });
-        });
-
-        list.length = 0;
-        list.push(...newList);
-
-        return true;
     }
 
     private applyArrangementPlaybackSettings(arrangement: ISbDmArrangement): void {

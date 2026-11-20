@@ -18,18 +18,14 @@
  *
  * ## Permission Model
  *
- * Each entity (score, folder) has an optional `permissions` row with:
- * - `owner_id` — the owning user (NULL = inherited from parent)
+ * Each entity (a score, a feature) has an optional `permissions` row with:
+ * - `owner_id` — the owning user (NULL = no owner)
  *
  * Groups are assigned via the `entity_groups` junction table:
  * - `entity_type`, `entity_id`, `group_id` — composite PK
  * - `writable` — whether the group has write access (read is implicit)
  *
- * Inheritance:
- * - An entity without its own `permissions` row inherits the owner from its parent.
- * - An entity inherits ALL group assignments from its ancestors (additive).
- * - An entity can add its own group assignments on top of inherited ones.
- * - Group assignments can never be removed from ancestors — only added.
+ * Permissions are flat: an entity's access comes from its own rows only.
  *
  * Special groups:
  * - **Admins**: Members bypass all permission checks. The group always exists, is editable (name, members),
@@ -54,12 +50,14 @@ interface IEntityGroupEntry {
     writable: boolean;
 }
 
-/** The fully resolved permission state for an entity (after inheritance). */
+/** The fully resolved permission state for an entity. */
 interface IResolvedPermission {
-    /** The effective owner id, or null if no owner is set anywhere in the chain. */
+    /** The owner id, or null if the entity has no owner. */
     ownerId: number | null;
-    /** All group assignments, collected from the entity and all ancestors (groupId → writable). */
+
+    /** All group assignments of the entity (groupId → writable). */
     groupEntries: Map<number, boolean>;
+
     /** The World group id, or undefined if the group does not exist. */
     worldGroupId?: number;
 }
@@ -92,7 +90,6 @@ export const enum AccessLevel {
 /** Entity types used in the permissions table. */
 export enum EntityType {
     Score = "score",
-    Folder = "folder",
     Feature = "feature",
 }
 
@@ -116,12 +113,14 @@ export enum LoginAuditEvent {
 }
 
 /** Summary of a user's relationship to an entity's permissions. */
-interface IPermissionSummary {
+export interface IPermissionSummary {
     isOwner: boolean;
     canRead: boolean;
     canWrite: boolean;
+
     /** Whether the entity is assigned to the World group (publicly readable). */
     isWorld: boolean;
+
     /** Group IDs that the entity is assigned to. */
     groupIds: number[];
 }
@@ -205,6 +204,8 @@ export class Auth {
                 return false;
             }
 
+            // The options come from the stored hash record and keep Node's `ScryptOptions` names.
+            // eslint-disable-next-line @typescript-eslint/naming-convention
             const options = opts as { N: number; r: number; p: number; };
 
             const salt = Buffer.from(parts[3], "hex");
@@ -356,7 +357,7 @@ export class Auth {
      * For features without explicit permissions, only admins have access.
      *
      * @param user The authenticated user, or undefined for anonymous.
-     * @param entityType The type of entity ("score", "folder", "feature").
+     * @param entityType The type of entity ("score", "feature").
      * @param entityId The entity id, or null for features.
      * @param requiredLevel The required access level (Read or Write).
      * @param isAdmin Optional. If true, skips the admin group DB query.
@@ -387,29 +388,7 @@ export class Auth {
             return true;
         }
 
-        // Collect all group IDs the user belongs to.
-        const userGroupIds = new Set<number>();
-
-        if (user) {
-            // Group login: user belongs only to the authenticated group.
-            if (user.authType === "group" && user.groupId !== undefined) {
-                userGroupIds.add(user.groupId);
-            } else {
-                // Normal login: collect all group memberships.
-                const memberRows = await this.getUserGroups(user.userId);
-
-                for (const r of memberRows) {
-                    userGroupIds.add(r.group_id);
-                }
-            }
-        }
-
-        // Also include the World group — everyone is a member.
-        const worldId = resolved.worldGroupId;
-
-        if (worldId !== undefined) {
-            userGroupIds.add(worldId);
-        }
+        const userGroupIds = await this.memberGroupIds(user);
 
         // Check group assignments.
         for (const [groupId, writable] of resolved.groupEntries) {
@@ -433,10 +412,10 @@ export class Auth {
 
     /**
      * Computes a permission summary for a user on an entity.
-     * Used by list endpoints that need to attach permission metadata to each returned row.
+     * Used by endpoints that need to attach permission metadata to a single row.
      *
      * @param user The authenticated user, or undefined for anonymous.
-     * @param entityType The type of entity ("score", "folder").
+     * @param entityType The type of entity ("score").
      * @param entityId The entity id.
      * @param isAdmin Optional. If true, skips the admin group DB query.
      *
@@ -444,73 +423,81 @@ export class Auth {
      */
     public async getPermissionSummary(user: ITokenPayload | undefined, entityType: EntityType,
         entityId: number, isAdmin?: boolean,): Promise<IPermissionSummary> {
-        const admin = isAdmin ?? (user ? await this.isUserInAdminGroup(user.userId) : false);
+        const summaries = await this.getPermissionSummaries(user, entityType, [entityId], isAdmin);
 
-        const resolved = await this.resolvePermission(entityType, entityId);
-
-        const isOwner = resolved.ownerId !== null && resolved.ownerId === user?.userId;
-
-        // Collect user's group memberships.
-        const userGroupIds = new Set<number>();
-
-        if (user) {
-            if (user.authType === "group" && user.groupId !== undefined) {
-                userGroupIds.add(user.groupId);
-            } else {
-                const memberRows = await this.getUserGroups(user.userId);
-
-                for (const r of memberRows) {
-                    userGroupIds.add(r.group_id);
-                }
-            }
-        }
-
-        const worldId = resolved.worldGroupId;
-
-        if (worldId !== undefined) {
-            userGroupIds.add(worldId);
-        }
-
-        let canRead = admin || isOwner;
-        let canWrite = admin || isOwner;
-
-        const isWorld = worldId !== undefined && resolved.groupEntries.has(worldId);
-
-        for (const [groupId, writable] of resolved.groupEntries) {
-            if (!userGroupIds.has(groupId)) {
-                continue;
-            }
-
-            canRead = true;
-
-            if (writable) {
-                canWrite = true;
-            }
-        }
-
-        const groupIds = Array.from(resolved.groupEntries.keys());
-
-        return {
-            isOwner,
-            canRead,
-            canWrite,
-            isWorld,
-            groupIds,
-        };
+        return summaries.get(entityId)!;
     }
 
     /**
-     * Sets the owner for an entity. An explicit NULL means "inherit from parent"
-     * (the row is deleted, so the inheritance chain takes over).
+     * Computes the permission summaries of a user for several entities of the same type, with one query per table
+     * instead of one query per entity.
+     *
+     * @param user The authenticated user, or undefined for anonymous.
+     * @param entityType The type of entity ("score", "feature").
+     * @param entityIds The entity ids to summarise.
+     * @param isAdmin Optional. If true, skips the admin group DB query.
+     *
+     * @returns The summary of every requested entity, keyed by its id.
+     */
+    public async getPermissionSummaries(user: ITokenPayload | undefined, entityType: EntityType,
+        entityIds: number[], isAdmin?: boolean,): Promise<Map<number, IPermissionSummary>> {
+        const summaries = new Map<number, IPermissionSummary>();
+
+        if (entityIds.length === 0) {
+            return summaries;
+        }
+
+        const admin = isAdmin ?? (user ? await this.isUserInAdminGroup(user.userId) : false);
+        const placeholders = entityIds.map(() => {
+            return "?";
+        }).join(", ");
+
+        const [ownerRows, groupRows, worldGroupId] = await Promise.all([
+            this.adapter.query<{ entityId: number; ownerId: number | null; }>(
+                `SELECT entity_id AS entityId, owner_id AS ownerId FROM permissions WHERE entity_type = ? ` +
+                `AND entity_id IN (${placeholders})`, [entityType, ...entityIds],
+            ),
+            this.adapter.query<{ entityId: number; groupId: number; writable: number; }>(
+                `SELECT entity_id AS entityId, group_id AS groupId, writable FROM entity_groups ` +
+                `WHERE entity_type = ? AND entity_id IN (${placeholders})`, [entityType, ...entityIds],
+            ),
+            this.getWorldGroupId(),
+        ]);
+
+        const owners = new Map<number, number | null>();
+        for (const row of ownerRows) {
+            owners.set(row.entityId, row.ownerId);
+        }
+
+        const groupEntries = new Map<number, Map<number, boolean>>();
+        for (const row of groupRows) {
+            const entityId = row.entityId;
+            const entries = groupEntries.get(entityId) ?? new Map<number, boolean>();
+            entries.set(row.groupId, Boolean(row.writable));
+            groupEntries.set(entityId, entries);
+        }
+
+        const userGroupIds = await this.memberGroupIds(user);
+
+        for (const entityId of entityIds) {
+            const entries = groupEntries.get(entityId) ?? new Map<number, boolean>();
+            summaries.set(entityId, Auth.summarize(owners.get(entityId) ?? null, entries, worldGroupId, userGroupIds,
+                user, admin));
+        }
+
+        return summaries;
+    }
+
+    /**
+     * Sets the owner for an entity. An explicit NULL removes the owner row.
      *
      * @param entityType The entity type.
      * @param entityId The entity id.
-     * @param ownerId The new owner id, or null to remove the explicit owner (inherit).
+     * @param ownerId The new owner id, or null to remove the owner.
      */
     public async setOwner(entityType: EntityType, entityId: number,
         ownerId: number | null): Promise<void> {
         if (ownerId === null) {
-            // Remove the explicit row — inheritance takes over.
             await this.adapter.execute("DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?",
                 [entityType, entityId]);
 
@@ -577,32 +564,32 @@ export class Auth {
      */
     public async getExplicitEntityGroups(entityType: EntityType,
         entityId: number): Promise<IEntityGroupEntry[]> {
-        const rows = await this.adapter.query<{ group_id: number; writable: number; }>(
-            "SELECT group_id, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+        const rows = await this.adapter.query<{ groupId: number; writable: number; }>(
+            "SELECT group_id AS groupId, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
             [entityType, entityId],
         );
 
         return rows.map((r) => {
-            return { groupId: r.group_id, writable: Boolean(r.writable) };
+            return { groupId: r.groupId, writable: Boolean(r.writable) };
         });
     }
 
     /**
-     * Returns the explicit owner for an entity (or null if inherited/deleted).
+     * Returns the explicit owner for an entity.
      *
      * @param entityType The entity type.
      * @param entityId The entity id.
      *
-     * @returns The owner id, or null.
+     * @returns The owner id, or null when the entity has no owner.
      */
     public async getExplicitOwner(entityType: EntityType,
         entityId: number): Promise<number | null> {
-        const rows = await this.adapter.query<{ owner_id: number | null; }>(
-            "SELECT owner_id FROM permissions WHERE entity_type = ? AND entity_id = ?",
+        const rows = await this.adapter.query<{ ownerId: number | null; }>(
+            "SELECT owner_id AS ownerId FROM permissions WHERE entity_type = ? AND entity_id = ?",
             [entityType, entityId],
         );
 
-        return rows[0]?.owner_id ?? null;
+        return rows[0]?.ownerId ?? null;
     }
 
     /**
@@ -691,135 +678,71 @@ export class Auth {
     }
 
     /**
-     * Resolves the effective owner for an entity by walking up the tree.
-     * Returns the first non-null owner_id found, or null if none exists.
+     * @param ownerId The owner of the entity, or null.
+     * @param groupEntries The entity's group assignments.
+     * @param worldGroupId The World group id, or undefined when the group does not exist.
+     * @param memberGroupIds The groups the user belongs to.
+     * @param user The authenticated user, or undefined for anonymous.
+     * @param isAdmin Whether the user is an administrator.
      *
-     * @param entityType The type of entity.
-     * @param entityId   The entity id.
-     * @param visited    Set of already-visited entity keys to detect cycles.
-     * @returns The resolved owner id, or null.
+     * @returns The permission summary for that entity.
      */
-    private async resolveOwner(entityType: EntityType, entityId: number,
-        visited = new Set<string>(),): Promise<number | null> {
-        const key = `${entityType}:${entityId}`;
-        if (visited.has(key)) {
-            return null;
-        }
+    private static summarize(ownerId: number | null, groupEntries: Map<number, boolean>,
+        worldGroupId: number | undefined, memberGroupIds: Set<number>, user: ITokenPayload | undefined,
+        isAdmin: boolean): IPermissionSummary {
+        const isOwner = ownerId !== null && ownerId === user?.userId;
+        const isWorld = worldGroupId !== undefined && groupEntries.has(worldGroupId);
 
-        visited.add(key);
+        let canRead = isAdmin || isOwner;
+        let canWrite = isAdmin || isOwner;
 
-        // Check for an explicit owner on this entity.
-        const rows = await this.adapter.query<{ owner_id: number | null; }>(
-            "SELECT owner_id FROM permissions WHERE entity_type = ? AND entity_id = ?",
-            [entityType, entityId],
-        );
+        for (const [groupId, writable] of groupEntries) {
+            if (!memberGroupIds.has(groupId)) {
+                continue;
+            }
 
-        if (rows.length > 0 && rows[0].owner_id !== null) {
-            return rows[0].owner_id;
-        }
+            canRead = true;
 
-        // For scores, walk up to the parent folder.
-        if (entityType === EntityType.Score) {
-            const scoreRows = await this.adapter.query<{ folderid: number | null; }>(
-                "SELECT folderid FROM scores WHERE id = ?",
-                [entityId],
-            );
-
-            if (scoreRows[0]?.folderid !== null) {
-                return this.resolveOwner(EntityType.Folder, scoreRows[0].folderid, visited);
+            // Everybody is a member of World, so a write grant there would open the entity to the public.
+            if (writable && groupId !== worldGroupId) {
+                canWrite = true;
             }
         }
 
-        // For folders, walk up to the parent folder.
-        if (entityType === EntityType.Folder) {
-            const folderRows = await this.adapter.query<{ parentid: number | null; }>(
-                "SELECT parentid FROM folders WHERE id = ?",
-                [entityId],
-            );
-
-            if (folderRows[0]?.parentid !== null) {
-                return this.resolveOwner(EntityType.Folder, folderRows[0].parentid, visited);
-            }
-        }
-
-        return null;
+        return {
+            isOwner,
+            canRead,
+            canWrite,
+            isWorld,
+            groupIds: Array.from(groupEntries.keys()),
+        };
     }
 
     /**
-     * Collects all group assignments for an entity by walking up the tree.
-     * Groups are additive: the entity inherits all groups from all ancestors
-     * plus any explicitly assigned groups.
+     * Resolves the permission state of an entity from its own rows.
      *
      * @param entityType The type of entity.
-     * @param entityId   The entity id.
-     * @param collected  Accumulator map (groupId → writable). Pass a new Map() on first call.
-     * @param visited    Set of already-visited entity keys to detect cycles.
-     * @returns A map of groupId → writable.
-     */
-    private async collectGroupEntries(entityType: EntityType, entityId: number,
-        collected: Map<number, boolean>, visited = new Set<string>(),): Promise<Map<number, boolean>> {
-        const key = `${entityType}:${entityId}`;
-        if (visited.has(key)) {
-            return collected;
-        }
-
-        visited.add(key);
-
-        // Collect explicit group assignments for this entity.
-        const rows = await this.adapter.query<{ group_id: number; writable: number; }>(
-            "SELECT group_id, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
-            [entityType, entityId],
-        );
-
-        for (const r of rows) {
-            // Children can upgrade from read to write but never downgrade from write to read.
-            const existing = collected.get(r.group_id);
-
-            if (existing === undefined || (!existing && Boolean(r.writable))) {
-                collected.set(r.group_id, Boolean(r.writable));
-            }
-        }
-
-        // Walk up to the parent.
-        if (entityType === EntityType.Score) {
-            const scoreRows = await this.adapter.query<{ folderid: number | null; }>(
-                "SELECT folderid FROM scores WHERE id = ?",
-                [entityId],
-            );
-
-            if (scoreRows[0]?.folderid !== null) {
-                return this.collectGroupEntries(EntityType.Folder, scoreRows[0].folderid, collected, visited);
-            }
-        }
-
-        if (entityType === EntityType.Folder) {
-            const folderRows = await this.adapter.query<{ parentid: number | null; }>(
-                "SELECT parentid FROM folders WHERE id = ?",
-                [entityId],
-            );
-
-            if (folderRows[0]?.parentid !== null) {
-                return this.collectGroupEntries(EntityType.Folder, folderRows[0].parentid, collected, visited);
-            }
-        }
-
-        return collected;
-    }
-
-    /**
-     * Resolves the full effective permission state for an entity by combining
-     * the inherited owner and the additive group assignments.
+     * @param entityId The entity id.
      *
-     * @param entityType The type of entity.
-     * @param entityId   The entity id.
      * @returns The resolved permission state.
      */
     private async resolvePermission(entityType: EntityType, entityId: number): Promise<IResolvedPermission> {
-        const [ownerId, groupEntries, worldGroupId] = await Promise.all([
-            this.resolveOwner(entityType, entityId),
-            this.collectGroupEntries(entityType, entityId, new Map()),
+        const [ownerRows, groupRows, worldGroupId] = await Promise.all([
+            this.adapter.query<{ ownerId: number | null; }>(
+                "SELECT owner_id AS ownerId FROM permissions WHERE entity_type = ? AND entity_id = ?",
+                [entityType, entityId],
+            ),
+            this.adapter.query<{ groupId: number; writable: number; }>(
+                "SELECT group_id AS groupId, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+                [entityType, entityId],
+            ),
             this.getWorldGroupId(),
         ]);
+
+        const groupEntries = new Map<number, boolean>();
+        for (const row of groupRows) {
+            groupEntries.set(row.groupId, Boolean(row.writable));
+        }
 
         // Everybody is a member of the World group, so a write grant there would open the entity to the public.
         if (worldGroupId !== undefined && groupEntries.has(worldGroupId)) {
@@ -827,15 +750,45 @@ export class Auth {
         }
 
         return {
-            ownerId,
+            ownerId: ownerRows[0]?.ownerId ?? null,
             groupEntries,
             worldGroupId,
         };
     }
 
-    private async getUserGroups(userId: number): Promise<Array<{ group_id: number; }>> {
-        return this.adapter.query<{ group_id: number; }>(
-            "SELECT group_id FROM user_groups WHERE user_id = ?",
+    /**
+     * @param user The authenticated user, or undefined for anonymous.
+     *
+     * @returns The ids of the groups the user belongs to, including World, which counts as a membership for
+     * everybody. The result does not grant anything by itself; it is set against an entity's group assignments.
+     */
+    private async memberGroupIds(user: ITokenPayload | undefined): Promise<Set<number>> {
+        const groupIds = new Set<number>();
+
+        if (user) {
+            // Group login: the user belongs only to the authenticated group.
+            if (user.authType === "group" && user.groupId !== undefined) {
+                groupIds.add(user.groupId);
+            } else {
+                const memberRows = await this.getUserGroups(user.userId);
+
+                for (const row of memberRows) {
+                    groupIds.add(row.groupId);
+                }
+            }
+        }
+
+        const worldGroupId = await this.getWorldGroupId();
+        if (worldGroupId !== undefined) {
+            groupIds.add(worldGroupId);
+        }
+
+        return groupIds;
+    }
+
+    private async getUserGroups(userId: number): Promise<Array<{ groupId: number; }>> {
+        return this.adapter.query<{ groupId: number; }>(
+            "SELECT group_id AS groupId FROM user_groups WHERE user_id = ?",
             [userId],
         );
     }

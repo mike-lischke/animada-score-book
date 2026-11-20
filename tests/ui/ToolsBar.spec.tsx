@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { AppStorage } from "../../src/core/AppStorage.js";
 import { ToolsBar } from "../../src/components/ui/Arrangement/ToolsBar.js";
 import { RangeArticulationTool, requisitions } from "../../src/supplement/Requisitions.js";
+import { stableMarkup } from "../unit-test-helpers.js";
 
 /** A tool of the bar: how to name it, the mode it starts and the status it shows. */
 interface IToolCase {
@@ -184,7 +185,7 @@ describe("ToolsBar", { concurrent: false }, () => {
     it("matches the compact snapshot", () => {
         renderInOverlay(400);
 
-        expect(visibleBar()).toMatchSnapshot();
+        expect(stableMarkup(visibleBar())).toMatchSnapshot();
     });
 
     it("heads the bar and offers every tool", () => {

@@ -60,15 +60,14 @@ test.describe("Settings — Permission Matrix Toggle", () => {
                 return;
             }
 
-            if (action === "listScoreFolderContent") {
+            if (action === "listScores") {
                 await route.fulfill({
                     status: 200, contentType: "application/json",
                     body: JSON.stringify({
-                        folders: [{
-                            id: 1, parentid: -1, name: "My Folder", hasChildren: false,
-                            perm: { isOwner: true, isGroup: false, isWorld: true, permBits: 492 },
+                        scores: [{
+                            id: 1, name: "My Score", tagIds: [],
+                            perm: { isOwner: true, canRead: true, canWrite: true, isWorld: true, groupIds: [] },
                         }],
-                        scores: [],
                     }),
                 });
 

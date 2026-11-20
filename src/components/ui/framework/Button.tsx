@@ -38,7 +38,8 @@ export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElem
 
     value?: string;
 
-    /** Pressed state of a toggle button. Rendered as the `aria-pressed` attribute. */
+    /** Pressed state of a toggle button. Rendered as the `aria-pressed` attribute, which names the property. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     "aria-pressed"?: boolean;
 
     popoverTarget?: string;

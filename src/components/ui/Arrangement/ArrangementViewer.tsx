@@ -909,7 +909,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             // The measure count comes from the arrangement itself: the player beside it is still the previous
             // score's while a load is being handled, and its count would lay out the measures that are gone.
             this.updateStaffGeometry(arrangement.timeParams.length);
-            this.staffGeometryDirty = true;
+            for (const track of arrangement.tracks) {
+                this.staffRowGeometries.set(track.id, StaffRowGeometry.ofTrack(track, arrangement, 1,
+                    this.staffDisplayWidths));
+            }
+
+            this.staffGeometryDirty = false;
         }
 
         this.forceUpdate();

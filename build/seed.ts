@@ -3,19 +3,34 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-/** A folder row of the seed data. */
-export interface ISeedFolder {
-    id: number;
-    parentid: number | null;
-    name: string;
-}
-
 /** A score row of the seed data. */
 export interface ISeedScore {
     id: number;
-    folderid: number | null;
     name: string;
     content: string;
+}
+
+/** A tag a user created. The seed cannot refer to a group, so a dumped tag is always global. */
+export interface ISeedTag {
+    id: number;
+    name: string;
+
+    /** The index of the tag's colour in the fixed palette. */
+    colorIndex: number;
+}
+
+/**
+ * An assignment of a tag to a score. A system tag is named by its `system_key`, because the seed must not depend on
+ * the ids the baseline happens to generate for them.
+ */
+export interface ISeedScoreTag {
+    scoreId: number;
+
+    /** The id of a dumped tag. */
+    tagId?: number;
+
+    /** The `system_key` of a system tag instead of a dumped one. */
+    systemKey?: string;
 }
 
 /**
@@ -45,41 +60,70 @@ const insertSection = (comment: string, statement: string, values: string[]): st
     return [comment, statement, `${values.join(",\n")};`, ""];
 };
 
-const folderSection = (folders: ISeedFolder[]): string[] => {
-    const values = folders.map((folder) => {
-        const parentId = folder.parentid === null ? "NULL" : String(folder.parentid);
-
-        return `  (${folder.id}, ${parentId}, ${asLiteral(folder.name)})`;
+const tagSection = (tags: ISeedTag[]): string[] => {
+    const values = tags.map((tag) => {
+        return `  (${tag.id}, ${asLiteral(tag.name)}, ${tag.colorIndex})`;
     });
 
-    return insertSection("-- Folders", "INSERT INTO folders (id, parentid, name) VALUES", values);
+    return insertSection("-- Tags", "INSERT IGNORE INTO tags (id, name, color_index) VALUES", values);
 };
 
 const scoreSection = (scores: ISeedScore[]): string[] => {
     const values = scores.map((score) => {
-        const folderId = score.folderid === null ? "NULL" : String(score.folderid);
-
-        return `  (${score.id}, ${folderId}, ${asLiteral(score.name)}, ${asLiteral(score.content)})`;
+        return `  (${score.id}, ${asLiteral(score.name)}, ${asLiteral(score.content)})`;
     });
 
-    return insertSection("-- Scores", "INSERT INTO scores (id, folderid, name, content) VALUES", values);
+    return insertSection("-- Scores", "INSERT INTO scores (id, name, content) VALUES", values);
+};
+
+/**
+ * @param scoreTags The assignments to write.
+ *
+ * @returns The lines of the assignment section, each one resolving a system tag through its key.
+ */
+const scoreTagSection = (scoreTags: ISeedScoreTag[]): string[] => {
+    const lines: string[] = ["-- Score tags"];
+
+    if (scoreTags.length === 0) {
+        lines.push("-- No rows.", "");
+
+        return lines;
+    }
+
+    for (const assignment of scoreTags) {
+        if (assignment.systemKey !== undefined) {
+            lines.push(`INSERT IGNORE INTO score_tags (score_id, tag_id) SELECT ${assignment.scoreId}, id FROM tags ` +
+                `WHERE system_key = ${asLiteral(assignment.systemKey)};`);
+
+            continue;
+        }
+
+        lines.push(`INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES ` +
+            `(${assignment.scoreId}, ${String(assignment.tagId)});`);
+    }
+
+    lines.push("");
+
+    return lines;
 };
 
 /**
  * Writes the seed data as a SQL script that the backend imports into an empty database.
  *
- * @param folders The folder rows to write.
  * @param scores The score rows to write.
+ * @param tags The tags a user created, all of them global.
+ * @param scoreTags The tag assignments to write.
  *
  * @returns The seed script.
  */
-export const createSeedSql = (folders: ISeedFolder[], scores: ISeedScore[]): string => {
+export const createSeedSql = (scores: ISeedScore[], tags: ISeedTag[], scoreTags: ISeedScoreTag[]): string => {
     const lines: string[] = [
         "-- Seed data for Animada Score Book",
         `-- Generated: ${new Date().toISOString()}`,
         "",
-        ...folderSection(folders),
+        ...tagSection(tags),
         ...scoreSection(scores),
+        ...scoreTagSection(scoreTags),
     ];
 
     return lines.join("\n");

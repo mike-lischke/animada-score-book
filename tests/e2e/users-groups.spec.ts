@@ -36,11 +36,11 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
 
     const groups: Array<Record<string, unknown>> = [
         {
-            id: 1, name: "Percussion", description: "", color: "#ff0000", adminId: 1,
+            id: 1, name: "Percussion", description: "", colorIndex: 1, adminId: 1,
             hasPassword: true, lastLogin: null, createdAt: "2024-01-01T00:00:00Z"
         },
         {
-            id: 2, name: "Vocals", description: "", color: "#00ff00", adminId: null,
+            id: 2, name: "Vocals", description: "", colorIndex: 2, adminId: null,
             hasPassword: false, lastLogin: null, createdAt: "2024-02-01T00:00:00Z"
         },
     ];
@@ -108,10 +108,10 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
             return;
         }
 
-        if (action === "listScoreFolderContent") {
+        if (action === "listScores") {
             await route.fulfill({
                 status: 200, contentType: "application/json",
-                body: JSON.stringify({ folders: [], scores: [] }),
+                body: JSON.stringify({ scores: [] }),
             });
 
             return;
@@ -205,7 +205,7 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
             const body = JSON.parse(route.request().postData() ?? "{}") as Record<string, unknown>;
             const newGroup = {
                 id: nextGroupId++, name: body.name, description: body.description ?? "",
-                color: body.color ?? "#cccccc", adminId: body.adminId ?? null,
+                colorIndex: body.colorIndex ?? 0, adminId: body.adminId ?? null,
                 hasPassword: Boolean(body.password), lastLogin: null,
                 createdAt: new Date().toISOString(),
             };
@@ -213,7 +213,7 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
 
             await route.fulfill({
                 status: 200, contentType: "application/json",
-                body: JSON.stringify({ success: true, id: newGroup.id, color: newGroup.color }),
+                body: JSON.stringify({ success: true, id: newGroup.id, colorIndex: newGroup.colorIndex }),
             });
 
             return;
@@ -231,8 +231,8 @@ const setupUsersGroupsApi = async (page: Page): Promise<{
                     group.hasPassword = Boolean(body.password);
                 }
 
-                if (body.color !== undefined) {
-                    group.color = body.color;
+                if (body.colorIndex !== undefined) {
+                    group.colorIndex = body.colorIndex;
                 }
 
                 await route.fulfill({

@@ -5,9 +5,13 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import {
+    stringifyPackedArrangement, tryParsePackedArrangement,
+} from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import { clickScoreElement, routeApi } from "./e2e-test-helpers.js";
+import {
+    clickScoreElement, readStoredCurrentScore, routeApi,
+} from "./e2e-test-helpers.js";
 
 /** A one-bar arrangement with a note spanning two steps, so cells inside one note are distinguishable. */
 const twoStepSnapshot = {
@@ -100,4 +104,75 @@ test("selects the clicked cell at a zoom other than 100 percent", async ({ page 
         expect(overlayBox.x + overlayBox.width, `overlay right at ${zoomLevel} percent`)
             .toBeGreaterThanOrEqual(cellBox.x + cellBox.width - 1);
     }
+});
+
+test("does not dirty or lose Repinique styles in repeated grid overwrite", async ({ page }) => {
+    const snapshot = {
+        version: arrangementSnapshotVersion,
+        title: "E2E Grid Repi Overwrite",
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4" },
+        tracks: [{
+            id: 300,
+            instrumentId: "3",
+            measures: [{
+                number: 1,
+                meter: { beats: 4, beatUnits: 4 },
+                events: [0, 1, 2].map((step) => {
+                    return {
+                        start: { numerator: step, denominator: 16 },
+                        duration: { numerator: 1, denominator: 16 },
+                        noteStyleId: "1",
+                    };
+                }),
+                subdivisions: [],
+            }],
+        }],
+    };
+
+    await page.addInitScript((packed: string) => {
+        const sessionId = "e2e-grid-repi-overwrite";
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+            currentScore: packed,
+        }));
+    }, stringifyPackedArrangement(snapshot));
+    await page.goto("/");
+    await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
+    await page.locator("#editModeButton").click({ force: true });
+
+    const before = await readStoredCurrentScore(page);
+    await page.locator(".grid-measure-row .note-viewer").nth(0).click();
+    await page.keyboard.press("1");
+    expect(await readStoredCurrentScore(page)).toBe(before);
+
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("2");
+
+    await expect.poll(async () => {
+        const stored = tryParsePackedArrangement(await readStoredCurrentScore(page));
+
+        return stored?.tracks[0].measures[0].events
+            .filter((event) => {
+                return event.noteStyleId !== undefined;
+            })
+            .map((event) => {
+                return event.noteStyleId;
+            });
+    }).toEqual(["2", "1", "1"]);
+
+    await page.keyboard.press("2");
+    await page.keyboard.press("2");
+
+    await expect.poll(async () => {
+        const stored = tryParsePackedArrangement(await readStoredCurrentScore(page));
+
+        return stored?.tracks[0].measures[0].events
+            .filter((event) => {
+                return event.noteStyleId !== undefined;
+            })
+            .map((event) => {
+                return event.noteStyleId;
+            });
+    }).toEqual(["2", "2", "2"]);
 });

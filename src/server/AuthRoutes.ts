@@ -681,8 +681,8 @@ export class AuthRoutes {
         );
 
         await this.ctx.auth.adapter.insertReturningId(
-            "INSERT INTO `groups` (name, description, color) VALUES (?, ?, ?)",
-            [Auth.worldGroupName, "Public access — everyone can read", "#808080"],
+            "INSERT INTO `groups` (name, description, color_index) VALUES (?, ?, ?)",
+            [Auth.worldGroupName, "Public access — everyone can read", 11],
         );
 
         const defaultGroupRows = await this.ctx.auth.adapter.query<{ id: number; }>(
@@ -695,26 +695,10 @@ export class AuthRoutes {
             defaultGroupId = defaultGroupRows[0].id;
         } else {
             const agResult = await this.ctx.auth.adapter.insertReturningId(
-                "INSERT INTO `groups` (name, description, color) VALUES (?, ?, ?)",
-                [groupName, "", "#2a9d8f"],
+                "INSERT INTO `groups` (name, description, color_index) VALUES (?, ?, ?)",
+                [groupName, "", 3],
             );
             defaultGroupId = agResult.insertId;
-        }
-
-        const orphanFolders = await this.ctx.auth.adapter.query<{ id: number; }>(
-            `SELECT f.id FROM folders f
-         WHERE NOT EXISTS (
-             SELECT 1 FROM permissions p
-             WHERE p.entity_type = 'folder' AND p.entity_id = f.id
-         )`,
-        );
-
-        for (const f of orphanFolders) {
-            await this.ctx.auth.setOwner(EntityType.Folder, f.id, result.insertId);
-
-            if (defaultGroupId) {
-                await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, defaultGroupId, false);
-            }
         }
 
         const orphanScores = await this.ctx.auth.adapter.query<{ id: number; }>(
@@ -734,8 +718,7 @@ export class AuthRoutes {
         }
 
         console.log(
-            `Assigned permissions: ${orphanFolders.length} folders, ${orphanScores.length} scores ` +
-            `→ owner=${email}, group=${groupName}.`,
+            `Assigned permissions: ${orphanScores.length} scores → owner=${email}, group=${groupName}.`,
         );
         console.log(`Initial admin user created: id=${result.insertId}, email=${email}.`);
 
@@ -826,13 +809,13 @@ export class AuthRoutes {
             return [sessionGroupId];
         }
 
-        const rows = await this.ctx.auth.adapter.query<{ group_id: number; }>(
-            "SELECT group_id FROM user_groups WHERE user_id = ?",
+        const rows = await this.ctx.auth.adapter.query<{ groupId: number; }>(
+            "SELECT group_id AS groupId FROM user_groups WHERE user_id = ?",
             [userId],
         );
 
         return rows.map((row) => {
-            return row.group_id;
+            return row.groupId;
         });
     }
 }

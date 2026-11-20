@@ -73,11 +73,10 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
             return;
         }
 
-        if (action === "listScoreFolderContent") {
+        if (action === "listScores") {
             const body = JSON.stringify({
-                folders: [],
                 scores: [{
-                    id: 42, name: "Test Score", content: "{}",
+                    id: 42, name: "Test Score", tagIds: [],
                     perm: {
                         isOwner: true, canRead: true, canWrite: true, isWorld: true, groupIds: [1],
                     },
@@ -112,15 +111,15 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
             const body = JSON.stringify({
                 groups: [
                     {
-                        id: 1, name: "World", description: "Public", color: "#808080",
+                        id: 1, name: "World", description: "Public", colorIndex: 0,
                         adminId: null, hasPassword: false, lastLogin: null, createdAt: "",
                     },
                     {
-                        id: 2, name: "Admins", description: "Admins", color: "#ff0000",
+                        id: 2, name: "Admins", description: "Admins", colorIndex: 1,
                         adminId: 1, hasPassword: true, lastLogin: null, createdAt: "",
                     },
                     {
-                        id: 3, name: "Percussion", description: "", color: "#00ff00",
+                        id: 3, name: "Percussion", description: "", colorIndex: 2,
                         adminId: 1, hasPassword: false, lastLogin: null, createdAt: "",
                     },
                 ],

@@ -114,11 +114,11 @@ const main = async (): Promise<void> => {
     });
 
     try {
-        const result = await pool.query("SHOW DATABASES");
-        const rows = (result as [Array<{ Database: string; }>, unknown])[0];
+        const result = await pool.query("SELECT schema_name AS name FROM information_schema.SCHEMATA");
+        const rows = (result as [Array<{ name: string; }>, unknown])[0];
         const dbNames = rows
             .map((r) => {
-                return r.Database;
+                return r.name;
             })
             .filter((name) => {
                 return name.startsWith(baseName);

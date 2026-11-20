@@ -39,6 +39,12 @@ export interface ITestConnectionResult {
     error?: string;
 }
 
+/** One statement of a transaction. */
+export interface IDbStatement {
+    sql: string;
+    params?: unknown[];
+}
+
 /**
  * Abstraction over the MariaDB and MySQL engines, which one adapter serves.
  */
@@ -110,6 +116,14 @@ export interface IDatabaseAdapter {
      * @param sql The SQL string containing multiple statements.
      */
     executeMultiple(sql: string): Promise<void>;
+
+    /**
+     * Runs the given statements inside one transaction on a single connection, so that either all of them take
+     * effect or none does.
+     *
+     * @param statements The statements to run, in order.
+     */
+    executeTransaction(statements: IDbStatement[]): Promise<void>;
 
     /**
      * Closes the connection pool.

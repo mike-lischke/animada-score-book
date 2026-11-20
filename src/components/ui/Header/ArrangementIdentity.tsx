@@ -6,10 +6,13 @@
 import { type ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
+import { TagBadges } from "../../../ui/TagBadges.js";
 import { ArrangementTitle } from "../Arrangement/ArrangementTitle.js";
 import { Badge, BadgeVariant } from "../framework/Badge.js";
 import { Container } from "../framework/Container.js";
 import { Label } from "../framework/Label.js";
+import { TagInput } from "../framework/TagInput.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -38,14 +41,28 @@ export interface IArrangementIdentityProps extends ICommonUIProperties {
     compact?: boolean;
 }
 
-/** The header's arrangement identity: its name with the save state, and its performance stats below. */
+/** The header's arrangement identity: its name with the save state, and its tags below. */
 export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> {
+    /** How many tags the line shows before it counts the rest. */
+    private static readonly maxTags = 4;
+
+    public override componentDidMount(): void {
+        requisitions.register("scoreTagsChanged", this.handleScoreTagsChanged);
+        requisitions.register("tagsChanged", this.handleScoreTagsChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("scoreTagsChanged", this.handleScoreTagsChanged);
+        requisitions.unregister("tagsChanged", this.handleScoreTagsChanged);
+    }
+
     public override render(): ComponentChild {
         const { className, stats, compact } = this.props;
         const title = this.renderTitle();
         const badge = compact ? undefined : this.renderSaveBadge();
         const statsLabel = compact
             ? undefined : <Label id="scoreStats" className="arrangementIdentityStats" caption={stats} />;
+        const tagRow = compact ? undefined : this.renderTags();
 
         return (
             <Container
@@ -63,12 +80,39 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
                     <Label className="arrangementIdentitySection" caption="Score Library" />
                     <Label className="arrangementIdentityChevron" caption={"\u203a"} />
                     {title}
+                    {statsLabel}
                     {badge}
                 </Container>
-                {statsLabel}
+                {tagRow}
             </Container>
         );
     }
+
+    /**
+     * @returns The badges of the score's tags, at most {@link maxTags} of them, or nothing when it carries none.
+     */
+    private renderTags(): ComponentChild {
+        const { arrangement, dataModel } = this.props;
+        const score = dataModel.findScore(arrangement.id);
+        const tags = TagBadges.resolve(score?.tagIds ?? [], dataModel.tags);
+
+        if (tags.length === 0) {
+            return undefined;
+        }
+
+        const shown = tags.slice(0, ArrangementIdentity.maxTags);
+        if (shown.length < tags.length) {
+            shown.push({ id: 0, caption: `+${tags.length - shown.length}` });
+        }
+
+        return <TagInput className="arrangementIdentityTags" tags={shown} readOnly />;
+    }
+
+    private handleScoreTagsChanged = (): Promise<boolean> => {
+        this.forceUpdate();
+
+        return Promise.resolve(true);
+    };
 
     private renderTitle(): ComponentChild {
         const { arrangement, dataModel, editMode, stats, compact } = this.props;

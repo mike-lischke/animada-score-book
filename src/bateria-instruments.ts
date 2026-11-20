@@ -31,7 +31,8 @@ import tamborimIcon from "./assets/images/instrument-icons/tamborim.svg";
 import timbauIcon from "./assets/images/instrument-icons/timbau.svg";
 
 import {
-    Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique, type IInstrumentMeta
+    Damping, ExcitationMode, HandTechnique, InstrumentRole, NoteDisplayType, StickTechnique,
+    type IInstrumentMeta
 } from "./core/ScoreBookDataModel.js";
 
 export const pastelColors: string[] = [
@@ -89,6 +90,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: agogo2Icon,
     displayOrder: 0,
     displayName: "Agogô 2-Bell",
+    role: InstrumentRole.Voice,
     variants: [
         {
             id: "1",
@@ -130,6 +132,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: agogo4Icon,
     displayOrder: 1,
     displayName: "Agogô 4-Bell",
+    role: InstrumentRole.Voice,
     variants: [
         {
             id: "1",
@@ -203,6 +206,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: chocalhoIcon,
     displayOrder: 2,
     displayName: "Chocalho",
+    role: InstrumentRole.Voice,
     variants: [
         {
             id: "1",
@@ -240,6 +244,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: tamborimIcon,
     displayOrder: 3,
     displayName: "Tamborim",
+    role: InstrumentRole.Voice,
     variants: [
         {
             id: "1",
@@ -279,6 +284,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: repiStickIcon,
     displayOrder: 4,
     displayName: "Repinique",
+    role: InstrumentRole.Carpet,
     variants: [
         {
             id: "1",
@@ -386,6 +392,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: repiWithWhippiesIcon,
     displayOrder: 5,
     displayName: "Repinique (Whippy Sticks)",
+    role: InstrumentRole.Carpet,
     variants: [
         {
             id: "1",
@@ -423,6 +430,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: caixaIcon,
     displayOrder: 6,
     displayName: "Caixa",
+    role: InstrumentRole.Carpet,
     variants: [
         {
             id: "1",
@@ -488,6 +496,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: timbauIcon,
     displayOrder: 7,
     displayName: "Timbau",
+    role: InstrumentRole.HandRhythm,
     variants: [
         {
             id: "1",
@@ -539,6 +548,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: highSurdoIcon,
     displayOrder: 8,
     displayName: "Surdo Terceira",
+    role: InstrumentRole.GroundRhythm,
     variants: [
         {
             id: "1",
@@ -576,6 +586,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: midSurdoIcon,
     displayOrder: 9,
     displayName: "Surdo Segunda",
+    role: InstrumentRole.GroundRhythm,
     variants: [
         {
             id: "1",
@@ -613,6 +624,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     icon: lowSurdoIcon,
     displayOrder: 10,
     displayName: "Surdo Primeira",
+    role: InstrumentRole.GroundRhythm,
     variants: [
         {
             id: "1",

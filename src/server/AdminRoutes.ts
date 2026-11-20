@@ -5,7 +5,9 @@
 
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
+import { TagPalette } from "../core/TagPalette.js";
 import { Auth, isValidEntityType } from "./Auth.js";
+import type { IDbStatement } from "./database.js";
 import { EmailConfirmation } from "./EmailConfirmation.js";
 import { ConfirmationReason } from "./Mailer.js";
 import { type RequestContext } from "./RequestContext.js";
@@ -224,7 +226,7 @@ export class AdminRoutes {
         }
 
         const rows = await this.ctx.auth.adapter.query(
-            "SELECT g.id, g.name, g.description, g.color, g.admin_id AS adminId," +
+            "SELECT g.id, g.name, g.description, g.color_index AS colorIndex, g.admin_id AS adminId," +
             " COALESCE(NULLIF(u.display_name, ''), u.email) AS adminName," +
             " (g.password_hash IS NOT NULL) AS hasPassword," +
             " g.last_login AS lastLogin, g.created_at AS createdAt" +
@@ -237,7 +239,7 @@ export class AdminRoutes {
                     id: g.id,
                     name: g.name,
                     description: g.description,
-                    color: g.color,
+                    colorIndex: g.colorIndex,
                     adminId: g.adminId,
                     adminName: g.adminName ?? undefined,
                     hasPassword: Boolean(g.hasPassword),
@@ -272,14 +274,18 @@ export class AdminRoutes {
         const body = await this.ctx.readJsonBody(req);
         const name = String(body.name ?? "").trim();
         const description = body.description !== undefined ? String(body.description).trim() : "";
-        const color = typeof body.color === "string" && body.color
-            ? body.color
-            : this.ctx.randomGroupColor();
+        const colorIndex = body.colorIndex === undefined ? 0 : TagPalette.optionalIndex(body.colorIndex);
         const password = typeof body.password === "string" && body.password ? body.password : undefined;
         const adminId = body.adminId !== undefined ? Number(body.adminId) || null : null;
 
         if (!name) {
             this.ctx.sendError(res, "Group name required");
+
+            return;
+        }
+
+        if (colorIndex === undefined) {
+            this.ctx.sendError(res, "Invalid colour index");
 
             return;
         }
@@ -301,12 +307,12 @@ export class AdminRoutes {
         }
 
         const result = await this.ctx.auth.adapter.insertReturningId(
-            "INSERT INTO `groups` (name, description, color, password_hash, admin_id)" +
+            "INSERT INTO `groups` (name, description, color_index, password_hash, admin_id)" +
             " VALUES (?, ?, ?, ?, ?)",
-            [name, description, color, passwordHash, adminId],
+            [name, description, colorIndex, passwordHash, adminId],
         );
 
-        this.ctx.sendJson(res, { success: true, id: result.insertId, color });
+        this.ctx.sendJson(res, { success: true, id: result.insertId, colorIndex });
     };
 
     public async handleUpdateGroup(req: IncomingMessage, res: ServerResponse) {
@@ -321,8 +327,8 @@ export class AdminRoutes {
             return;
         }
 
-        const groupRow = await this.ctx.auth.adapter.query<{ admin_id: number | null; }>(
-            "SELECT admin_id FROM `groups` WHERE id = ?",
+        const groupRow = await this.ctx.auth.adapter.query<{ adminId: number | null; }>(
+            "SELECT admin_id AS adminId FROM `groups` WHERE id = ?",
             [id],
         );
 
@@ -332,7 +338,7 @@ export class AdminRoutes {
             return;
         }
 
-        const isGroupAdmin = groupRow[0].admin_id === user?.userId;
+        const isGroupAdmin = groupRow[0].adminId === user?.userId;
 
         if (!user || (!(await this.ctx.auth.isUserInAdminGroup(user.userId)) && !isGroupAdmin)) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -353,11 +359,17 @@ export class AdminRoutes {
 
         const name = body.name !== undefined ? String(body.name).trim() : undefined;
         const description = body.description !== undefined ? String(body.description).trim() : undefined;
-        const color = body.color !== undefined ? String(body.color) : undefined;
+        const colorIndex = body.colorIndex === undefined ? undefined : TagPalette.optionalIndex(body.colorIndex);
         const password = body.password !== undefined
             ? (typeof body.password === "string" && body.password ? body.password : null)
             : undefined;
         const adminId = body.adminId !== undefined ? (Number(body.adminId) || null) : undefined;
+
+        if (colorIndex === undefined && body.colorIndex !== undefined) {
+            this.ctx.sendError(res, "Invalid colour index");
+
+            return;
+        }
 
         if (adminId !== undefined) {
             if (!await this.ctx.auth.isUserInAdminGroup(user.userId)) {
@@ -367,7 +379,7 @@ export class AdminRoutes {
             }
         }
 
-        if (!name && description === undefined && color === undefined
+        if (!name && description === undefined && colorIndex === undefined
             && password === undefined && adminId === undefined) {
             this.ctx.sendError(res, "No fields to update");
 
@@ -387,9 +399,9 @@ export class AdminRoutes {
             params.push(description);
         }
 
-        if (color !== undefined) {
-            updates.push("color = ?");
-            params.push(color);
+        if (colorIndex !== undefined) {
+            updates.push("color_index = ?");
+            params.push(colorIndex);
         }
 
         if (password !== undefined) {
@@ -456,7 +468,10 @@ export class AdminRoutes {
             return;
         }
 
-        await this.ctx.auth.adapter.execute("DELETE FROM `groups` WHERE id = ?", [id]);
+        const statements = await this.tagTransferStatements(id);
+        statements.push({ sql: "DELETE FROM `groups` WHERE id = ?", params: [id] });
+
+        await this.ctx.auth.adapter.executeTransaction(statements);
 
         this.ctx.sendJson(res, { success: true });
     };
@@ -471,11 +486,11 @@ export class AdminRoutes {
             return;
         }
 
-        const groupRow = await this.ctx.auth.adapter.query<{ admin_id: number | null; }>(
-            "SELECT admin_id FROM `groups` WHERE id = ?",
+        const groupRow = await this.ctx.auth.adapter.query<{ adminId: number | null; }>(
+            "SELECT admin_id AS adminId FROM `groups` WHERE id = ?",
             [groupId],
         );
-        const isGroupAdmin = groupRow[0]?.admin_id === user?.userId;
+        const isGroupAdmin = groupRow[0]?.adminId === user?.userId;
 
         if (!user || (!(await this.ctx.auth.isUserInAdminGroup(user.userId)) && !isGroupAdmin)) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -509,11 +524,11 @@ export class AdminRoutes {
             return;
         }
 
-        const groupRow = await this.ctx.auth.adapter.query<{ admin_id: number | null; }>(
-            "SELECT admin_id FROM `groups` WHERE id = ?",
+        const groupRow = await this.ctx.auth.adapter.query<{ adminId: number | null; }>(
+            "SELECT admin_id AS adminId FROM `groups` WHERE id = ?",
             [groupId],
         );
-        const isGroupAdmin = groupRow[0]?.admin_id === user?.userId;
+        const isGroupAdmin = groupRow[0]?.adminId === user?.userId;
 
         if (!user || (!(await this.ctx.auth.isUserInAdminGroup(user.userId)) && !isGroupAdmin)) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -567,11 +582,11 @@ export class AdminRoutes {
             return;
         }
 
-        const groupRow = await this.ctx.auth.adapter.query<{ admin_id: number | null; }>(
-            "SELECT admin_id FROM `groups` WHERE id = ?",
+        const groupRow = await this.ctx.auth.adapter.query<{ adminId: number | null; }>(
+            "SELECT admin_id AS adminId FROM `groups` WHERE id = ?",
             [groupId],
         );
-        const isGroupAdmin = groupRow[0]?.admin_id === authUser?.userId;
+        const isGroupAdmin = groupRow[0]?.adminId === authUser?.userId;
 
         if (!authUser || (!(await this.ctx.auth.isUserInAdminGroup(authUser.userId)) && !isGroupAdmin)) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -690,6 +705,42 @@ export class AdminRoutes {
 
         this.ctx.sendJson(res, { success: true });
     };
+
+    /**
+     * Builds the statements that hand the tags of a group over to the administrators, so that deleting the group
+     * does not take them with it. A tag whose name an existing global tag already uses is merged into it.
+     *
+     * @param groupId The group that is about to be deleted.
+     *
+     * @returns The statements to run inside the deletion's transaction.
+     */
+    private async tagTransferStatements(groupId: number): Promise<IDbStatement[]> {
+        const statements: IDbStatement[] = [];
+        const tags = await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
+            "SELECT id, name FROM tags WHERE group_id = ?", [groupId],
+        );
+
+        for (const tag of tags) {
+            const globalRows = await this.ctx.auth.adapter.query<{ id: number; }>(
+                "SELECT id FROM tags WHERE group_id IS NULL AND name = ?", [tag.name],
+            );
+
+            if (globalRows.length === 0) {
+                statements.push({ sql: "UPDATE tags SET group_id = NULL WHERE id = ?", params: [tag.id] });
+
+                continue;
+            }
+
+            // The assignments move to the global tag; the ones it already has are dropped as duplicates.
+            statements.push({
+                sql: "UPDATE IGNORE score_tags SET tag_id = ? WHERE tag_id = ?", params: [globalRows[0].id, tag.id],
+            });
+            statements.push({ sql: "DELETE FROM score_tags WHERE tag_id = ?", params: [tag.id] });
+            statements.push({ sql: "DELETE FROM tags WHERE id = ?", params: [tag.id] });
+        }
+
+        return statements;
+    }
 
     /**
      * @param userId The administrator who creates an account.

@@ -13,15 +13,15 @@ import { UndoManager } from "../../src/core/UndoManager.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
-    private readonly _arrangement: ISbDmArrangement;
+    private readonly testArrangement: ISbDmArrangement;
 
     public constructor(arrangement: ISbDmArrangement) {
         super();
-        this._arrangement = arrangement;
+        this.testArrangement = arrangement;
     }
 
     public override get arrangement(): ISbDmArrangement {
-        return this._arrangement;
+        return this.testArrangement;
     }
 }
 

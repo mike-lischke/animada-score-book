@@ -82,9 +82,14 @@ export class GridMeasureEditor extends MeasureEditor {
         const stepsPerBar = StepGrid.stepsPerBarOfMeter(measure.meter);
         const step = reduceFraction(1, stepsPerBar);
         const aligned = compareFractions(start, reduceFraction(position.step, stepsPerBar)) === 0;
-        const event = aligned ? undefined : modelEventAt(measure, start);
+        const event = modelEventAt(measure, start);
 
-        this.dataModel.setNoteAt(position.trackId, position.bar, start, event?.duration ?? step, noteStyleId);
+        const duration = aligned && event?.start !== undefined
+            && compareFractions(event.start, start) === 0
+            ? event.duration
+            : event?.duration ?? step;
+
+        this.dataModel.setNoteAt(position.trackId, position.bar, start, duration, noteStyleId);
 
         return style;
     }
@@ -462,7 +467,7 @@ export class GridMeasureEditor extends MeasureEditor {
             return false;
         }
 
-        const applied = this.isSubdivisionSlot(position)
+        const applied = this.isSubdivisionSlot(position) || this.hasNoteAt(position)
             ? this.setNote(position, style.id)
             : this.insertSelectedLength(position, style.id);
         this.playNote(applied);

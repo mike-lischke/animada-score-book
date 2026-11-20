@@ -349,3 +349,28 @@ export const requireCurrent = <T>(ref: RefObject<T | null>): T => {
 
     return instance;
 };
+
+/**
+ * Copies a rendered element with the ids and anchor names that `getNewId` hands out replaced by a placeholder. A
+ * dropdown takes its `popover-<id>` and `--anchor-<id>` from the counter of the whole session, so a snapshot recorded
+ * from the raw markup depends on how many ids the run created before it and fails once the tests share a module graph.
+ *
+ * @param element The rendered element to record.
+ *
+ * @returns The copy to snapshot.
+ */
+export const stableMarkup = (element: Element): Element => {
+    const clone = element.cloneNode(true) as Element;
+
+    for (const node of [clone, ...Array.from(clone.querySelectorAll("*"))]) {
+        for (const attribute of Array.from(node.attributes)) {
+            const value = attribute.value.replace(/(popover|--anchor)-\d+/g, "$1-{id}");
+            if (value !== attribute.value) {
+                node.setAttribute(attribute.name, value);
+            }
+        }
+    }
+
+    return clone;
+};
+

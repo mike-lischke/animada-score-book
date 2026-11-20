@@ -5,45 +5,50 @@
 
 import "preact/compat";
 
-import { beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 import { AppMode, RunMode } from "../src/core/RunMode.js";
+import { localStorageMock, sessionStorageMock } from "./storage-mocks.js";
 
 // Required by auth.ts — the JWT secret is mandatory.
 // eslint-disable-next-line no-restricted-syntax
 process.env.JWT_SECRET = "test-secret";
 
-class StorageMock implements Storage {
-    private data = new Map<string, string>();
-
-    public get length(): number {
-        return this.data.size;
-    }
-
-    public clear(): void {
-        this.data.clear();
-    }
-
-    public getItem(key: string): string | null {
-        return this.data.get(key) ?? null;
-    }
-
-    public key(index: number): string | null {
-        return Array.from(this.data.keys())[index] ?? null;
-    }
-
-    public removeItem(key: string): void {
-        this.data.delete(key);
-    }
-
-    public setItem(key: string, value: unknown): void {
-        this.data.set(key, String(value));
-    }
-}
-
 let mockedHistoryState: unknown = null;
-const localStorageMock = new StorageMock();
-const sessionStorageMock = new StorageMock();
+
+/** The globals this file adds to: the timers a test left pending, shared by the files of one worker. */
+type TimerGlobal = typeof globalThis & { asbPendingTimers?: Set<ReturnType<typeof setTimeout>>; };
+
+const timerGlobal = globalThis as TimerGlobal;
+
+/**
+ * Tracks the timers the tests schedule. A test that does not stop its own timer would otherwise keep it running into
+ * the next test file, whose environment no longer holds the globals the timer reaches for, and the error would be
+ * reported for a file that has nothing to do with it.
+ */
+if (timerGlobal.asbPendingTimers === undefined) {
+    const pendingTimers = new Set<ReturnType<typeof setTimeout>>();
+    const scheduleTimeout = globalThis.setTimeout.bind(globalThis);
+
+    timerGlobal.asbPendingTimers = pendingTimers;
+
+    const trackedSetTimeout = (callback: TimerHandler, delay?: number,
+        ...args: unknown[]): ReturnType<typeof setTimeout> => {
+        const id = scheduleTimeout(() => {
+            pendingTimers.delete(id);
+
+            if (typeof callback === "function") {
+                (callback as (...callbackArgs: unknown[]) => void)(...args);
+            }
+        }, delay);
+
+        pendingTimers.add(id);
+
+        return id;
+    };
+
+    Object.defineProperty(globalThis, "setTimeout", { configurable: true, writable: true, value: trackedSetTimeout });
+}
 
 const resetBrowserStateMocks = (): void => {
     mockedHistoryState = null;
@@ -91,6 +96,17 @@ beforeEach(() => {
 
     // A test runs as a session unless it enters the demo itself.
     RunMode.enter(AppMode.Normal);
+});
+
+afterEach(() => {
+    const pendingTimers = timerGlobal.asbPendingTimers;
+    if (pendingTimers !== undefined) {
+        for (const id of pendingTimers) {
+            clearTimeout(id);
+        }
+
+        pendingTimers.clear();
+    }
 });
 
 export class AudioContextMock {

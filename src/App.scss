@@ -494,7 +494,7 @@ h6 {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    gap: 0;
+    gap: 1px;
 }
 
 .arrangementIdentityRow {
@@ -528,12 +528,23 @@ h6 {
 }
 
 .arrangementIdentityStats {
+    flex: 0 1 auto;
+    min-width: 0;
     max-width: 100%;
     font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     opacity: 0.65;
+}
+
+/* The tags of the loaded score, on a line below the title. */
+.arrangementIdentityTags {
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    width: 100%;
 }
 
 .arrangement-save-chip {

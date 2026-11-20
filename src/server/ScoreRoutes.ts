@@ -3,102 +3,23 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
+import { type IncomingMessage, type ServerResponse } from "node:http";
 
+import { NameText } from "../core/NameText.js";
 import { AccessLevel, EntityType, isValidEntityType } from "./Auth.js";
+import { InstrumentTags } from "./InstrumentTags.js";
 import { type RequestContext } from "./RequestContext.js";
+import { ScoreLock } from "./ScoreLock.js";
+import { TagAccess, type ITagRow } from "./TagAccess.js";
 
-/** Lock timeout in minutes. Locks older than this are considered expired. */
-const lockTimeoutMinutes = 30;
 const tokenBytes = 32;
+
+/** The longest name a score may carry; the `name` column holds exactly this many characters. */
+const maxNameLength = 255;
 
 export class ScoreRoutes {
     public constructor(private readonly ctx: RequestContext) { }
-
-    public async handleListScoreFolderContent(req: IncomingMessage, res: ServerResponse) {
-        const user = this.ctx.getAuthUser(req);
-        const body = await this.ctx.readJsonBody(req);
-        const parentId = body.parentid !== undefined ? Number(body.parentid) : null;
-
-        const folderParams: unknown[] = [];
-        let folderWhere: string;
-
-        if (parentId === null || parentId === -1) {
-            folderWhere = "parentid IS NULL";
-        } else {
-            folderWhere = "parentid = ?";
-            folderParams.push(parentId);
-        }
-
-        const folders = await this.ctx.auth.adapter.query(
-            `SELECT f.*, (
-            EXISTS(SELECT 1 FROM folders cf WHERE cf.parentid = f.id LIMIT 1)
-            OR EXISTS(SELECT 1 FROM scores cs WHERE cs.folderid = f.id LIMIT 1)
-        ) AS hasChildren
-        FROM folders f
-        WHERE ${folderWhere}
-        ORDER BY f.name`,
-            folderParams,
-        );
-
-        for (const f of folders) {
-            if (f.parentid === null) {
-                f.parentid = -1;
-            }
-
-            f.hasChildren = Boolean(f.hasChildren);
-        }
-
-        const scoreParams: unknown[] = [];
-        let scoreWhere: string;
-
-        if (parentId === null || parentId === -1) {
-            scoreWhere = "folderid IS NULL";
-        } else {
-            scoreWhere = "folderid = ?";
-            scoreParams.push(parentId);
-        }
-
-        const scores = await this.ctx.auth.adapter.query(
-            `SELECT * FROM scores WHERE ${scoreWhere} ORDER BY name`,
-            scoreParams,
-        );
-
-        const isAdmin = user ? await this.ctx.auth.isUserInAdminGroup(user.userId) : false;
-
-        const readableFolders: Array<Record<string, unknown>> = [];
-        for (const f of folders) {
-            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Folder, f.id as number, isAdmin);
-
-            if (summary.canRead) {
-                readableFolders.push({
-                    ...f,
-                    perm: {
-                        isOwner: summary.isOwner, canRead: summary.canRead, canWrite: summary.canWrite,
-                        isWorld: summary.isWorld, groupIds: summary.groupIds,
-                    },
-                });
-            }
-        }
-
-        const readableScores: Array<Record<string, unknown>> = [];
-        for (const s of scores) {
-            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, s.id as number, isAdmin);
-
-            if (summary.canRead) {
-                readableScores.push({
-                    ...s,
-                    perm: {
-                        isOwner: summary.isOwner, canRead: summary.canRead, canWrite: summary.canWrite,
-                        isWorld: summary.isWorld, groupIds: summary.groupIds,
-                    },
-                });
-            }
-        }
-
-        this.ctx.sendJson(res, { folders: readableFolders, scores: readableScores });
-    };
 
     public async handleGetScore(req: IncomingMessage, res: ServerResponse) {
         const user = this.ctx.getAuthUser(req);
@@ -112,8 +33,8 @@ export class ScoreRoutes {
             return;
         }
 
-        const rows = await this.ctx.auth.adapter.query(
-            "SELECT id, folderid, name, content FROM scores WHERE id = ?",
+        const rows = await this.ctx.auth.adapter.query<{ id: number; name: string; content: string; }>(
+            "SELECT id, name, content FROM scores WHERE id = ?",
             [id],
         );
 
@@ -124,235 +45,104 @@ export class ScoreRoutes {
         }
 
         const score = rows[0];
-        const isDemoScore = this.ctx.config.demo.scoreIds.includes(score.id as number);
-        const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, score.id as number);
+        const isDemoScore = await this.isDemoScore(score.id);
+        const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, score.id);
 
-        // A curated demo score is readable without a session, whatever the permission rows say.
+        // A score in the demo catalog is readable without a session, whatever the permission rows say.
         if (!summary.canRead && !isDemoScore) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
+        const context = await TagAccess.contextFor(this.ctx.auth, user);
+        const tagIds = (await this.tagsOfScore(score.id)).filter((tag) => {
+            return TagAccess.canUse(context, tag);
+        }).map((tag) => {
+            return tag.id;
+        });
+
         this.ctx.sendJson(res, {
             id: score.id,
-            folderid: score.folderid,
             name: score.name,
             content: score.content,
-            perm: {
-                isOwner: summary.isOwner,
-                canRead: summary.canRead,
-                canWrite: summary.canWrite,
-                isWorld: summary.isWorld,
-                groupIds: summary.groupIds,
-            },
+            tagIds,
+            perm: summary,
         });
     };
 
     /**
-     * Lists the scores a demo may offer without a session. The answer is the same for every caller, so no session
-     * can widen or narrow the catalog.
+     * Lists the scores of the demo catalog, which are the ones carrying the `Demo Score` tag. The answer is the same
+     * for every caller, so no session can widen or narrow the catalog.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
      */
     public async handleListDemoScores(req: IncomingMessage, res: ServerResponse) {
-        const { scoreIds } = this.ctx.config.demo;
-
-        if (scoreIds.length === 0) {
-            this.ctx.sendJson(res, { scores: [] });
-
-            return;
-        }
-
-        const placeholders = scoreIds.map(() => {
-            return "?";
-        }).join(", ");
-
         const rows = await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
-            `SELECT id, name FROM scores WHERE id IN (${placeholders})`,
-            scoreIds,
+            `SELECT s.id, s.name FROM scores s WHERE s.id IN (
+                SELECT st.score_id FROM score_tags st JOIN tags t ON t.id = st.tag_id WHERE t.system_key = ?
+            )`, [TagAccess.demoSystemKey],
         );
 
-        // The configuration decides the order, because its first entry is the score a demo opens.
-        const scores = rows.sort((left, right) => {
-            return scoreIds.indexOf(left.id) - scoreIds.indexOf(right.id);
+        // The first entry is the score a demo opens, so the order has to be the one every score list uses.
+        rows.sort((left, right) => {
+            return NameText.compare(left.name, right.name);
         });
-
-        this.ctx.sendJson(res, { scores });
-    };
-
-    public async handleResetChildPermissions(req: IncomingMessage, res: ServerResponse) {
-        const user = this.ctx.getAuthUser(req);
-        const body = await this.ctx.readJsonBody(req);
-        const folderId = body.folderId !== undefined ? Number(body.folderId) : null;
-
-        if (folderId === null) {
-            this.ctx.sendError(res, "folderId required");
-
-            return;
-        }
-
-        const allowed = await this.ctx.auth.checkPermission(user, EntityType.Folder, folderId, AccessLevel.Write);
-
-        if (!allowed) {
-            this.ctx.sendError(res, "Forbidden", 403);
-
-            return;
-        }
-
-        const childFolderIds: number[] = [];
-        const childScoreIds: number[] = [];
-
-        const collectChildren = async (parentId: number): Promise<void> => {
-            const subFolders = await this.ctx.auth.adapter.query<{ id: number; }>(
-                "SELECT id FROM folders WHERE parentid = ?", [parentId],
-            );
-
-            for (const f of subFolders) {
-                childFolderIds.push(f.id);
-                await collectChildren(f.id);
-            }
-
-            const scores = await this.ctx.auth.adapter.query<{ id: number; }>(
-                "SELECT id FROM scores WHERE folderid = ?", [parentId],
-            );
-
-            for (const s of scores) {
-                childScoreIds.push(s.id);
-            }
-        };
-
-        await collectChildren(folderId);
-
-        const allEntityIds = [
-            ...childFolderIds.map((id) => {
-                return { type: "folder", id };
-            }),
-            ...childScoreIds.map((id) => {
-                return { type: "score", id };
-            }),
-        ];
-
-        for (const entity of allEntityIds) {
-            await this.ctx.auth.adapter.execute(
-                "DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?",
-                [entity.type, entity.id],
-            );
-            await this.ctx.auth.adapter.execute(
-                "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
-                [entity.type, entity.id],
-            );
-        }
 
         this.ctx.sendJson(res, {
-            success: true,
-            resetFolders: childFolderIds.length,
-            resetScores: childScoreIds.length,
+            scores: rows.map((row) => {
+                return { id: row.id, name: row.name };
+            }),
         });
-    };
-
-    public async handleAddScoreFolder(req: IncomingMessage, res: ServerResponse) {
-        const user = this.ctx.getAuthUser(req);
-        const body = await this.ctx.readJsonBody(req);
-        const name = String(body.name ?? "").trim();
-        const parentId = body.parentid !== undefined ? Number(body.parentid) : null;
-
-        if (!name) {
-            this.ctx.sendError(res, "Name required");
-
-            return;
-        }
-
-        if (parentId !== null && parentId !== -1) {
-            const allowed = await this.ctx.auth.checkPermission(user, EntityType.Folder, parentId, AccessLevel.Write);
-
-            if (!allowed) {
-                this.ctx.sendError(res, "Forbidden", 403);
-
-                return;
-            }
-        } else if (!user) {
-            this.ctx.sendError(res, "Forbidden", 403);
-
-            return;
-        }
-
-        const result = await this.ctx.auth.adapter.insertReturningId(
-            "INSERT INTO folders (parentid, name) VALUES (?, ?)",
-            [parentId === -1 ? null : parentId, name],
-        );
-
-        if (user && (parentId === null || parentId === -1)) {
-            // A new entry is private: sharing it is a deliberate act, so nothing is granted to World here.
-            await this.ctx.auth.setOwner(EntityType.Folder, result.insertId, user.userId);
-        }
-
-        this.ctx.sendJson(res, { success: true, id: result.insertId });
     };
 
     public async handleAddScore(req: IncomingMessage, res: ServerResponse) {
         const user = this.ctx.getAuthUser(req);
         const body = await this.ctx.readJsonBody(req);
-        const folderId = body.folderId !== undefined ? Number(body.folderId) : null;
-        const name = String(body.name ?? "").trim();
+        const name = this.storableName(res, body.name);
         const content = String(body.content ?? "");
 
-        if (!name) {
-            this.ctx.sendError(res, "Name required");
-
+        if (name === undefined) {
             return;
         }
 
-        if (folderId !== null && folderId !== -1) {
-            const allowed = await this.ctx.auth.checkPermission(user, EntityType.Folder, folderId, AccessLevel.Write);
-
-            if (!allowed) {
-                this.ctx.sendError(res, "Forbidden", 403);
-
-                return;
-            }
-        } else if (!user) {
+        if (!user) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
         const result = await this.ctx.auth.adapter.insertReturningId(
-            "INSERT INTO scores (folderid, name, content) VALUES (?, ?, ?)",
-            [folderId === -1 ? null : folderId, name, content],
+            "INSERT INTO scores (name, content) VALUES (?, ?)",
+            [name, content],
         );
+        const scoreId = result.insertId;
 
-        if (user && (folderId === null || folderId === -1)) {
-            // A new entry is private: sharing it is a deliberate act, so nothing is granted to World here.
-            await this.ctx.auth.setOwner(EntityType.Score, result.insertId, user.userId);
-        }
+        // A new score is private: sharing it is a deliberate act, so nothing is granted to World here.
+        await this.ctx.auth.setOwner(EntityType.Score, scoreId, user.userId);
+        await InstrumentTags.sync(this.ctx.auth.adapter, scoreId, content);
 
-        this.ctx.sendJson(res, { success: true, id: result.insertId });
+        this.ctx.sendJson(res, { success: true, id: scoreId });
     };
 
     public async handleRenameEntry(req: IncomingMessage, res: ServerResponse) {
         const user = this.ctx.getAuthUser(req);
         const body = await this.ctx.readJsonBody(req);
-        const type = body.type as string | undefined;
         const id = body.id !== undefined ? Number(body.id) : undefined;
-        const name = String(body.name ?? "").trim();
 
-        if (!type || id === undefined || !name) {
-            this.ctx.sendError(res, "type, id and name required");
-
-            return;
-        }
-
-        if (type !== "folder" && type !== "score") {
-            this.ctx.sendError(res, "Invalid type (folder|score)");
+        if (id === undefined) {
+            this.ctx.sendError(res, "id required");
 
             return;
         }
 
-        const entityType = type === "folder" ? EntityType.Folder : EntityType.Score;
+        const name = this.storableName(res, body.name);
+        if (name === undefined) {
+            return;
+        }
 
-        const allowed = await this.ctx.auth.checkPermission(user, entityType, id, AccessLevel.Write);
+        const allowed = await this.ctx.auth.checkPermission(user, EntityType.Score, id, AccessLevel.Write);
 
         if (!allowed) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -360,9 +150,7 @@ export class ScoreRoutes {
             return;
         }
 
-        const table = type === "folder" ? "folders" : "scores";
-
-        await this.ctx.auth.adapter.execute(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id]);
+        await this.ctx.auth.adapter.execute("UPDATE scores SET name = ? WHERE id = ?", [name, id]);
 
         this.ctx.sendJson(res, { success: true });
     };
@@ -389,12 +177,12 @@ export class ScoreRoutes {
         }
 
         if (token) {
-            const locks = await this.ctx.auth.adapter.query<{ lock_token: string; }>(
-                "SELECT lock_token FROM score_locks WHERE score_id = ?",
+            const locks = await this.ctx.auth.adapter.query<{ lockToken: string; }>(
+                "SELECT lock_token AS lockToken FROM score_locks WHERE score_id = ?",
                 [id],
             );
 
-            if (locks.length === 0 || locks[0].lock_token !== token) {
+            if (locks.length === 0 || locks[0].lockToken !== token) {
                 this.ctx.sendError(res, "Score is locked by another user. Refresh and try again.", 409);
 
                 return;
@@ -408,6 +196,8 @@ export class ScoreRoutes {
 
             return;
         }
+
+        await InstrumentTags.sync(this.ctx.auth.adapter, id, content);
 
         this.ctx.sendJson(res, { success: true });
     };
@@ -424,13 +214,13 @@ export class ScoreRoutes {
             return;
         }
 
-        if (!isValidEntityType(type)) {
+        if (!isValidEntityType(type) || type !== EntityType.Score) {
             this.ctx.sendError(res, `Invalid type: ${type}`);
 
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, type, id, AccessLevel.Write);
+        const allowed = await this.ctx.auth.checkPermission(user, EntityType.Score, id, AccessLevel.Write);
 
         if (!allowed) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -438,139 +228,15 @@ export class ScoreRoutes {
             return;
         }
 
-        if (type === EntityType.Score) {
-            await this.ctx.auth.adapter.execute("DELETE FROM scores WHERE id = ?", [id]);
-            await this.ctx.auth.adapter.execute(
-                "DELETE FROM permissions WHERE entity_type = 'score' AND entity_id = ?", [id],
-            );
-            await this.ctx.auth.adapter.execute(
-                "DELETE FROM entity_groups WHERE entity_type = 'score' AND entity_id = ?", [id],
-            );
-            this.ctx.sendJson(res, { success: true });
+        await this.ctx.auth.adapter.execute("DELETE FROM scores WHERE id = ?", [id]);
+        await this.ctx.auth.adapter.execute(
+            "DELETE FROM permissions WHERE entity_type = 'score' AND entity_id = ?", [id],
+        );
+        await this.ctx.auth.adapter.execute(
+            "DELETE FROM entity_groups WHERE entity_type = 'score' AND entity_id = ?", [id],
+        );
 
-            return;
-        }
-
-        if (type === EntityType.Folder) {
-            const folders = await this.ctx.auth.adapter.query<{ parentid: number | null; }>(
-                "SELECT parentid FROM folders WHERE id = ?", [id],
-            );
-
-            if (folders.length === 0) {
-                this.ctx.sendError(res, "Folder not found", 404);
-
-                return;
-            }
-
-            const parentId = folders[0].parentid;
-
-            await this.ctx.auth.adapter.execute(
-                "UPDATE scores SET folderid = ? WHERE folderid = ?", [parentId, id],
-            );
-
-            await this.ctx.auth.adapter.execute(
-                "UPDATE folders SET parentid = ? WHERE parentid = ?", [parentId, id],
-            );
-
-            await this.ctx.auth.adapter.execute("DELETE FROM folders WHERE id = ?", [id]);
-            await this.ctx.auth.adapter.execute(
-                "DELETE FROM permissions WHERE entity_type = 'folder' AND entity_id = ?", [id],
-            );
-            await this.ctx.auth.adapter.execute(
-                "DELETE FROM entity_groups WHERE entity_type = 'folder' AND entity_id = ?", [id],
-            );
-
-            this.ctx.sendJson(res, { success: true });
-
-            return;
-        }
-
-        this.ctx.sendError(res, "Invalid type (folder|score)");
-    };
-
-    public async handleMove(req: IncomingMessage, res: ServerResponse) {
-        const user = this.ctx.getAuthUser(req);
-        const body = await this.ctx.readJsonBody(req);
-        const type = body.type as string | undefined;
-        const id = body.id !== undefined ? Number(body.id) : undefined;
-
-        if (type === "folder") {
-            const newParentId = body.newParentId !== undefined ? Number(body.newParentId) : undefined;
-
-            if (id === undefined || newParentId === undefined) {
-                this.ctx.sendError(res, "id and newParentId required");
-
-                return;
-            }
-
-            const entityType = EntityType.Folder;
-
-            const allowed = await this.ctx.auth.checkPermission(user, entityType, id, AccessLevel.Write);
-
-            if (!allowed) {
-                this.ctx.sendError(res, "Forbidden", 403);
-
-                return;
-            }
-
-            if (newParentId !== -1) {
-                const targetAllowed = await this.ctx.auth.checkPermission(
-                    user, EntityType.Folder, newParentId, AccessLevel.Write,
-                );
-
-                if (!targetAllowed) {
-                    this.ctx.sendError(res, "Forbidden", 403);
-
-                    return;
-                }
-            }
-
-            await this.ctx.auth.adapter.execute("UPDATE folders SET parentid = ? WHERE id = ?", [
-                newParentId === -1 ? null : newParentId, id,
-            ]);
-            this.ctx.sendJson(res, { success: true });
-
-            return;
-        }
-
-        if (type === EntityType.Score) {
-            const newFolderId = body.newFolderId !== undefined ? Number(body.newFolderId) : undefined;
-
-            if (id === undefined || newFolderId === undefined) {
-                this.ctx.sendError(res, "id and newFolderId required");
-
-                return;
-            }
-
-            const allowed = await this.ctx.auth.checkPermission(user, EntityType.Score, id, AccessLevel.Write);
-
-            if (!allowed) {
-                this.ctx.sendError(res, "Forbidden", 403);
-
-                return;
-            }
-
-            if (newFolderId !== -1) {
-                const targetAllowed = await this.ctx.auth.checkPermission(
-                    user, EntityType.Folder, newFolderId, AccessLevel.Write,
-                );
-
-                if (!targetAllowed) {
-                    this.ctx.sendError(res, "Forbidden", 403);
-
-                    return;
-                }
-            }
-
-            await this.ctx.auth.adapter.execute("UPDATE scores SET folderid = ? WHERE id = ?", [
-                newFolderId === -1 ? null : newFolderId, id,
-            ]);
-            this.ctx.sendJson(res, { success: true });
-
-            return;
-        }
-
-        this.ctx.sendError(res, "Invalid type (folder|score)");
+        this.ctx.sendJson(res, { success: true });
     };
 
     public async handleClearAll(req: IncomingMessage, res: ServerResponse) {
@@ -589,7 +255,6 @@ export class ScoreRoutes {
         }
 
         await this.ctx.auth.adapter.execute("DELETE FROM scores");
-        await this.ctx.auth.adapter.execute("DELETE FROM folders");
 
         this.ctx.sendJson(res, { success: true });
     };
@@ -633,23 +298,19 @@ export class ScoreRoutes {
         }
 
         const locks = await this.ctx.auth.adapter.query<{
-            user_id: number; email: string; lock_token: string; locked_at: string;
+            userId: number; email: string; lockToken: string; lockedAt: string;
         }>(
-            "SELECT user_id, email, lock_token, locked_at FROM score_locks WHERE score_id = ?",
+            "SELECT user_id AS userId, email, lock_token AS lockToken, locked_at AS lockedAt "
+            + "FROM score_locks WHERE score_id = ?",
             [scoreId],
         );
 
         if (locks.length > 0) {
             const lock = locks[0];
-            const rawLockedAt = lock.locked_at as unknown;
-            const lockedAt = rawLockedAt instanceof Date
-                ? rawLockedAt.getTime()
-                : new Date(String(rawLockedAt).replace(" ", "T") + "Z").getTime();
-            const lockAge = Date.now() - lockedAt;
-            const isExpired = lockAge > lockTimeoutMinutes * 60 * 1000;
+            const isExpired = ScoreLock.isExpired(lock.lockedAt);
 
             // Same user reclaiming their own lock — always allowed, even if not expired.
-            if (lock.user_id === user.userId) {
+            if (lock.userId === user.userId) {
                 const token = randomBytes(tokenBytes).toString("hex");
 
                 await this.ctx.auth.adapter.execute(
@@ -663,13 +324,13 @@ export class ScoreRoutes {
             }
 
             // Different user's lock — renew with prevToken only if expired.
-            if (isExpired && prevToken && prevToken === lock.lock_token) {
+            if (isExpired && prevToken && prevToken === lock.lockToken) {
                 await this.ctx.auth.adapter.execute(
                     "UPDATE score_locks SET locked_at = CURRENT_TIMESTAMP WHERE score_id = ?",
                     [scoreId],
                 );
 
-                this.ctx.sendJson(res, { success: true, token: lock.lock_token, renewed: true });
+                this.ctx.sendJson(res, { success: true, token: lock.lockToken, renewed: true });
 
                 return;
             }
@@ -679,7 +340,7 @@ export class ScoreRoutes {
                     success: false,
                     locked: true,
                     email: lock.email,
-                    lockedAt: lock.locked_at,
+                    lockedAt: lock.lockedAt,
                 }, 409);
 
                 return;
@@ -718,8 +379,8 @@ export class ScoreRoutes {
             return;
         }
 
-        const locks = await this.ctx.auth.adapter.query<{ lock_token: string; }>(
-            "SELECT lock_token FROM score_locks WHERE score_id = ?",
+        const locks = await this.ctx.auth.adapter.query<{ lockToken: string; }>(
+            "SELECT lock_token AS lockToken FROM score_locks WHERE score_id = ?",
             [scoreId],
         );
 
@@ -729,7 +390,7 @@ export class ScoreRoutes {
             return;
         }
 
-        if (locks[0].lock_token !== token) {
+        if (locks[0].lockToken !== token) {
             this.ctx.sendError(res, "Invalid token", 403);
 
             return;
@@ -762,4 +423,64 @@ export class ScoreRoutes {
 
         this.ctx.sendJson(res, { success: true });
     };
+
+    /**
+     * @param scoreId The score in question.
+     *
+     * @returns Whether the score carries the `Demo Score` tag, which publishes it to visitors without a session.
+     */
+    private async isDemoScore(scoreId: number): Promise<boolean> {
+        const rows = await this.ctx.auth.adapter.query<{ cnt: number; }>(
+            "SELECT COUNT(*) AS cnt FROM score_tags st JOIN tags t ON t.id = st.tag_id " +
+            "WHERE st.score_id = ? AND t.system_key = ?", [scoreId, TagAccess.demoSystemKey],
+        );
+
+        return (rows[0]?.cnt ?? 0) > 0;
+    }
+
+    /**
+     * @param scoreId The score in question.
+     *
+     * @returns All tags of the score, whoever may see them.
+     */
+    private async tagsOfScore(scoreId: number): Promise<ITagRow[]> {
+        return this.ctx.auth.adapter.query<ITagRow>(
+            "SELECT t.id, t.name, t.color_index AS colorIndex, t.group_id AS groupId, "
+            + "t.system_key AS systemKey FROM score_tags st " +
+            "JOIN tags t ON t.id = st.tag_id WHERE st.score_id = ?", [scoreId],
+        );
+    }
+
+    /**
+     * Reads a score name from a request and checks every rule a stored name has to meet. Writes the error response
+     * itself when a rule does not hold.
+     *
+     * @param res The response to write a rejection to.
+     * @param value The `name` field of the request body.
+     *
+     * @returns The name as it must be stored, or undefined when the request was rejected.
+     */
+    private storableName(res: ServerResponse, value: unknown): string | undefined {
+        const name = NameText.normalize(String(value ?? ""));
+
+        if (name.length === 0) {
+            this.ctx.sendError(res, "Name required");
+
+            return undefined;
+        }
+
+        if (!NameText.isWellFormed(name)) {
+            this.ctx.sendError(res, "A score name must be valid Unicode.");
+
+            return undefined;
+        }
+
+        if (NameText.codePointCount(name) > maxNameLength) {
+            this.ctx.sendError(res, `A score name may hold at most ${maxNameLength} characters.`);
+
+            return undefined;
+        }
+
+        return name;
+    }
 }

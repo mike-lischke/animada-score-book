@@ -4,12 +4,15 @@
  */
 
 import { AppStorage } from "../core/AppStorage.js";
-import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
+import {
+    Articulation, articulationOf, resolveNoteStyleForArticulation, resolveRequestedNoteStyle,
+} from "../core/articulation.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { defaultEntryValue, noteValueFraction, type INoteValue } from "../core/rest-notation.js";
-import type {
-    IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
+import {
+    type IEventResizeRequest, type INoteStyleAssignment, type ISbDmTrack, type ISbDmTrackPiece,
+    type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { addFractions, compareFractions, divideFraction, reduceFraction }
     from "../core/serialisation/numeric-functions.js";
@@ -779,20 +782,22 @@ export abstract class MeasureEditor {
         const requested = styles.find((candidate) => {
             return candidate.id === noteStyleId;
         });
-        if (requested === undefined || this.articulation === undefined) {
+        if (requested === undefined || this.entryMode === EditEntryMode.Overwrite
+            || this.articulation === undefined) {
             return requested;
         }
 
-        const articulatedId = resolveNoteStyleForArticulation(
-            Object.fromEntries(styles.map((style) => {
-                return [style.id, style];
-            })),
+        const styleMap = Object.fromEntries(styles.map((style) => {
+            return [style.id, style];
+        }));
+        const resolvedId = resolveRequestedNoteStyle(
+            styleMap,
             requested.id,
             this.articulation,
         );
 
         return styles.find((candidate) => {
-            return candidate.id === articulatedId;
+            return candidate.id === resolvedId;
         }) ?? requested;
     }
 

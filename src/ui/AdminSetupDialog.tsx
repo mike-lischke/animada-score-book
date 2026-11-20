@@ -6,7 +6,6 @@
 import { createRef, type ComponentChild } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Icon } from "../components/ui/framework/Icon.js";
@@ -14,6 +13,8 @@ import { Input } from "../components/ui/framework/Input.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
+import { ConfirmationReloadResult, EmailConfirmationDialog } from "./EmailConfirmationDialog.js";
 
 interface IAdminSetupDialogState {
     email: string;
@@ -31,15 +32,27 @@ interface IAdminSetupDialogState {
     pendingEmail: string;
 }
 
+export interface IAdminSetupDialogProperties extends ICommonUIProperties {
+    /** True on phones (viewport up to 600 px), which hands the narrower layout to the sub-dialogs. */
+    compact?: boolean;
+
+    /**
+     * Called when the operator asks to continue after confirming the link. The callback checks the installation and
+     * signs in; without it the confirmation dialog reloads the document.
+     */
+    onContinue?: (email: string, password: string) => Promise<ConfirmationReloadResult>;
+}
+
 /**
  * First-time setup dialog: asks for the initial admin and mails the link that finishes the installation. Until that
  * link is opened, the installation holds no account at all, so the dialog stays open and explains what to do.
  */
-export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSetupDialogState> {
+export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, IAdminSetupDialogState> {
     private dialogRef = createRef<Dialog | null>();
+    private confirmationRef = createRef<EmailConfirmationDialog | null>();
     private groupNameRef = createRef<HTMLElement | null>();
 
-    public constructor(props: ICommonUIProperties) {
+    public constructor(props: IAdminSetupDialogProperties) {
         super(props);
 
         this.state = {
@@ -70,42 +83,40 @@ export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSet
             loading: false,
             pendingEmail: "",
         }, () => {
-            this.dialogRef.current?.open();
+            this.openCurrentDialog();
         });
     }
 
     public render(): ComponentChild {
-        const { loading, pendingEmail } = this.state;
+        const { compact } = this.props;
+        const { loading, pendingEmail, notice, errorMessage } = this.state;
 
-        let content: ComponentChild;
-        let actions: ComponentChild[];
-        if (pendingEmail === "") {
-            content = this.renderForm(loading);
-            actions = [
-                <Button
-                    id="admin-setup-create"
-                    type="button"
-                    key="create"
-                    caption="Finish Installation"
-                    isDefault
-                    disabled={loading}
-                    onClick={this.handleCreateClick}
-                />,
-            ];
-        } else {
-            content = this.renderPending(pendingEmail);
-            actions = [
-                <Button
-                    id="admin-setup-resend"
-                    type="button"
-                    key="resend"
-                    caption="Send Again"
-                    isDefault
-                    disabled={loading}
-                    onClick={this.handleSendAgain}
-                />,
-            ];
+        if (pendingEmail !== "") {
+            return (
+                <EmailConfirmationDialog
+                    ref={this.confirmationRef}
+                    email={pendingEmail}
+                    compact={compact}
+                    loading={loading}
+                    notice={notice}
+                    errorMessage={errorMessage}
+                    onResend={this.handleSendAgain}
+                    onReload={this.handleReload}
+                />
+            );
         }
+
+        const actions = [
+            <Button
+                id="admin-setup-create"
+                type="button"
+                key="create"
+                caption="Finish Installation"
+                isDefault
+                disabled={loading}
+                onClick={this.handleCreateClick}
+            />,
+        ];
 
         return (
             <Dialog
@@ -114,7 +125,7 @@ export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSet
                 onClose={this.handleClose}
                 actions={actions}
             >
-                {content}
+                {this.renderForm(loading)}
             </Dialog>
         );
     }
@@ -126,6 +137,19 @@ export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSet
      */
     private static looksLikeEmail(value: string): boolean {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+
+    /**
+     * Opens the dialog that matches the current state, since the form and the confirmation are separate dialogs.
+     */
+    private openCurrentDialog(): void {
+        const { pendingEmail } = this.state;
+
+        if (pendingEmail === "") {
+            this.dialogRef.current?.open();
+        } else {
+            this.confirmationRef.current?.open();
+        }
     }
 
     /**
@@ -298,69 +322,6 @@ export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSet
         );
     }
 
-    /**
-     * @param email The address the confirmation link was sent to.
-     *
-     * @returns What the operator sees while the link waits in the inbox.
-     */
-    private renderPending(email: string): ComponentChild {
-        const { errorMessage, notice } = this.state;
-        const explanation = `We sent a confirmation link to ${email}. Open it to create the administrator and `
-            + "finish the installation.";
-        const reloadHint = "The installation is complete as soon as the link has been opened. Then reload this page "
-            + "yourself — the application does not do that by itself.";
-        const resendHint = "Nothing arrived? `Send Again` mails a new link. The previous link stops working with it.";
-
-        return (
-            <>
-                <Container
-                    className="font-bold text-lg"
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}
-                    style={{ marginBottom: "12px" }}
-                >
-                    <Icon
-                        src={UIIcon.Account}
-                        style={{ fontSize: "24px", marginRight: "8px", color: "var(--color-primary)" }}
-                    />
-                    Check Your Inbox
-                </Container>
-
-                <Container className="form-card" orientation={Orientation.TopDown}>
-                    <Label caption={explanation} />
-                    <Label caption={reloadHint} />
-                    <Label className="text-sm text-base-content/60" caption={resendHint} />
-                </Container>
-
-                {notice && (
-                    <Container
-                        className="form-row"
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <Label
-                            caption={notice}
-                            style={{ color: "var(--color-success)", fontSize: "13px" }}
-                        />
-                    </Container>
-                )}
-
-                {errorMessage && (
-                    <Container
-                        className="form-row"
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <Label
-                            caption={errorMessage}
-                            style={{ color: "var(--color-error)", fontSize: "13px" }}
-                        />
-                    </Container>
-                )}
-            </>
-        );
-    }
-
     private handleChange = (e: InputEvent): void => {
         const target = e.target as HTMLInputElement;
 
@@ -405,6 +366,21 @@ export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSet
     private handleSendAgain = (): void => {
         // The backend replaces the pending confirmation, so the mail carries a new link and the old one stops working.
         void this.attemptCreate();
+    };
+
+    /**
+     * @returns What the check of the installation found out; the credentials of the last submission let the callback
+     * sign in right away, so the operator can start without typing them again.
+     */
+    private handleReload = async (): Promise<ConfirmationReloadResult> => {
+        const { email, password } = this.state;
+        const { onContinue } = this.props;
+
+        if (!onContinue) {
+            return ConfirmationReloadResult.NotConfirmed;
+        }
+
+        return onContinue(email.trim().toLowerCase(), password);
     };
 
     private handleClose = (): void => {
@@ -477,6 +453,10 @@ export class AdminSetupDialog extends UIComponent<ICommonUIProperties, IAdminSet
             loading: false,
             pendingEmail: address,
             notice: pendingEmail === "" ? "" : "A new confirmation link was sent.",
+        }, () => {
+            if (pendingEmail === "") {
+                this.openCurrentDialog();
+            }
         });
     }
 }

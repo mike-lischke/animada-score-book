@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { PlayerPlayState } from "../../src/player/ArrangementPlayer.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -35,6 +35,12 @@ const collectAnimationStates = (): PlayerPlayState[] => {
 };
 
 describe("AnimationEngine", { concurrent: false }, () => {
+    beforeEach(() => {
+        // Engines of the specs that ran before in this worker may still listen on the shared bus and answer the
+        // player state changes this spec executes.
+        requisitions.unregister();
+    });
+
     afterEach(() => {
         requisitions.unregister();
     });

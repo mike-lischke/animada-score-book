@@ -57,10 +57,10 @@ const routeHealthyApi = async (page: Page): Promise<() => Array<Record<string, u
             return;
         }
 
-        if (action === "listScoreFolderContent") {
+        if (action === "listScores") {
             await route.fulfill({
                 status: 200, contentType: "application/json",
-                body: JSON.stringify({ folders: [], scores: [] }),
+                body: JSON.stringify({ scores: [] }),
             });
 
             return;
@@ -113,11 +113,11 @@ const routeApiWithState = async (page: Page, state: IApiState): Promise<void> =>
             return;
         }
 
-        if (action === "listScoreFolderContent") {
+        if (action === "listScores") {
             await route.fulfill({
                 status: 200,
                 contentType: "application/json",
-                body: JSON.stringify({ folders: [], scores: [] }),
+                body: JSON.stringify({ scores: [] }),
             });
 
             return;
@@ -210,10 +210,10 @@ test.describe("Setup: fresh start, database exists but empty", () => {
                 return;
             }
 
-            if (action === "listScoreFolderContent") {
+            if (action === "listScores") {
                 await route.fulfill({
                     status: 200, contentType: "application/json",
-                    body: JSON.stringify({ folders: [], scores: [] })
+                    body: JSON.stringify({ scores: [] })
                 });
 
                 return;
@@ -276,10 +276,10 @@ test.describe("Setup: fresh start, database has data", () => {
                 return;
             }
 
-            if (action === "listScoreFolderContent") {
+            if (action === "listScores") {
                 await route.fulfill({
                     status: 200, contentType: "application/json",
-                    body: JSON.stringify({ folders: [], scores: [] })
+                    body: JSON.stringify({ scores: [] })
                 });
 
                 return;

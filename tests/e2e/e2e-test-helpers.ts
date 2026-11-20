@@ -278,11 +278,31 @@ export const routeApi = async (page: Page): Promise<void> => {
             return;
         }
 
-        if (action === "listScoreFolderContent") {
+        if (action === "listScores") {
             await route.fulfill({
                 status: 200,
                 contentType: "application/json",
-                body: JSON.stringify({ folders: [], scores: [] }),
+                body: JSON.stringify({ scores: [] }),
+            });
+
+            return;
+        }
+
+        if (action === "listTags") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify({ tags: [] }),
+            });
+
+            return;
+        }
+
+        if (action === "listTagOwnerScopes") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify({ scopes: [] }),
             });
 
             return;

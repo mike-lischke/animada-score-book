@@ -28,9 +28,6 @@ export interface IServerConfig {
     /** The outgoing mail server that delivers the confirmation links. */
     mail: IMailConfig;
 
-    /** The curated scores a demo may offer without a session. */
-    demo: IDemoConfig;
-
     /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
     allowedOrigins?: string[];
 
@@ -79,12 +76,6 @@ export const isMailConfigured = (mail: IMailConfig): boolean => {
     return mail.host.length > 0 && mail.from.length > 0;
 };
 
-/** The curated demo catalog. */
-export interface IDemoConfig {
-    /** The scores a demo may offer, by id. An empty list disables the catalog. */
-    scoreIds: number[];
-}
-
 /** Whether the loaded configuration holds a usable database connection. */
 export interface IConfigStatus {
     loaded: boolean;
@@ -131,16 +122,6 @@ export const loadConfig = (): IServerConfig => {
         }).filter(Boolean)
         : undefined;
 
-    const demoScoreIdsEnv = process.env.DEMO_SCORE_IDS
-        ? process.env.DEMO_SCORE_IDS.split(",")
-            .map((value) => {
-                return Number.parseInt(value.trim(), 10);
-            })
-            .filter((value) => {
-                return Number.isInteger(value) && value > 0;
-            })
-        : undefined;
-
     // Environment variables take precedence over saved config.
     const requestedEngine: string | undefined = process.env.DB_ENGINE ?? raw.database?.engine;
     const engine = requestedEngine !== undefined && isValidDatabaseEngine(requestedEngine)
@@ -181,9 +162,6 @@ export const loadConfig = (): IServerConfig => {
             password: process.env.MAIL_PASSWORD ?? raw.mail?.password ?? "",
             from: process.env.MAIL_FROM ?? raw.mail?.from ?? "",
             publicUrl: process.env.MAIL_PUBLIC_URL ?? raw.mail?.publicUrl,
-        },
-        demo: {
-            scoreIds: demoScoreIdsEnv ?? raw.demo?.scoreIds ?? [],
         },
     };
 

@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { checksum, deriveDbName, extractRows, sanitizeBranchName } from "../../build/migration.js";
+import { checksum, deriveDbName, extractRows, mayCreateDatabase, sanitizeBranchName } from "../../build/migration.js";
 
 describe("extractRows", () => {
     it("extracts from mysql2 tuple format [rows, fields]", () => {
@@ -104,7 +104,28 @@ describe("deriveDbName", () => {
         );
     });
 
+    it("keeps a name that already carries the branch suffix", () => {
+        expect(deriveDbName("animada_score_book__features_editing", "features/editing")).toBe(
+            "animada_score_book__features_editing",
+        );
+        expect(deriveDbName("animada_score_book__editing", "editing")).toBe("animada_score_book__editing");
+    });
+
     it("handles empty base name", () => {
         expect(deriveDbName("", "mybranch")).toBe("__mybranch");
+    });
+});
+
+describe("mayCreateDatabase", () => {
+    it("creates a missing branch database when the caller allows it", () => {
+        expect(mayCreateDatabase("animada_score_book", "animada_score_book__features_x", true)).toBe(true);
+    });
+
+    it("never creates the configured database itself", () => {
+        expect(mayCreateDatabase("animada_score_book", "animada_score_book", true)).toBe(false);
+    });
+
+    it("never creates a database when the caller does not allow it", () => {
+        expect(mayCreateDatabase("animada_score_book", "animada_score_book__features_x", false)).toBe(false);
     });
 });

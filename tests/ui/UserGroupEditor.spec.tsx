@@ -63,11 +63,11 @@ const sampleUsers: IUserRow[] = [
 
 const sampleGroups: IGroupRow[] = [
     {
-        id: 1, name: "Percussion", description: "", color: "#ff0000", adminId: 1,
+        id: 1, name: "Percussion", description: "", colorIndex: 1, adminId: 1,
         hasPassword: true, lastLogin: null, createdAt: "2024-01-01"
     },
     {
-        id: 2, name: "Vocals", description: "", color: "#00ff00", adminId: null,
+        id: 2, name: "Vocals", description: "", colorIndex: 2, adminId: null,
         hasPassword: false, lastLogin: null, createdAt: "2024-02-01"
     },
 ];
@@ -451,6 +451,47 @@ describe("UserGroupEditor", { concurrent: false }, () => {
             expect(popupContent!.textContent).toContain("Password");
             expect(popupContent!.textContent).toContain("Group Membership");
             expect(popupContent!.textContent).toContain("Create");
+        });
+    });
+
+    it("adds a group membership from the completions and one the editor creates on the fly", async () => {
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue([]),
+            listGroups: vi.fn().mockResolvedValue(sampleGroups),
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        requireCurrent(ref).open();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#ug-add-user")).toBeTruthy();
+        });
+
+        document.body.querySelector<HTMLElement>("#ug-add-user")!.click();
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup .tag-input-field")).toBeTruthy();
+        });
+
+        const input = document.body.querySelector<HTMLInputElement>(".popup .tag-input-field")!;
+
+        // An existing group is taken from the completion list, a typed name creates a pending group.
+        fireEvent.input(input, { target: { value: "Vocals" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup .tag-input")!.textContent).toContain("Vocals");
+        });
+
+        fireEvent.input(input, { target: { value: "New Band" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup .tag-input")!.textContent).toContain("New Band");
         });
     });
 

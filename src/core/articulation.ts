@@ -107,6 +107,36 @@ export const resolveNoteStyleForArticulation = (
 };
 
 /**
+ * Resolves an explicitly requested style while preserving a toolbar articulation only
+ * if the requested style's voice offers that variant.
+ *
+ * @param noteStyles All note styles of the instrument.
+ * @param requestedStyleId The exact style the user selected.
+ * @param articulation The toolbar articulation, or undefined for plain.
+ *
+ * @returns The exact style or a matching same-voice variant.
+ */
+export const resolveRequestedNoteStyle = (
+    noteStyles: Record<string, IAudioData>,
+    requestedStyleId: string,
+    articulation: Articulation | undefined,
+): string => {
+    const requested = Object.values(noteStyles).find((style) => {
+        return style.id === requestedStyleId;
+    });
+    if (!requested) {
+        return requestedStyleId;
+    }
+
+    const key = voiceKey(requested);
+    const match = Object.values(noteStyles).find((candidate) => {
+        return voiceKey(candidate) === key && articulationOf(candidate) === articulation;
+    });
+
+    return match?.id ?? requestedStyleId;
+};
+
+/**
  * Collects the articulations that are available for the given note style's voice.
  *
  * @param noteStyles All note styles of an instrument.

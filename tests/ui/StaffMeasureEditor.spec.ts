@@ -600,6 +600,35 @@ describe("StaffMeasureEditor input", { concurrent: false }, () => {
         // A style change never alters a note's length.
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("2");
+        expect(SelectionSerializer.coordinatesOf(
+            [...input.selectionManager.currentSelection.values()][0],
+        ).start).toEqual({ numerator: 1, denominator: 4 });
+    });
+
+    it("does not mutate an existing note when overwrite repeats the same style", () => {
+        setEvents(model, [
+            {
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "1",
+            },
+            {
+                start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "2",
+            },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 } },
+        ]);
+        editor.entryMode = EditEntryMode.Overwrite;
+        const runs = [...renderRuns().querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+
+        expect(editor.hitTest(runs[0])).toBe(true);
+        expect(editor.enterNote("1")).toBe(true);
+
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
+        expect(styleAt(measure, { numerator: 1, denominator: 4 })).toBe("2");
+        expect(SelectionSerializer.coordinatesOf(
+            [...input.selectionManager.currentSelection.values()][0],
+        ).start).toEqual({ numerator: 1, denominator: 4 });
     });
 
     it("keeps the cleared cell selected, so the cursor stands where the note stood", () => {
