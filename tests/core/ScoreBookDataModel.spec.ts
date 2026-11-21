@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { ScoreLineupStatus } from "../../src/core/DatabaseTypes.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
 import { ScoreBookDataModel, SbDmEntityType, type ISbDmScore, type ISbDmTrackPiece }
@@ -2613,5 +2614,28 @@ describe("ScoreBookDataModel — score list entries", { concurrent: false }, () 
         vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(responseOf(403, { error: "Forbidden" }));
 
         expect(await model.ensureScoreContent(entry(""))).toBeUndefined();
+    });
+
+    it("derives the lineup of a score from the content it saves", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(200, { success: true }));
+        const score = entry("");
+
+        await model.updateScoreContent(score,
+            "{\"v\":7,\"p\":[\"4/4\",110,1,\"q\"],\"k\":[[1,\"5\",[]],[2,\"5\",[]]]}");
+
+        expect(score.lineup?.status).toBe(ScoreLineupStatus.Ok);
+        expect(score.lineup?.tracks).toEqual([
+            { trackId: 1, instrumentTypeId: "5" },
+            { trackId: 2, instrumentTypeId: "5" },
+        ]);
+    });
+
+    it("starts a created score with the lineup of the content it was given", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(200, { success: true, id: 77 }));
+
+        const created = await model.addScore("Samba",
+            "{\"v\":7,\"p\":[\"4/4\",110,1,\"q\"],\"k\":[[3,\"2\",[]]]}");
+
+        expect(created?.lineup?.tracks).toEqual([{ trackId: 3, instrumentTypeId: "2" }]);
     });
 });

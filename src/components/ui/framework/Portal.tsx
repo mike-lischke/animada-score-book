@@ -26,11 +26,7 @@ export interface IPortalOptions {
      */
     blockMouseEvents?: boolean;
 
-    /**
-     * When true, focus moves into the portal when it opens, Tab stays inside it and the element that had the
-     * focus gets it back when the portal closes (default: true). A floating panel that belongs to a control
-     * behind it turns this off.
-     */
+    /** Moves the focus into the portal, keeps Tab there and gives the focus back when it closes (default: true). */
     trapFocus?: boolean;
 }
 

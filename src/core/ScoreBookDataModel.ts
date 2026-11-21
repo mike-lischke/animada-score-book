@@ -17,11 +17,12 @@ import { decomposeRestSpan } from "./rest-notation.js";
 import { computeIsTuplet, maxTupletLevels } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
-import type { IScoreListEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
+import type { IScoreLineup, IScoreListEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
 import { NameText } from "./NameText.js";
 import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
+import { ScoreLineup } from "./ScoreLineup.js";
 import { StepGrid } from "./StepGrid.js";
 import { TagCombination } from "./TagCombination.js";
 import type { ITagCombination, ITagInfo, ITagOwnerScope } from "./types/tags.js";
@@ -477,6 +478,9 @@ export interface ISbDmScore extends ISbDmVisual {
 
     /** The ids of the tags the current user can use on this score. */
     tagIds: number[];
+
+    /** The tracks with their instruments, as the score card shows them. */
+    lineup?: IScoreLineup;
 }
 
 export interface ISbDmTrack extends ISbDmCommon {
@@ -2648,6 +2652,7 @@ export class ScoreBookDataModel {
             name: storedName,
             content,
             tagIds: [],
+            lineup: ScoreLineup.read(content),
             state: {
                 initialized: true,
                 isLeaf: true,
@@ -2700,6 +2705,7 @@ export class ScoreBookDataModel {
         }
 
         score.content = content;
+        score.lineup = ScoreLineup.read(content);
     }
 
     /**
@@ -3365,6 +3371,7 @@ export class ScoreBookDataModel {
             if (score) {
                 score.name = entry.name;
                 score.tagIds = entry.tagIds;
+                score.lineup = entry.lineup;
                 score.perm = entry.perm;
 
                 return score;
@@ -3376,6 +3383,7 @@ export class ScoreBookDataModel {
                 name: entry.name,
                 content: "",
                 tagIds: entry.tagIds,
+                lineup: entry.lineup,
                 perm: entry.perm,
                 state: {
                     initialized: false,

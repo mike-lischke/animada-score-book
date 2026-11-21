@@ -200,9 +200,15 @@ class FakeDatabase implements IDatabaseAdapter {
         }
 
         if (sql.includes("FROM permissions")) {
-            const owner = this.permissions.get(Number(params[1]));
+            const entityIds = params.slice(1).map((value) => {
+                return Number(value);
+            });
 
-            return owner === undefined ? [] : [{ entityId: Number(params[1]), ownerId: owner }];
+            return entityIds.filter((entityId) => {
+                return this.permissions.has(entityId);
+            }).map((entityId) => {
+                return { entityId, ownerId: this.permissions.get(entityId) };
+            });
         }
 
         if (sql.includes("FROM entity_groups")) {
@@ -222,6 +228,32 @@ class FakeDatabase implements IDatabaseAdapter {
             const assigned = tag !== undefined && this.assignments.has(`${String(params[0])}:${tag.id}`);
 
             return [{ cnt: assigned ? 1 : 0 }];
+        }
+
+        if (sql.includes("SELECT id, content FROM scores")) {
+            const ids = params.map((value) => {
+                return Number(value);
+            });
+
+            return this.scores.filter((score) => {
+                return ids.includes(score.id);
+            }).map((score) => {
+                return { id: score.id, content: score.content };
+            });
+        }
+
+        if (sql.includes("FROM scores s")) {
+            return this.scores.map((score) => {
+                return { id: score.id, name: score.name };
+            });
+        }
+
+        if (sql.includes("FROM score_tags")) {
+            return Array.from(this.assignments).map((entry) => {
+                const [assignedScore, assignedTag] = entry.split(":");
+
+                return { scoreId: Number(assignedScore), tagId: Number(assignedTag) };
+            });
         }
 
         if (sql.includes("SELECT content FROM scores")) {
@@ -343,6 +375,53 @@ describe("tag actions — assigning", () => {
         await routes.handleAssignTag(createRequest({ scoreId, tagId: 2 }), res);
 
         expect(captured.status).toBe(401);
+    });
+});
+
+describe("tag actions — score list", () => {
+    it("returns the lineup of every listed score, keeping repeated instruments apart", async () => {
+        const secondScoreId = scoreId + 1;
+
+        const { database, routes } = setup();
+        database.scores.push({
+            id: secondScoreId,
+            name: "Samba Reggae",
+            content: "{\"v\":7,\"p\":[\"4/4\",110,1,\"q\"],\"k\":[[1,\"5\",[]],[2,\"5\",[]],[3,\"7\",[]]]}",
+        });
+        database.permissions.set(secondScoreId, memberUserId);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleListScores(createRequest({ groups: [] }, memberUserId), res);
+
+        const body = captured.body as { scores: Array<{ id: number; lineup: unknown; }> };
+        const listed = body.scores.find((entry) => {
+            return entry.id === secondScoreId;
+        });
+
+        expect(listed?.lineup).toEqual({
+            status: "ok",
+            tracks: [
+                { trackId: 1, instrumentTypeId: "5" },
+                { trackId: 2, instrumentTypeId: "5" },
+                { trackId: 3, instrumentTypeId: "7" },
+            ],
+        });
+    });
+
+    it("lists a score whose content it cannot read instead of dropping it", async () => {
+        const { routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleListScores(createRequest({ groups: [] }, memberUserId), res);
+
+        const body = captured.body as { scores: Array<{ id: number; lineup: unknown; }> };
+        const listed = body.scores.find((entry) => {
+            return entry.id === scoreId;
+        });
+
+        expect(listed).toBeDefined();
+        expect(listed?.lineup).toEqual({ status: "unreadable", tracks: [] });
     });
 });
 

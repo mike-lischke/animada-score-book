@@ -6,7 +6,9 @@
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { NameText } from "../core/NameText.js";
+import { ScoreLineup } from "../core/ScoreLineup.js";
 import { TagPalette } from "../core/TagPalette.js";
+import { ScoreLineupStatus, type IScoreLineup } from "../core/DatabaseTypes.js";
 import { AccessLevel, EntityType, type ITokenPayload } from "./Auth.js";
 import { InstrumentTags } from "./InstrumentTags.js";
 import { type RequestContext } from "./RequestContext.js";
@@ -364,6 +366,9 @@ export class TagActions {
         const tagIds = await this.tagIdsPerScore(scores.map((score) => {
             return score.id;
         }), usableIds);
+        const lineups = await this.lineups(scores.map((score) => {
+            return score.id;
+        }));
 
         const entries = scores.map((score) => {
             const summary = summaries.get(score.id)!;
@@ -372,6 +377,7 @@ export class TagActions {
                 id: score.id,
                 name: score.name,
                 tagIds: tagIds.get(score.id) ?? [],
+                lineup: lineups.get(score.id)!,
                 perm: summary,
             };
         });
@@ -644,6 +650,40 @@ export class TagActions {
         }
 
         return counts;
+    }
+
+    /**
+     * Reads the lineup of every listed score in one query, so showing a card needs no second request for its
+     * content.
+     *
+     * @param scoreIds The scores whose lineups the list shows.
+     *
+     * @returns The lineup of every requested score, keyed by id. A score whose content cannot be read keeps an
+     * unreadable lineup instead of dropping out of the list.
+     */
+    private async lineups(scoreIds: number[]): Promise<Map<number, IScoreLineup>> {
+        const lineups = new Map<number, IScoreLineup>();
+
+        for (const scoreId of scoreIds) {
+            lineups.set(scoreId, { status: ScoreLineupStatus.Unreadable, tracks: [] });
+        }
+
+        if (scoreIds.length === 0) {
+            return lineups;
+        }
+
+        const placeholders = scoreIds.map(() => {
+            return "?";
+        }).join(", ");
+        const rows = await this.ctx.auth.adapter.query<{ id: number; content: string; }>(
+            `SELECT id, content FROM scores WHERE id IN (${placeholders})`, scoreIds,
+        );
+
+        for (const row of rows) {
+            lineups.set(row.id, ScoreLineup.read(row.content));
+        }
+
+        return lineups;
     }
 
     /**
