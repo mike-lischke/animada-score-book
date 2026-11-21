@@ -25,7 +25,24 @@ export interface IPortalOptions {
      * (default: true).
      */
     blockMouseEvents?: boolean;
+
+    /**
+     * When true, focus moves into the portal when it opens, Tab stays inside it and the element that had the
+     * focus gets it back when the portal closes (default: true). A floating panel that belongs to a control
+     * behind it turns this off.
+     */
+    trapFocus?: boolean;
 }
+
+/** The elements a Tab press can reach inside a portal, in DOM order. */
+const focusableSelector = [
+    "a[href]",
+    "button:not([disabled])",
+    "input:not([disabled]):not([type='hidden'])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])",
+].join(", ");
 
 export enum PortalCloseReason {
     Escape,
@@ -70,6 +87,9 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
 
     private host?: HTMLDivElement;
 
+    /** The element that had the focus before the portal opened, which gets it back when the portal closes. */
+    private previouslyFocused?: HTMLElement;
+
     public constructor(props: IPortalProperties) {
         super(props);
 
@@ -97,6 +117,7 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         const { open, options } = this.state;
 
         if (open) {
+            let hostCreated = false;
             if (!this.host) {
                 const blockMouseEvents = options.blockMouseEvents ?? true;
                 const className = this.generateFinalClassName([
@@ -109,16 +130,26 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                     this.host.id = id;
                 }
 
+                // The host itself is a focus target, so a portal without a focusable element still takes the focus.
+                this.host.tabIndex = -1;
                 this.host.className = className;
                 this.host.style.setProperty(
                     "--background-opacity", String(options.backgroundOpacity ?? 0.5),
                 );
 
                 this.host.addEventListener("mousedown", this.handlePortalMouseDown);
+                this.host.addEventListener("keydown", this.handleHostKeyDown);
                 container.appendChild(this.host);
+
+                hostCreated = true;
             }
 
             render(children, this.host);
+
+            // Only a new host takes the focus; a later render of the same portal must not pull it away again.
+            if (hostCreated && (options.trapFocus ?? true)) {
+                this.focusFirstElement();
+            }
         } else {
             this.host?.remove();
             this.host = undefined;
@@ -153,10 +184,14 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         const { open } = this.state;
 
         if (!open) {
+            const activeElement = document.activeElement;
+            this.previouslyFocused = activeElement instanceof HTMLElement ? activeElement : undefined;
+
             const activeOptions: IPortalOptions = {
                 closeOnEscape: true,
                 closeOnPortalClick: false,
                 blockMouseEvents: true,
+                trapFocus: true,
                 ...options,
             };
 
@@ -178,6 +213,9 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
 
             onClose?.(cancelled, this.props, reason);
 
+            // The focus goes back before the host disappears: by the time a close handler unmounts this portal,
+            // a later callback would never run.
+            this.restoreFocus();
             this.setState({ open: false, options: {} });
             const index = Portal.portalStack.findIndex((portal) => {
                 return portal === this;
@@ -213,6 +251,68 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
             this.close(true, PortalCloseReason.Escape);
         }
     };
+
+    /**
+     * Keeps Tab inside the portal: from the last element it wraps to the first and back.
+     *
+     * @param event The keydown event of an element inside the portal.
+     */
+    private handleHostKeyDown = (event: KeyboardEvent): void => {
+        const { open, options } = this.state;
+
+        if (!open || event.key !== "Tab" || !(options.trapFocus ?? true)) {
+            return;
+        }
+
+        const elements = this.focusableElements();
+        const first = elements[0];
+        const last = elements[elements.length - 1];
+
+        if (elements.length === 0) {
+            // Nothing can take the focus, so Tab must not leave the portal either.
+            event.preventDefault();
+
+            return;
+        }
+
+        const active = document.activeElement;
+        if (event.shiftKey) {
+            if (active === first || active === this.host) {
+                event.preventDefault();
+                last.focus();
+            }
+        } else if (active === last || active === this.host) {
+            event.preventDefault();
+            first.focus();
+        }
+    };
+
+    /**
+     * @returns The elements inside the portal that a Tab press can reach.
+     */
+    private focusableElements(): HTMLElement[] {
+        if (!this.host) {
+            return [];
+        }
+
+        return Array.from(this.host.querySelectorAll<HTMLElement>(focusableSelector));
+    }
+
+    private focusFirstElement(): void {
+        const elements = this.focusableElements();
+        const target = elements.length > 0 ? elements[0] : this.host;
+
+        target?.focus();
+    }
+
+    private restoreFocus(): void {
+        const target = this.previouslyFocused;
+        this.previouslyFocused = undefined;
+
+        if (target?.isConnected) {
+            target.focus();
+        }
+    }
 
     static {
         // A single keydown handler for all portals. Enter is forwarded to the topmost portal's onEnter

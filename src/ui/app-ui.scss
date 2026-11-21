@@ -52,12 +52,35 @@
     background-color: var(--color-base-200);
 }
 
+/* The score library dialog: generous on a desktop and nearly the whole viewport on a narrow screen. */
+.dialog.score-library-dialog {
+    width: min(1100px, calc(100% - 48px));
+    height: min(820px, calc(100% - 48px));
+
+    /* The library brings its own header, padding and scrolling, so the dialog frame adds none. */
+    .dialog-content {
+        display: flex;
+        min-height: 0;
+        padding: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .dialog.score-library-dialog {
+        width: calc(100% - 8px);
+        height: calc(100% - 8px);
+        max-width: calc(100% - 8px);
+        max-height: calc(100% - 8px);
+        min-width: 0;
+    }
+}
+
 #libraryPaneContent {
     gap: 8px;
     height: 100%;
-    padding: 8px;
-    width: 25vw;
-    min-width: 250px;
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
 
     .score-library-header {
         flex: 0 0 auto;

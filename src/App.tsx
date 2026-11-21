@@ -35,7 +35,6 @@ import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
 import { Dialog, DialogResponseClosure } from "./components/ui/framework/Dialog.js";
-import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { Portal } from "./components/ui/framework/Portal.js";
@@ -46,7 +45,8 @@ import { getSharedAudioContext } from "./core/audio-context.js";
 import { EntryHandoff, EntryMode } from "./core/EntryHandoff.js";
 import { AppMode, RunMode } from "./core/RunMode.js";
 import {
-    ScoreBookChangeReason, ScoreBookDataModel, type IDemoScoreEntry, type ISbDmInstrument, type ISbDmScore
+    ScoreBookChangeReason, ScoreBookDataModel, type IDemoScoreEntry, type ISbDmArrangement,
+    type ISbDmInstrument, type ISbDmScore
 } from "./core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult,
@@ -71,14 +71,9 @@ import type { PermissionEditor } from "./ui/PermissionEditor.js";
 import { PrintSession } from "./ui/PrintSession.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import type { SettingsDialog } from "./ui/SettingsDialog.js";
+import type { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import type { UserGroupEditor } from "./ui/UserGroupEditor.js";
 import { isMobile } from "./ui/index.js";
-
-const ScoreLibrary = lazy(() => {
-    return import("./ui/ScoreLibrary.js").then((m) => {
-        return { default: m.ScoreLibrary };
-    });
-});
 
 // The print document and its preview are only needed while printing, so the initial bundle leaves them out.
 const PrintDocument = lazy(() => {
@@ -117,6 +112,7 @@ enum AppPhase {
  * and is opened through its ref.
  */
 interface IAppDialogs {
+    scoreLibrary?: typeof ScoreLibrary;
     settingsDialog?: typeof SettingsDialog;
     userGroupEditor?: typeof UserGroupEditor;
     permissionEditor?: typeof PermissionEditor;
@@ -127,7 +123,7 @@ interface IAppState {
     phase: AppPhase;
     editMode: boolean;
     zenMode: boolean;
-    sidebarOpen: boolean;
+    libraryOpen: boolean;
 
     /** The active arrangement view mode (grid or staff notation). */
     trackViewMode: TrackViewMode;
@@ -176,7 +172,6 @@ interface IAppState {
 }
 
 export class App extends UIComponent<{}, IAppState> {
-    private scoreLibraryRef = createRef<DrawerSidebar | null>();
     private settingsDialogRef = createRef<SettingsDialog | null>();
     private backendSetupDialogRef = createRef<BackendSetupDialog | null>();
     private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog | null>();
@@ -242,7 +237,7 @@ export class App extends UIComponent<{}, IAppState> {
             phase: AppPhase.Checking,
             editMode: false,
             zenMode: false,
-            sidebarOpen: false,
+            libraryOpen: false,
             trackViewMode: TrackViewMode.Grid,
             preferredEntryMode: EditEntryMode.Insert,
             printing: false,
@@ -290,13 +285,13 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { editMode, zenMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
+        const { editMode, zenMode, libraryOpen, phase, trackViewMode, printing, backendUnreachable,
             startupError, preferredEntryMode, notificationState, zoom, compactHeader, compactLayout,
             scoreSaved, printPreviewOpen, dialogs } = this.state;
 
         return editMode !== nextState.editMode
             || zenMode !== nextState.zenMode
-            || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
+            || libraryOpen !== nextState.libraryOpen || phase !== nextState.phase
             || trackViewMode !== nextState.trackViewMode
             || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
@@ -338,7 +333,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
+        const { phase, editMode: requestedEditMode, zenMode, libraryOpen, trackViewMode, notificationState, zoom,
             printing, printPreviewOpen, backendUnreachable, startupError, preferredEntryMode,
             compactHeader, compactLayout, dialogs } = this.state;
 
@@ -522,7 +517,9 @@ export class App extends UIComponent<{}, IAppState> {
                 className="du-btn-ghost"
                 title="Score Library"
                 data-tutorial="score-library"
-                onClick={this.handleScoreLibraryClick}
+                // The library closes back onto this button, so it has to hold the focus while the modal is open.
+                focusOnClick={true}
+                onClick={this.handleScoreLibraryButtonClick}
             >
                 <Icon src={UIIcon.Library} />
             </Button>;
@@ -619,72 +616,51 @@ export class App extends UIComponent<{}, IAppState> {
                             orientation={Orientation.TopDown}
                             crossAlignment={ChildAlignment.Stretch}
                         >
-                            <DrawerSidebar
-                                id="mainDrawer"
-                                ref={this.scoreLibraryRef}
-                                open={sidebarOpen}
-                                sidebarContent={
-                                    <Suspense fallback={<ProgressIndicator />}>
-                                        <ScoreLibrary
-                                            onAction={this.handleScoreLibraryAction}
-                                            dataModel={this.dataModel}
-                                        />
-                                    </Suspense>
-                                }
-                                onOpenChange={(open) => {
-                                    this.setState({ sidebarOpen: open }, () => {
-                                        if (!open) {
-                                            escapeStack.remove(this.onSidebarEscape);
-                                        }
-                                    });
+                            <Container
+                                id="appContent"
+                                className={editMode ? "score-editing" : undefined}
+                                orientation={Orientation.TopDown}
+                                crossAlignment={ChildAlignment.Stretch}
+                                style={{
+                                    flex: "1 1 auto",
+                                    minHeight: 0,
+                                    position: "relative",
                                 }}
                             >
-                                <Container
-                                    id="appContent"
-                                    className={editMode ? "score-editing" : undefined}
-                                    orientation={Orientation.TopDown}
-                                    crossAlignment={ChildAlignment.Stretch}
+                                {appHeader}
+                                <div id="appOverlay">
+                                    {modeBar}
+                                    {toolsBar}
+                                    {animationDiagnostics}
+                                    <div id="playbackControlsHost">
+                                        <ArrangementPlayControls
+                                            arrangementPlayer={this.arrangementPlayer!}
+                                            dataModel={this.dataModel}
+                                            editMode={editMode}
+                                            compact={compactLayout}
+                                            data-tutorial="playback"
+                                        />
+                                    </div>
+                                </div>
+                                <div
+                                    id="viewerScrollHost"
                                     style={{
                                         flex: "1 1 auto",
                                         minHeight: 0,
-                                        position: "relative",
+                                        overflow: "auto",
                                     }}
                                 >
-                                    {appHeader}
-                                    <div id="appOverlay">
-                                        {modeBar}
-                                        {toolsBar}
-                                        {animationDiagnostics}
-                                        <div id="playbackControlsHost">
-                                            <ArrangementPlayControls
-                                                arrangementPlayer={this.arrangementPlayer!}
-                                                dataModel={this.dataModel}
-                                                editMode={editMode}
-                                                compact={compactLayout}
-                                                data-tutorial="playback"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div
-                                        id="viewerScrollHost"
-                                        style={{
-                                            flex: "1 1 auto",
-                                            minHeight: 0,
-                                            overflow: "auto",
-                                        }}
-                                    >
-                                        {this.arrangementPlayer && <ArrangementViewer
-                                            arrangementPlayer={this.arrangementPlayer}
-                                            dataModel={this.dataModel}
-                                            selectionManager={this.selectionManager}
-                                            inEditMode={editMode}
-                                            zenMode={zenMode}
-                                            zenIdentity={zenMode ? arrangementIdentity : undefined}
-                                            entryMode={entryMode}
-                                        />}
-                                    </div>
-                                </Container>
-                            </DrawerSidebar>
+                                    {this.arrangementPlayer && <ArrangementViewer
+                                        arrangementPlayer={this.arrangementPlayer}
+                                        dataModel={this.dataModel}
+                                        selectionManager={this.selectionManager}
+                                        inEditMode={editMode}
+                                        zenMode={zenMode}
+                                        zenIdentity={zenMode ? arrangementIdentity : undefined}
+                                        entryMode={entryMode}
+                                    />}
+                                </div>
+                            </Container>
                             <AppFooter
                                 barCount={this.arrangementPlayer?.scoreMetrics.bars ?? 0}
                                 zoom={zoom}
@@ -701,6 +677,14 @@ export class App extends UIComponent<{}, IAppState> {
                             {renderNotificationCenter()}
                         </Container>
                         <ValueDialog ref={this.valueDialogRef} />
+                        {dialogs.scoreLibrary &&
+                            <dialogs.scoreLibrary
+                                dataModel={this.dataModel}
+                                open={libraryOpen}
+                                onClose={this.handleScoreLibraryClose}
+                                onAction={this.handleScoreLibraryAction}
+                            />
+                        }
                         {dialogs.settingsDialog &&
                             <dialogs.settingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
                         }
@@ -1596,13 +1580,28 @@ export class App extends UIComponent<{}, IAppState> {
         window.open("https://github.com/mike-lischke/animada-score-book", "_blank");
     };
 
-    private handleScoreLibraryClick = () => {
-        // The sidebar covers the screen, so overlays that are still open would float above it.
+    private handleScoreLibraryButtonClick = (): void => {
+        void this.handleScoreLibraryClick();
+    };
+
+    private handleScoreLibraryClick = async (): Promise<void> => {
+        // The library covers the screen, so overlays that are still open would float above it.
         Portal.closeAll();
 
-        this.setState({ sidebarOpen: true }, () => {
-            escapeStack.push(this.onSidebarEscape);
-        });
+        const { dialogs } = this.state;
+
+        if (!dialogs.scoreLibrary) {
+            const { ScoreLibrary } = await import("./ui/ScoreLibrary.js");
+            await new Promise<void>((resolve) => {
+                this.setState({ dialogs: { ...dialogs, scoreLibrary: ScoreLibrary } }, resolve);
+            });
+        }
+
+        this.setState({ libraryOpen: true });
+    };
+
+    private handleScoreLibraryClose = (): void => {
+        this.setState({ libraryOpen: false });
     };
 
     private handlePrintClick = () => {
@@ -2035,11 +2034,12 @@ export class App extends UIComponent<{}, IAppState> {
                     return false;
                 }
 
-                this.setState({ sidebarOpen: false }, () => {
-                    escapeStack.remove(this.onSidebarEscape);
-                });
+                // A score that cannot be read leaves the library open, so the user can pick another one.
+                if (!this.loadScorebook(score)) {
+                    return false;
+                }
 
-                this.loadScorebook(score);
+                this.setState({ libraryOpen: false });
 
                 break;
             }
@@ -2099,7 +2099,14 @@ export class App extends UIComponent<{}, IAppState> {
         });
     }
 
-    private loadScorebook(source?: IArrangementSnapshot | URLSearchParams | ISbDmScore) {
+    /**
+     * Loads an arrangement into the app: a snapshot, URL parameters or a score entry.
+     *
+     * @param source The arrangement to load; without one the score stored for the session is restored.
+     *
+     * @returns True when an arrangement was loaded, false when the source could not be read.
+     */
+    private loadScorebook(source?: IArrangementSnapshot | URLSearchParams | ISbDmScore): boolean {
         let resolvedSource: IArrangementSnapshot | URLSearchParams | ISbDmScore | undefined;
 
         if (source) {
@@ -2118,19 +2125,20 @@ export class App extends UIComponent<{}, IAppState> {
 
         let arrangement = this.dataModel.arrangement!;
         if (resolvedSource) {
-            if (this.arrangementPlayer) {
-                this.arrangementPlayer.dispose();
-            }
-
+            let loaded: ISbDmArrangement;
             try {
-                arrangement = this.dataModel.loadArrangement(resolvedSource);
+                loaded = this.dataModel.loadArrangement(resolvedSource);
             } catch (error) {
                 const message = convertErrorToString(error);
                 console.error(message);
                 void requisitions.execute("showError", message);
 
-                return;
+                return false;
             }
+
+            // The running player keeps going until the new arrangement is known to be readable.
+            this.arrangementPlayer?.dispose();
+            arrangement = loaded;
         }
 
         this.undoManager?.dispose();
@@ -2153,6 +2161,8 @@ export class App extends UIComponent<{}, IAppState> {
         if (settings?.editMode && !editMode) {
             void requisitions.execute("editModeChanged", true);
         }
+
+        return true;
     }
 
     private initEventHandlers(): void {
@@ -2164,10 +2174,6 @@ export class App extends UIComponent<{}, IAppState> {
             event.preventDefault();
         });
     }
-
-    private onSidebarEscape = (): void => {
-        this.setState({ sidebarOpen: false });
-    };
 
     /** Runs for Escape only when no portal, popup or popover is open. */
     private handleEscapeFallback = (): void => {
@@ -2413,8 +2419,7 @@ export class App extends UIComponent<{}, IAppState> {
     private handleToggleZenMode = (): void => {
         const { zenMode } = this.state;
         const enabled = !zenMode;
-        this.setState({ zenMode: enabled, sidebarOpen: false });
-        escapeStack.remove(this.onSidebarEscape);
+        this.setState({ zenMode: enabled, libraryOpen: false });
         void requisitions.execute("zenModeChanged", enabled);
     };
 

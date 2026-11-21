@@ -9,6 +9,7 @@ import type { CellComponent, ColumnDefinition } from "tabulator-tables";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Container } from "../components/ui/framework/Container.js";
+import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
@@ -59,6 +60,12 @@ const arrangeScores = (scores: readonly ISbDmScore[], sortOrder: ScoreListSortOr
 export interface IScoreLibraryProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
 
+    /** Whether the library shows as a modal dialog. The component itself stays mounted while it is closed. */
+    open: boolean;
+
+    /** Called when the user closes the dialog (Escape, backdrop click or the close button). */
+    onClose?: () => void;
+
     /**
      * Runs a score action; the app owns the dialogs and the data model.
      *
@@ -82,9 +89,11 @@ interface IScoreLibraryState {
 
 /**
  * The overview of the scores: a flat list of everything the current tag combination matches, with a selector that
- * builds that combination. A double click loads a score into the player/editor.
+ * builds that combination. A double click loads a score into the player/editor. The overview shows in a modal dialog,
+ * which the app opens and closes through the `open` property.
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
+    private dialogRef = createRef<Dialog | null>();
     private scoreTableRef = createRef<TreeGrid | null>();
 
     public constructor(props: IScoreLibraryProperties) {
@@ -108,6 +117,24 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         requisitions.register("scoreEntryUpdated", this.handleScoreEntryUpdated);
         requisitions.register("tagsChanged", this.handleTagsChanged);
         requisitions.register("scoreTagsChanged", this.handleScoreTagsChanged);
+
+        if (this.props.open) {
+            this.dialogRef.current?.open();
+        }
+    }
+
+    public override componentDidUpdate(previousProperties: IScoreLibraryProperties): void {
+        const { open } = this.props;
+
+        if (open === previousProperties.open) {
+            return;
+        }
+
+        if (open) {
+            this.dialogRef.current?.open();
+        } else {
+            this.dialogRef.current?.close(true);
+        }
     }
 
     public override componentWillUnmount(): void {
@@ -127,13 +154,22 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const favourites = this.renderFavourites();
 
         return (
-            <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
-                {header}
-                {selector}
-                {sortSelector}
-                {list}
-                {favourites}
-            </Container>
+            <Dialog
+                id="scoreLibraryDialog"
+                ref={this.dialogRef}
+                className="score-library-dialog"
+                ariaLabel="Score Library"
+                closeOnBackdropClick={true}
+                onClose={this.handleDialogClose}
+            >
+                <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
+                    {header}
+                    {selector}
+                    {sortSelector}
+                    {list}
+                    {favourites}
+                </Container>
+            </Dialog>
         );
     }
 
@@ -146,6 +182,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 </Button>
                 <Button id="scoreListImportScore" imageOnly title="Import Score" onClick={this.handleImportClick}>
                     <Icon src={UIIcon.CloudDownload} />
+                </Button>
+                <Button id="scoreListClose" imageOnly title="Close Score Library" onClick={this.handleCloseClick}>
+                    <Icon src={UIIcon.Close} />
                 </Button>
             </Container>
         );
@@ -457,6 +496,22 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleImportClick = (): void => {
         void this.runAction("import");
+    };
+
+    private handleCloseClick = (): void => {
+        this.dialogRef.current?.close(true);
+    };
+
+    /**
+     * Runs when the dialog closed itself, which Escape and a click beside it do. A close the app requested is
+     * already known there, so only a self-close is reported.
+     */
+    private handleDialogClose = (): void => {
+        const { open, onClose } = this.props;
+
+        if (open) {
+            onClose?.();
+        }
     };
 
     private handleTagAdd = (completion: ITagCompletion): void => {

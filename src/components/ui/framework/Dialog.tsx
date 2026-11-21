@@ -51,6 +51,9 @@ interface IDialogProperties extends ICommonUIProperties {
 
     actions?: ComponentChild[];
 
+    /** Names the dialog for assistive technology when the caption alone does not describe it. */
+    ariaLabel?: string;
+
     /** When true, clicking the backdrop closes the dialog (default: false). ESC always closes. */
     closeOnBackdropClick?: boolean;
 
@@ -71,7 +74,7 @@ export class Dialog extends UIComponent<IDialogProperties> {
     private customReturnValue?: string;
 
     public render(): ComponentChild {
-        const { id, children, caption, actions } = this.props;
+        const { id, children, caption, actions, ariaLabel } = this.props;
 
         const className = this.generateFinalClassName(["dialog"]);
 
@@ -85,6 +88,9 @@ export class Dialog extends UIComponent<IDialogProperties> {
                     id={id}
                     ref={this.dialogRef}
                     class={className}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={ariaLabel}
                     onClick={(e: Event) => {
                         e.stopPropagation();
                     }}

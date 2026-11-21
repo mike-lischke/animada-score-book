@@ -242,6 +242,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
                 backgroundOpacity: 0,
                 blockMouseEvents: false,
                 ...options,
+                trapFocus: false,
                 closeOnEscape: dismissOnEscape ?? (persistent ? false : options?.closeOnEscape ?? true),
             });
         });
