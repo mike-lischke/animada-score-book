@@ -91,6 +91,7 @@ export const enum AccessLevel {
 export enum EntityType {
     Score = "score",
     Feature = "feature",
+    SetList = "setlist",
 }
 
 const entityTypeValues = Object.values(EntityType) as string[];
@@ -357,7 +358,7 @@ export class Auth {
      * For features without explicit permissions, only admins have access.
      *
      * @param user The authenticated user, or undefined for anonymous.
-     * @param entityType The type of entity ("score", "feature").
+     * @param entityType The type of entity ("score", "feature", "setlist").
      * @param entityId The entity id, or null for features.
      * @param requiredLevel The required access level (Read or Write).
      * @param isAdmin Optional. If true, skips the admin group DB query.
@@ -415,7 +416,7 @@ export class Auth {
      * Used by endpoints that need to attach permission metadata to a single row.
      *
      * @param user The authenticated user, or undefined for anonymous.
-     * @param entityType The type of entity ("score").
+     * @param entityType The type of entity ("score", "setlist").
      * @param entityId The entity id.
      * @param isAdmin Optional. If true, skips the admin group DB query.
      *
@@ -433,7 +434,7 @@ export class Auth {
      * instead of one query per entity.
      *
      * @param user The authenticated user, or undefined for anonymous.
-     * @param entityType The type of entity ("score", "feature").
+     * @param entityType The type of entity ("score", "feature", "setlist").
      * @param entityIds The entity ids to summarise.
      * @param isAdmin Optional. If true, skips the admin group DB query.
      *

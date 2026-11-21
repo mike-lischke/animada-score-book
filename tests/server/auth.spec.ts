@@ -198,7 +198,8 @@ describe("auth — Constants", () => {
     it("EntityType has expected values", () => {
         expect(EntityType.Score).toBe("score");
         expect(EntityType.Feature).toBe("feature");
-        expect(Object.values(EntityType)).toHaveLength(2);
+        expect(EntityType.SetList).toBe("setlist");
+        expect(Object.values(EntityType)).toHaveLength(3);
     });
 });
 

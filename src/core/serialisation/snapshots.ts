@@ -72,8 +72,7 @@ export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangemen
  * @returns The chunks, or undefined when the arrangement has none.
  */
 export const collectArrangementExtensions = (
-    arrangementView: Readonly<ISbDmArrangement>,
-): IArrangementExtensions | undefined => {
+    arrangementView: Readonly<ISbDmArrangement>): IArrangementExtensions | undefined => {
     const chunks: IArrangementExtensions = { ...arrangementView.foreignExtensions };
 
     const widths = arrangementView.measureWidths;

@@ -171,6 +171,38 @@ CREATE TABLE IF NOT EXISTS score_tags (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- A set list is a named, saved tag combination with its own score order. Scores are not copied into it, only
+-- referenced, and the order belongs to the list, not to the score. Access follows the score model: the rows live in
+-- permissions and entity_groups under the entity type 'setlist'.
+-- filters holds the combination as [ [tagId, ...], ... ]: each inner array is an AND group, the array of groups is
+-- OR-ed, and an empty array matches every readable score. A tag that is deleted later leaves the stored id in place:
+-- the backend reports the list as invalid instead of dropping a condition.
+CREATE TABLE IF NOT EXISTS set_lists (
+    id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name       VARCHAR(255) NOT NULL,
+    filters    JSON         NOT NULL,
+    revision   INT UNSIGNED NOT NULL DEFAULT 1,
+    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- The score order of one list. A row stays when its score stops matching the filter, so that a returning score keeps
+-- its place. Both foreign keys clean up after a deleted list or score.
+CREATE TABLE IF NOT EXISTS set_list_scores (
+    set_list_id INT UNSIGNED NOT NULL,
+    score_id    INT UNSIGNED NOT NULL,
+    position    INT UNSIGNED NOT NULL,
+    PRIMARY KEY (set_list_id, score_id),
+    INDEX idx_set_list_scores_order (set_list_id, position),
+    CONSTRAINT fk_set_list_scores_list
+        FOREIGN KEY (set_list_id) REFERENCES set_lists(id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_set_list_scores_score
+        FOREIGN KEY (score_id) REFERENCES scores(id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- System tags: one per instrument type plus the demo catalog marker. Code finds them by system_key, never by name
 -- or id, because an administrator may rename them.
 -- An instrument tag wears the colour of its InstrumentRole: GroundRhythm (2 = dark-teal), Carpet (0 = flag-red),

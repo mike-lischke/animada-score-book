@@ -22,6 +22,7 @@ import { type IServerConfig } from "./config.js";
 import { getConfigStatus } from "./config.js";
 import { RequestContext } from "./RequestContext.js";
 import { ScoreRoutes } from "./ScoreRoutes.js";
+import { SetListRoutes } from "./SetListRoutes.js";
 import { TagActions } from "./TagActions.js";
 import { AuthRoutes } from "./AuthRoutes.js";
 import { AdminRoutes } from "./AdminRoutes.js";
@@ -33,6 +34,7 @@ export class Router {
     private authenticator?: Auth;
     private ctx!: RequestContext;
     private scoreRoutes!: ScoreRoutes;
+    private setListRoutes!: SetListRoutes;
     private tagActions!: TagActions;
     private authRoutes!: AuthRoutes;
     private adminRoutes!: AdminRoutes;
@@ -49,6 +51,7 @@ export class Router {
         this.authenticator = authenticator;
         this.ctx = new RequestContext(authenticator, this.config);
         this.scoreRoutes = new ScoreRoutes(this.ctx);
+        this.setListRoutes = new SetListRoutes(this.ctx);
         this.tagActions = new TagActions(this.ctx);
         this.authRoutes = new AuthRoutes(this.ctx);
         this.adminRoutes = new AdminRoutes(this.ctx);
@@ -134,6 +137,31 @@ export class Router {
 
                     case "delete":
                         await this.scoreRoutes.handleDelete(req, res);
+
+                        break;
+
+                    case "listSetLists":
+                        await this.setListRoutes.handleListSetLists(req, res);
+
+                        break;
+
+                    case "getSetList":
+                        await this.setListRoutes.handleGetSetList(req, res);
+
+                        break;
+
+                    case "createSetList":
+                        await this.setListRoutes.handleCreateSetList(req, res);
+
+                        break;
+
+                    case "updateSetList":
+                        await this.setListRoutes.handleUpdateSetList(req, res);
+
+                        break;
+
+                    case "deleteSetList":
+                        await this.setListRoutes.handleDeleteSetList(req, res);
 
                         break;
 

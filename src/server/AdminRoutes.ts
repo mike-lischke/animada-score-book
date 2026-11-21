@@ -6,11 +6,12 @@
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { TagPalette } from "../core/TagPalette.js";
-import { Auth, isValidEntityType } from "./Auth.js";
+import { Auth, EntityType, isValidEntityType } from "./Auth.js";
 import type { IDbStatement } from "./database.js";
 import { EmailConfirmation } from "./EmailConfirmation.js";
 import { ConfirmationReason } from "./Mailer.js";
 import { type RequestContext } from "./RequestContext.js";
+import { SetListAccess } from "./SetListAccess.js";
 
 export class AdminRoutes {
     public constructor(private readonly ctx: RequestContext) { }
@@ -685,6 +686,11 @@ export class AdminRoutes {
             return;
         }
 
+        if (entityType === EntityType.SetList
+            && !(await this.setListChangeAllowed(res, entityId, body, resolvedOwner))) {
+            return;
+        }
+
         if (body.ownerId !== undefined) {
             const newOwnerId = body.ownerId !== null ? Number(body.ownerId) : null;
 
@@ -703,8 +709,101 @@ export class AdminRoutes {
             }
         }
 
+        if (entityType === EntityType.SetList) {
+            const changed = body.ownerId !== undefined
+                || (Array.isArray(body.addGroups) && body.addGroups.length > 0)
+                || (Array.isArray(body.removeGroups) && body.removeGroups.length > 0);
+
+            // A changed audience is a changed list: the next edit has to see this revision.
+            if (changed) {
+                await this.ctx.auth.adapter.execute(
+                    "UPDATE set_lists SET revision = revision + 1 WHERE id = ?", [entityId],
+                );
+            }
+
+            const updated = await SetListAccess.find(this.ctx.auth.adapter, entityId);
+            this.ctx.sendJson(res, { success: true, revision: updated?.revision });
+
+            return;
+        }
+
         this.ctx.sendJson(res, { success: true });
     };
+
+    /**
+     * @param value A `addGroups` or `removeGroups` field of a permission request.
+     *
+     * @returns The group ids it names, ignoring anything that is not one.
+     */
+    private static groupIds(value: unknown): number[] {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+
+        return value.map((entry) => {
+            return Number((entry as { groupId?: unknown; }).groupId);
+        }).filter((groupId) => {
+            return Number.isInteger(groupId) && groupId > 0;
+        });
+    }
+
+    /**
+     * Checks a permission change of a set list: the caller has to edit the current state, and the stored tag
+     * combination has to stay usable for everybody the list reaches. A combination never widens through sharing.
+     *
+     * @param res The response to write a rejection to.
+     * @param listId The list whose permissions change.
+     * @param body The request body.
+     * @param ownerId The owner the list has right now.
+     *
+     * @returns True when the change may be applied.
+     */
+    private async setListChangeAllowed(res: ServerResponse, listId: number, body: Record<string, unknown>,
+        ownerId: number | null): Promise<boolean> {
+        const row = await SetListAccess.find(this.ctx.auth.adapter, listId);
+        if (row === undefined) {
+            this.ctx.sendError(res, "Set list not found", 404);
+
+            return false;
+        }
+
+        const revision = body.revision === undefined ? undefined : Number(body.revision);
+        if (revision !== undefined && revision !== row.revision) {
+            this.ctx.sendJson(res, { error: "The set list was changed in the meantime.", revision: row.revision }, 409);
+
+            return false;
+        }
+
+        const addedGroupIds = AdminRoutes.groupIds(body.addGroups);
+        const removedGroupIds = AdminRoutes.groupIds(body.removeGroups);
+        const audience = await SetListAccess.plannedAudience(this.ctx.auth, listId, addedGroupIds, removedGroupIds);
+
+        const owner = body.ownerId === undefined
+            ? ownerId ?? undefined
+            : body.ownerId === null ? undefined : Number(body.ownerId);
+
+        let groups: number[][] | undefined;
+        try {
+            groups = SetListAccess.readGroups(JSON.parse(row.filters) as unknown);
+        } catch {
+            groups = undefined;
+        }
+
+        if (groups === undefined) {
+            this.ctx.sendJson(res, { error: "The stored tag combination is damaged." }, 409);
+
+            return false;
+        }
+
+        const problem = await SetListAccess.filterProblem(this.ctx.auth, groups, audience, owner);
+        if (problem !== undefined) {
+            this.ctx.sendJson(res, { error: SetListAccess.problemMessage(problem), filterProblem: problem }, 409);
+
+            return false;
+        }
+
+        return true;
+    }
 
     /**
      * Builds the statements that hand the tags of a group over to the administrators, so that deleting the group
