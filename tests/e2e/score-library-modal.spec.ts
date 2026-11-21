@@ -182,7 +182,7 @@ test.describe("Score library modal", () => {
         await expect(dialog).toHaveAttribute("role", "dialog");
         await expect(dialog).toHaveAttribute("aria-modal", "true");
         await expect(page.locator(".du-drawer")).toHaveCount(0);
-        await expect(page.locator("#scoreTreeHost .score-tree-entry")).toHaveCount(1);
+        await expect(page.locator("#scoreCardsHost .score-card")).toHaveCount(1);
     });
 
     test("closes on Escape and gives the focus back to the library button", async ({ page }) => {
@@ -266,10 +266,10 @@ test.describe("Score library modal", () => {
         api.setScoreContent(await currentScore(page));
 
         await page.locator("#scoreLibraryButton").click();
-        const entry = page.locator("#scoreTreeHost .score-tree-entry").first();
+        const entry = page.locator("#scoreCardsHost .score-card").first();
         await expect(entry).toBeVisible();
 
-        await entry.dblclick();
+        await entry.locator(".score-card-open").click();
 
         await expect(page.locator("#scoreLibraryDialog")).toHaveCount(0);
     });
@@ -279,10 +279,10 @@ test.describe("Score library modal", () => {
         await page.goto("/");
 
         await page.locator("#scoreLibraryButton").click();
-        const entry = page.locator("#scoreTreeHost .score-tree-entry").first();
+        const entry = page.locator("#scoreCardsHost .score-card").first();
         await expect(entry).toBeVisible();
 
-        await entry.dblclick();
+        await entry.locator(".score-card-open").click();
 
         await expect(page.locator("#scoreLibraryDialog")).toBeVisible();
     });

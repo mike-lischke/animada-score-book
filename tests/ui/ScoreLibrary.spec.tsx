@@ -7,20 +7,31 @@ import { cleanup, fireEvent, render, screen, waitFor, type RenderResult } from "
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
-import type { ScoreBookDataModel, ISbDmScore } from "../../src/core/ScoreBookDataModel.js";
+import type { ScoreBookDataModel, ISbDmInstrument, ISbDmScore } from "../../src/core/ScoreBookDataModel.js";
 import { SbDmEntityType } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreListSortOrder } from "../../src/core/types/general.js";
 import { SystemTagKind, type ITagInfo } from "../../src/core/types/tags.js";
 import { ScoreLibrary } from "../../src/ui/ScoreLibrary.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 
 interface IMockDataModel {
     scores: ISbDmScore[];
     tags: ITagInfo[];
+    instruments: ISbDmInstrument[];
     queryScores: ReturnType<typeof vi.fn>;
 }
 
 const caixaTag: ITagInfo = {
     id: 7, name: "Caixa", colorIndex: 2, editable: false, assignable: true, usageCount: 0,
+};
+
+const instrumentTag: ITagInfo = {
+    id: 9, name: "Surdo", colorIndex: 2, systemKind: SystemTagKind.Instrument, editable: false,
+    assignable: true, usageCount: 0,
+};
+
+const competitionTag: ITagInfo = {
+    id: 10, name: "Wettkampf", colorIndex: 4, editable: false, assignable: true, usageCount: 0,
 };
 
 const demoTag: ITagInfo = {
@@ -32,6 +43,7 @@ const createMockDataModel = (tags: ITagInfo[] = [], scores: ISbDmScore[] = []): 
     return {
         scores,
         tags,
+        instruments: [],
         queryScores: vi.fn().mockResolvedValue(undefined),
     };
 };
@@ -39,16 +51,17 @@ const createMockDataModel = (tags: ITagInfo[] = [], scores: ISbDmScore[] = []): 
 /**
  * @param id The score id.
  * @param name The score name.
+ * @param tagIds The tags of the score.
  *
  * @returns A score entry as the model hands it to the overview.
  */
-const createScore = (id: number, name: string): ISbDmScore => {
+const createScore = (id: number, name: string, tagIds: number[] = []): ISbDmScore => {
     return {
         type: SbDmEntityType.Score,
         id,
         name,
         content: "",
-        tagIds: [],
+        tagIds,
         state: { initialized: true, expanded: true, expandedOnce: true, isLeaf: true },
     };
 };
@@ -268,6 +281,43 @@ describe("ScoreLibrary", { concurrent: false }, () => {
             expect(libraryDialog().textContent).toContain("Caixa");
         });
         expect(model.queryScores).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps an open lineup open when the list changes", async () => {
+        const surdo = createScore(1, "Surdo");
+        const model = createMockDataModel([], [surdo, createScore(2, "Caixa")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card")).toHaveLength(2);
+        });
+
+        document.body.querySelector<HTMLButtonElement>(".score-card .score-card-lineup-toggle")!.click();
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card-lineup")).toHaveLength(1);
+        });
+
+        await requisitions.execute("scoreEntryUpdated", surdo);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card-lineup")).toHaveLength(1);
+        });
+    });
+
+    it("keeps instrument tags out of the card chips", async () => {
+        const model = createMockDataModel([instrumentTag, competitionTag],
+            [createScore(1, "Surdo", [instrumentTag.id, competitionTag.id])]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card")).toHaveLength(1);
+        });
+
+        const chips = document.body.querySelector(".score-card-tags");
+        expect(chips?.textContent).toContain("Wettkampf");
+        expect(chips?.textContent).not.toContain("Surdo");
     });
 
     it("closes on Escape and reports the close", async () => {

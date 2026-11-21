@@ -2072,7 +2072,7 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "managePerm": {
-                const row = document.querySelector<HTMLElement>(`.score-tree-entry[data-score-id="${data.id}"]`);
+                const row = document.querySelector<HTMLElement>(`.score-card[data-score-id="${data.id}"]`);
 
                 if (row) {
                     void this.openPermissionEditor(row.getBoundingClientRect(), data);

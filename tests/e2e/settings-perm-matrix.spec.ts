@@ -92,12 +92,12 @@ test.describe("Settings — Permission Matrix Toggle", () => {
 
         await page.goto("/");
 
-        // Open the Score Library drawer.
+        // Open the score library modal.
         await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
+        await expect(page.locator("#scoreCardsHost")).toBeVisible({ timeout: 5000 });
 
         // The perm indicator should be visible by default (showPermMatrix defaults to true).
-        const permIndicator = page.locator("#scoreTreeHost .perm-indicator");
+        const permIndicator = page.locator("#scoreCardsHost .perm-indicator");
         await expect(permIndicator).toBeVisible({ timeout: 5000 });
 
         // Close the drawer via Escape so it doesn't intercept toolbar clicks.
@@ -117,10 +117,10 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await page.locator("#settings-button-save").click();
         await page.waitForTimeout(300);
 
-        // Reopen the drawer to verify the matrix is hidden.
+        // Reopen the library to verify the matrix is hidden.
         await page.locator("#scoreLibraryButton").click();
         await page.waitForTimeout(500);
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
+        await expect(page.locator("#scoreCardsHost")).toBeVisible({ timeout: 5000 });
 
         // The perm indicator should now be hidden.
         await expect(permIndicator).not.toBeVisible({ timeout: 5000 });
@@ -138,10 +138,10 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await page.locator("#settings-button-save").click();
         await page.waitForTimeout(300);
 
-        // Reopen drawer to verify.
+        // Reopen the library to verify.
         await page.locator("#scoreLibraryButton").click();
         await page.waitForTimeout(500);
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
+        await expect(page.locator("#scoreCardsHost")).toBeVisible({ timeout: 5000 });
 
         // The perm indicator should be visible again.
         await expect(permIndicator).toBeVisible({ timeout: 5000 });

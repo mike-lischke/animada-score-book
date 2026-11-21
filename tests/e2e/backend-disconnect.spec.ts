@@ -89,9 +89,9 @@ const importUrl = "http://127.0.0.1:4173/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbr
  * @param page The page under test.
  */
 const startImport = async (page: Page): Promise<void> => {
-    if (!(await page.locator("#scoreTreeHost").isVisible())) {
+    if (!(await page.locator("#scoreCardsHost").isVisible())) {
         await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
+        await expect(page.locator("#scoreCardsHost")).toBeVisible({ timeout: 5000 });
     }
 
     await page.locator("button[title='Import Score']").click();

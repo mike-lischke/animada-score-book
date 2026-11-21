@@ -7,7 +7,7 @@ import { LoadAudioError, type LoadAudioStage } from "./LoadAudioError.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { getSharedAudioContext } from "./audio-context.js";
 import {
-    SbDmEntityType, type IInstrumentMeta, type ISbDmInstrument, type ISbDmInstrumentImage,
+    SbDmEntityType, type IInstrumentMeta, type InstrumentRole, type ISbDmInstrument, type ISbDmInstrumentImage,
 } from "./ScoreBookDataModel.js";
 import type { IAudioData } from "./types/general.js";
 import { getNewId } from "./utils.js";
@@ -24,6 +24,7 @@ export class Instrument implements ISbDmInstrument {
     public readonly displayName: string;
     public readonly image: ISbDmInstrumentImage;
     public readonly color: string;
+    public readonly role?: InstrumentRole;
 
     public readonly range: [number, number] = [0, -1];
     public readonly state = {
@@ -42,11 +43,12 @@ export class Instrument implements ISbDmInstrument {
     private static readonly audioCtx = getSharedAudioContext();
 
     public constructor(instrumentMeta: IInstrumentMeta) {
-        const { id, variants, displayOrder, displayName, color, typeId } = instrumentMeta;
+        const { id, variants, displayOrder, displayName, color, typeId, role } = instrumentMeta;
         this.id = id;
         this.typeId = typeId;
         this.displayOrder = displayOrder;
         this.displayName = displayName;
+        this.role = role;
         this.image = { type: SbDmEntityType.InstrumentImage, id: getNewId(), filePath: instrumentMeta.icon };
         this.color = color;
 

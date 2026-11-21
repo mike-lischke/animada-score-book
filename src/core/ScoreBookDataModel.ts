@@ -584,6 +584,9 @@ export interface ISbDmInstrument extends ISbDmVisual {
     /** The color associated with this instrument. */
     readonly color: string;
 
+    /** The instrument's job in the bateria, which decides the colour of its tag and how the lineup groups it. */
+    readonly role?: InstrumentRole;
+
     /** Start end and position in the audio file. */
     readonly range: [number, number];
 

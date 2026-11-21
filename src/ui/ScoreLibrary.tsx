@@ -3,9 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createRef, render, type ComponentChild } from "preact";
-
-import type { CellComponent, ColumnDefinition } from "tabulator-tables";
+import { createRef, type ComponentChild } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Container } from "../components/ui/framework/Container.js";
@@ -13,13 +11,10 @@ import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
-import { Menu } from "../components/ui/framework/Menu/Menu.js";
-import type { IMenuItem } from "../components/ui/framework/Menu/MenuItem.js";
-import { TagInput, type ITagCompletion } from "../components/ui/framework/TagInput.js";
-import { TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
+import { TagInput, type ITag, type ITagCompletion } from "../components/ui/framework/TagInput.js";
 import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
-import { ChildAlignment, Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
+import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { AppStorage, type IUISettings } from "../core/AppStorage.js";
 import { NameText } from "../core/NameText.js";
 import {
@@ -27,9 +22,9 @@ import {
 } from "../core/ScoreBookDataModel.js";
 import { TagCombination } from "../core/TagCombination.js";
 import { ScoreListSortOrder } from "../core/types/general.js";
-import { globalTagOwnerCaption, type ITagCombination } from "../core/types/tags.js";
+import { globalTagOwnerCaption, SystemTagKind, type ITagCombination } from "../core/types/tags.js";
+import { ScoreCard } from "./ScoreCard.js";
 import { TagBadges } from "./TagBadges.js";
-import { PermIndicator } from "./PermIndicator.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { NotificationCenter } from "../components/ui/NotificationCenter/NotificationCenter.js";
 
@@ -85,16 +80,18 @@ interface IScoreLibraryState {
 
     /** The scores of the current combination, in the order the overview shows them. */
     scores: ISbDmScore[];
+
+    /** The scores whose lineup is open. The ids survive list updates as long as the score stays in it. */
+    expandedScoreIds: Set<number>;
 }
 
 /**
- * The overview of the scores: a flat list of everything the current tag combination matches, with a selector that
- * builds that combination. A double click loads a score into the player/editor. The overview shows in a modal dialog,
+ * The overview of the scores: the scores of the current tag combination as cards, with a selector that builds that
+ * combination. Opening a card's title loads the score into the player/editor. The overview shows in a modal dialog,
  * which the app opens and closes through the `open` property.
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
     private dialogRef = createRef<Dialog | null>();
-    private scoreTableRef = createRef<TreeGrid | null>();
 
     public constructor(props: IScoreLibraryProperties) {
         super(props);
@@ -107,6 +104,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             sortOrder,
             combination: TagCombination.empty,
             scores: arrangeScores(props.dataModel.scores, sortOrder),
+            expandedScoreIds: new Set(),
         };
     }
 
@@ -269,11 +267,11 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         if (scores.length === 0) {
             content = this.renderEmptyState();
         } else {
-            content = this.renderTable();
+            content = this.renderCards();
         }
 
         return (
-            <Container id="scoreTreeHost" orientation={Orientation.TopDown}>
+            <Container id="scoreCardsHost" className="score-card-list" orientation={Orientation.TopDown}>
                 {content}
             </Container>
         );
@@ -290,28 +288,49 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         return <Label className="score-list-empty" caption={caption} wrap />;
     }
 
-    private renderTable(): ComponentChild {
-        const { scores } = this.state;
+    private renderCards(): ComponentChild {
+        const { dataModel } = this.props;
+        const { scores, currentSettings, expandedScoreIds } = this.state;
+        const isAdmin = dataModel.user?.isAdmin ?? false;
+        const showPermission = currentSettings.showPermMatrix ?? true;
 
-        const scoreColumns: ColumnDefinition[] = [{
-            title: "",
-            field: "name",
-            resizable: false,
-            hozAlign: "left",
-            formatter: this.scoreCellFormatter,
-            cellDblClick: this.handleScoreDblClick,
-        }];
+        return scores.map((score, index) => {
+            return (
+                <ScoreCard
+                    key={score.id}
+                    score={score}
+                    position={index + 1}
+                    instruments={dataModel.instruments}
+                    tagChips={this.tagChips(score)}
+                    expanded={expandedScoreIds.has(score.id)}
+                    isAdmin={isAdmin}
+                    showPermission={showPermission}
+                    onToggleLineup={this.handleToggleLineup}
+                    onOpen={this.handleOpenScore}
+                    onAction={this.handleCardAction}
+                />
+            );
+        });
+    }
 
-        const scoreOptions: ITreeGridOptions = {
-            treeColumn: "name",
-            selectionType: SelectionType.Single,
-            showHeader: false,
-            layout: "fitColumns",
-            horizontalGridLines: false,
-            verticalGridLines: false,
-        };
+    /**
+     * @param score The score whose chips are built.
+     *
+     * @returns The tags of the score the caller may see, without the instrument tags: those are filter material and
+     * would repeat what the lineup already says.
+     */
+    private tagChips(score: ISbDmScore): ITag[] {
+        const { dataModel } = this.props;
 
-        return <TreeGrid ref={this.scoreTableRef} options={scoreOptions} columns={scoreColumns} tableData={scores} />;
+        const visible = score.tagIds.filter((tagId) => {
+            const tag = dataModel.tags.find((candidate) => {
+                return candidate.id === tagId;
+            });
+
+            return tag !== undefined && tag.systemKind !== SystemTagKind.Instrument;
+        });
+
+        return TagBadges.resolve(visible, dataModel.tags);
     }
 
     /**
@@ -326,116 +345,35 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         );
     }
 
-    private scoreCellFormatter = (cell: CellComponent): string | HTMLElement => {
-        const { currentSettings } = this.state;
-        const { dataModel } = this.props;
-
-        const data = cell.getData() as ISbDmScore;
-
-        const host = document.createElement("div");
-        host.className = "score-tree-entry";
-        host.dataset.entryType = String(data.type);
-        host.dataset.entryId = String(data.id);
-        host.dataset.scoreId = String(data.id);
-
-        const menuItems: IMenuItem[] = [
-            { id: "load", label: "Load Score" },
-            { id: "copyUrl", label: "Copy Score URL", icon: UIIcon.Link },
-            { id: "separator2", label: "-" },
-            { id: "remove", label: "Remove Score", icon: UIIcon.Trash },
-        ];
-
-        const isAdmin = dataModel.user?.isAdmin ?? false;
-        const { perm } = data;
-        const canManage = isAdmin || (perm?.isOwner === true);
-        const showIndicator = (currentSettings.showPermMatrix ?? true) && perm != null;
-        const canWrite = perm?.canWrite === true;
-        const isWorld = perm?.isWorld === true;
-
-        if (canManage) {
-            menuItems.push(
-                { id: "separator3", label: "-" },
-                { id: "managePerm", label: "Group Access", icon: UIIcon.Key },
-            );
+    private handleToggleLineup = (score: ISbDmScore): void => {
+        const next = new Set(this.state.expandedScoreIds);
+        if (next.has(score.id)) {
+            next.delete(score.id);
+        } else {
+            next.add(score.id);
         }
 
-        let indicator: ComponentChild = undefined;
-        if (showIndicator) {
-            indicator = (
-                <PermIndicator
-                    canWrite={canWrite}
-                    isWorld={isWorld}
-                    canManage={canManage}
-                    onManage={canManage ? () => {
-                        this.selectRow(data.id);
-                        void this.runAction("managePerm", data);
-                    } : undefined}
-                />
-            );
-        }
-
-        const tags = TagBadges.resolve(data.tagIds, dataModel.tags);
-        let tagRow: ComponentChild = undefined;
-        if (tags.length > 0) {
-            tagRow = <TagInput className="score-entry-tags" tags={tags} readOnly />;
-        }
-
-        const mainRow = (
-            <Container className="score-entry-main" orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}>
-                <Icon src={UIIcon.Music} className="score scoreTreeIcon" />
-                <Label caption={data.name} />
-                {indicator}
-                <Container className="action-box" orientation={Orientation.LeftToRight}>
-                    <Menu
-                        icon={UIIcon.KebabVertical}
-                        items={menuItems}
-                        onItemClick={(id) => {
-                            this.handleMenuItemClick(id, data);
-                        }}
-                    />
-                </Container>
-            </Container>
-        );
-
-        const content = (
-            <Container className="score-entry" orientation={Orientation.TopDown}>
-                {mainRow}
-                {tagRow}
-            </Container>
-        );
-
-        render(content, host);
-
-        return host;
+        this.setState({ expandedScoreIds: next });
     };
 
-    private handleMenuItemClick = (id: string, entry: ISbDmScore): void => {
-        if (id === "managePerm") {
-            this.selectRow(entry.id);
-        }
+    private handleOpenScore = (score: ISbDmScore): void => {
+        void this.runAction("load", score);
+    };
 
+    private handleCardAction = (id: string, score: ISbDmScore): void => {
         if (id === "copyUrl") {
-            const url = `${window.location.origin}${import.meta.env.BASE_URL}?score=${entry.id}`;
+            const url = `${window.location.origin}${import.meta.env.BASE_URL}?score=${score.id}`;
             void navigator.clipboard.writeText(url);
             void NotificationCenter.showInfo("Score URL copied to clipboard.");
 
             return;
         }
 
-        void this.runAction(id, entry);
-    };
-
-    private handleScoreDblClick = (event: UIEvent, cell: CellComponent): void => {
-        const entry = cell.getData() as ISbDmScore;
-
-        void this.runAction("load", entry);
+        void this.runAction(id, score);
     };
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
-        this.setState({ currentSettings: settings }, () => {
-            this.reformatRows();
-        });
+        this.setState({ currentSettings: settings });
 
         return Promise.resolve(true);
     };
@@ -612,24 +550,5 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const { onAction } = this.props;
 
         return await onAction?.(action, score, tagIds) ?? false;
-    }
-
-    private selectRow(scoreId: number): void {
-        const tree = this.scoreTableRef.current;
-
-        tree?.deselectRow();
-
-        const rows = tree?.searchAllRows("id", scoreId);
-        if (rows && rows.length > 0) {
-            tree?.selectRow(rows);
-        }
-    }
-
-    private reformatRows(): void {
-        const rows = this.scoreTableRef.current?.getRows();
-
-        rows?.forEach((row) => {
-            row.reformat();
-        });
     }
 }

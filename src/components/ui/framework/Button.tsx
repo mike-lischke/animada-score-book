@@ -42,6 +42,12 @@ export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElem
     // eslint-disable-next-line @typescript-eslint/naming-convention
     "aria-pressed"?: boolean;
 
+    /** Expanded state of a disclosure button, as in an accordion header. */
+    ariaExpanded?: boolean;
+
+    /** The element a disclosure button controls. */
+    ariaControls?: string;
+
     popoverTarget?: string;
 
     /**
@@ -65,7 +71,7 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, compact, imageOnly, disabled, isDefault, title, role,
-            name, type, value, popoverTarget, onClick, plain, "aria-pressed": ariaPressed
+            name, type, value, popoverTarget, onClick, plain, "aria-pressed": ariaPressed, ariaExpanded, ariaControls,
         } = this.props;
 
         const className = this.generateFinalClassName([
@@ -96,6 +102,8 @@ export class Button extends UIComponent<IButtonProperties> {
             name={name}
             value={value}
             aria-pressed={ariaPressed}
+            aria-expanded={ariaExpanded}
+            aria-controls={ariaControls}
             {...this.dataAttributes}
             popoverTarget={popoverTarget}
             onClick={onClick}

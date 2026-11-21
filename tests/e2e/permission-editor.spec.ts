@@ -223,13 +223,13 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
 const openGroupAccess = async (page: Page): Promise<void> => {
     await page.goto("/");
     await page.click("#scoreLibraryButton");
-    await page.waitForSelector("#scoreTreeHost .score-tree-entry", { timeout: 10000 });
+    await page.waitForSelector("#scoreCardsHost .score-card", { timeout: 10000 });
 
-    const entry = page.locator("#scoreTreeHost .score-tree-entry").first();
+    const entry = page.locator("#scoreCardsHost .score-card").first();
 
     await entry.hover();
 
-    const kebab = entry.locator(".action-box button").first();
+    const kebab = entry.locator(".score-card-actions button").first();
 
     await kebab.click();
 

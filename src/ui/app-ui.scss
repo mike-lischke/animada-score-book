@@ -142,126 +142,200 @@
     }
 }
 
-#scoreTreeHost {
+#scoreCardsHost {
     flex: 1 1 auto;
     min-height: 0;
+    overflow: auto;
+    gap: 8px;
+    padding-right: 4px;
 
     .score-list-empty {
         margin: 4px 0 0 4px;
         opacity: 0.7;
     }
 
-    .score-tree-entry {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        min-width: 0;
-        width: 100%;
-        padding: 3px 0;
-        font-size: 12pt;
+    .score-card {
+        flex: 0 0 auto;
+        gap: 6px;
+        padding: 10px 12px;
+        border: 1px solid var(--color-base-300);
+        border-radius: 12px;
+        background-color: var(--color-base-100);
+        box-shadow: 0 1px 4px var(--shadow-color);
         user-select: none;
 
-        .score-entry-main {
-            align-items: center;
-            gap: 4px;
+        &:hover {
+            border-color: var(--color-primary);
+        }
+    }
+
+    .score-card-header {
+        gap: 8px;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .score-card-icon {
+        flex: 0 0 auto;
+        font-size: 26px;
+        color: var(--color-primary);
+    }
+
+    .score-card-identity {
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 2px;
+    }
+
+    .score-card-title-row {
+        gap: 6px;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .score-card-position {
+        flex: 0 0 auto;
+        padding: 0 4px;
+        border-radius: 4px;
+        background-color: var(--color-base-200);
+        font-size: 9pt;
+        opacity: 0.8;
+    }
+
+    .score-card-open {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        justify-content: flex-start;
+        border: none;
+        background: none;
+        box-shadow: none;
+        font-size: 13pt;
+        font-weight: 600;
+        text-align: left;
+        color: var(--color-base-content);
+
+        .score-card-name {
+            display: block;
             min-width: 0;
-            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
         }
 
-        /* The badges wrap, so the row grows with them. */
-        .score-entry-tags {
-            align-items: center;
-            gap: 3px;
-            min-width: 0;
-            width: 100%;
-            margin-top: 2px;
+        &:hover .score-card-name {
+            text-decoration: underline;
         }
+    }
+
+    /* The badges wrap, so a card grows with them. */
+    .score-card-tags {
+        align-items: center;
+        gap: 3px;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .score-card-actions {
+        flex: 0 0 auto;
+        margin-left: auto;
 
         .btn {
+            height: auto;
             margin: 0;
             padding: 0;
-            height: auto;
-
-            .icon:is(svg) {
-                font-size: 22px;
-            }
+            border: none;
+            background: none;
         }
+    }
 
-        .label {
-            display: block;
-            flex: 1 1 auto;
-            color: currentColor;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            min-width: 0;
-            user-select: none;
-        }
+    .score-card-lineup-toggle {
+        justify-content: flex-start;
+        gap: 6px;
+        width: 100%;
+        height: auto;
+        margin: 0;
+        padding: 4px 8px;
+        border: none;
+        border-radius: 8px;
+        background-color: var(--color-base-200);
+        color: var(--color-base-content);
+        font-size: 10pt;
+        text-align: left;
 
         .icon:is(svg) {
             flex: 0 0 auto;
+            color: var(--color-primary);
         }
 
-        .action-box {
-            display: flex;
-            justify-content: flex-end;
+        .score-card-lineup-caption {
+            flex: 1 1 auto;
+            font-weight: 600;
+        }
+
+        .score-card-chevron {
+            transition: transform 120ms ease-out;
+        }
+    }
+
+    .score-card-expanded .score-card-lineup-toggle .score-card-chevron {
+        transform: rotate(180deg);
+    }
+
+    .score-card-lineup {
+        gap: 8px;
+        padding: 2px 0 2px 6px;
+    }
+
+    .score-card-lineup-section {
+        gap: 2px;
+    }
+
+    .score-card-lineup-heading {
+        gap: 6px;
+
+        .score-card-role-dot {
+            flex: 0 0 auto;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .score-card-role-caption {
+            font-size: 9pt;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+    }
+
+    .score-card-track {
+        gap: 6px;
+        padding-left: 14px;
+        font-size: 11pt;
+
+        .score-card-track-icon {
+            flex: 0 0 auto;
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+        }
+
+        .score-card-track-name {
+            min-width: 0;
             overflow: hidden;
-            min-width: fit-content;
-
-            > .actionButton,
-            > .dropdown-host > .btn {
-                top: 1px;
-                right: 0;
-                width: 20px;
-                min-width: 0;
-                min-height: 0;
-                margin: 0;
-                border: none;
-                color: var(--color-primary);
-                background-color: transparent;
-            }
-
-            > .actionButton:first-of-type {
-                margin-left: auto;
-            }
-        }
-
-        &:hover .action-box > .actionButton:hover .icon {
-            color: var(--color-primary);
-            border: 1px solid var(--color-primary);
-            border-radius: 4px;
+            white-space: nowrap;
+            text-overflow: ellipsis;
         }
     }
 
-    .scoreTreeIcon {
-        font-size: 24px;
-
-        &.score {
-            color: var(--color-primary);
-        }
-    }
-
-    .tabulator-row:hover .action-box {
-        display: flex;
-    }
-
-    .tabulator {
-        .tabulator-cell {
-            display: flex;
-            align-items: center;
-        }
-
-        .tabulator-tableholder .tabulator-table {
-            background: none;
-
-            .tabulator-row {
-                background: none;
-
-                &.tabulator-selected {
-                    background-color: var(--selection-background);
-                }
-            }
-        }
+    .score-card-lineup-note {
+        padding-left: 14px;
+        font-size: 10pt;
+        opacity: 0.7;
     }
 
     /* ---- Permission indicator ---- */
@@ -271,8 +345,6 @@
         align-items: center;
         gap: 2px;
         flex: 0 0 auto;
-        margin-left: auto;
-        margin-right: 4px;
         cursor: default;
         opacity: 0.7;
 

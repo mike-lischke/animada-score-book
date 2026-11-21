@@ -1,0 +1,45 @@
+name: Close issues on feature branches
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Close referenced issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          DEFAULT: ${{ github.event.repository.default_branch }}
+        run: |
+          # New branch or force-push: check everything since the default branch
+          if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            RANGE="origin/$DEFAULT..$AFTER"
+          else
+            RANGE="$BEFORE..$AFTER"
+          fi
+
+          git log --format='%H' "$RANGE" | while read -r sha; do
+            git log -1 --format='%B' "$sha" \
+              | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?):?[[:space:]]+#[0-9]+' \
+              | grep -oE '[0-9]+$' | sort -u \
+              | while read -r num; do
+                  state=$(gh issue view "$num" --json state -q .state 2>/dev/null || true)
+                  if [ "$state" = "OPEN" ]; then
+                    gh issue close "$num" --comment "done in ${sha:0:7} on \`$GITHUB_REF_NAME\`."
+                  fi
+                done
+          done
