@@ -11,6 +11,7 @@ import {
 } from "../../src/components/ui/Header/ArrangementIdentity.js";
 import { ScoreBookDataModel, type ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
 import type { ITagInfo } from "../../src/core/types/tags.js";
+import { SystemTagKind } from "../../src/core/types/tags.js";
 import { createInstrument } from "../unit-test-helpers.js";
 
 const statsCaption = "4/4 • 1 bar • 2 s";
@@ -18,6 +19,10 @@ const statsCaption = "4/4 • 1 bar • 2 s";
 const tagCatalogue: ITagInfo[] = [
     { id: 1, name: "Caixa", colorIndex: 1, editable: false, assignable: true, usageCount: 0 },
     { id: 2, name: "Ensaio", colorIndex: 2, editable: true, assignable: true, usageCount: 0 },
+    {
+        id: 3, name: "Surdo", colorIndex: 3, systemKind: SystemTagKind.Instrument, editable: false,
+        assignable: true, usageCount: 0,
+    },
 ];
 
 describe("ArrangementIdentity", { concurrent: false }, () => {
@@ -52,10 +57,11 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
      * Renders the identity of a score that carries tags, on a model that only answers the two lookups it needs.
      *
      * @param tagIds The tags of the score.
+     * @param compact Whether the identity renders in the compact (zen mode) shape.
      *
      * @returns The rendered container.
      */
-    const renderWithTags = (tagIds: number[]): Element => {
+    const renderWithTags = (tagIds: number[], compact = false): Element => {
         const dataModel = {
             findScore: () => {
                 return { tagIds };
@@ -70,6 +76,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
                 editMode={false}
                 stats={statsCaption}
                 saveState={ArrangementSaveState.Unchanged}
+                compact={compact}
             />,
         );
 
@@ -134,8 +141,28 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
         })).toEqual(["Caixa", "Ensaio"]);
     });
 
-    it("counts the tags its line does not show", () => {
-        const container = renderWithTags([1, 2, 1, 2, 1, 2]);
+    it("leaves the instrument tags out of the score's tag line", () => {
+        const container = renderWithTags([1, 3, 2]);
+        const badges = container.querySelectorAll(".arrangementIdentityTags .tag-input-tag");
+        const captions = Array.from(badges, (badge) => {
+            return badge.textContent;
+        });
+
+        expect(captions).toEqual(["Caixa", "Ensaio"]);
+    });
+
+    it("shows the user tags below the title in compact mode", () => {
+        const container = renderWithTags([1, 3, 2], true);
+        const badges = container.querySelectorAll(".arrangementIdentityTags .tag-input-tag");
+        const captions = Array.from(badges, (badge) => {
+            return badge.textContent;
+        });
+
+        expect(captions).toEqual(["Caixa", "Ensaio"]);
+    });
+
+    it("counts only the user tags its line does not show", () => {
+        const container = renderWithTags([1, 2, 1, 2, 1, 2, 3]);
         const badges = container.querySelectorAll(".arrangementIdentityTags .tag-input-tag");
         const captions = Array.from(badges, (badge) => {
             return badge.textContent;

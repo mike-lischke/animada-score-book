@@ -19,19 +19,22 @@ interface IMockDataModel {
     tags: ITagInfo[];
     instruments: ISbDmInstrument[];
     queryScores: ReturnType<typeof vi.fn>;
+    assignTag: ReturnType<typeof vi.fn>;
+    unassignTag: ReturnType<typeof vi.fn>;
 }
 
 const caixaTag: ITagInfo = {
-    id: 7, name: "Caixa", colorIndex: 2, editable: false, assignable: true, usageCount: 0,
+    id: 7, name: "Caixa", colorIndex: 2, editable: true, assignable: true, usageCount: 0,
 };
 
 const instrumentTag: ITagInfo = {
-    id: 9, name: "Surdo", colorIndex: 2, systemKind: SystemTagKind.Instrument, editable: false,
+    id: 9, name: "Surdo", colorIndex: 2, systemKind: SystemTagKind.Instrument, editable: true,
     assignable: true, usageCount: 0,
 };
 
 const competitionTag: ITagInfo = {
-    id: 10, name: "Wettkampf", colorIndex: 4, editable: false, assignable: true, usageCount: 0,
+    id: 10, name: "Wettkampf", colorIndex: 4, groupId: 10, groupName: "Bateria", editable: true,
+    assignable: true, usageCount: 0,
 };
 
 const demoTag: ITagInfo = {
@@ -45,6 +48,8 @@ const createMockDataModel = (tags: ITagInfo[] = [], scores: ISbDmScore[] = []): 
         tags,
         instruments: [],
         queryScores: vi.fn().mockResolvedValue(undefined),
+        assignTag: vi.fn().mockResolvedValue(true),
+        unassignTag: vi.fn().mockResolvedValue(true),
     };
 };
 
@@ -179,7 +184,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
     });
 
     it("starts a new score with the assignable tags of the active filter", async () => {
-        const model = createMockDataModel([caixaTag, demoTag]);
+        const model = createMockDataModel([caixaTag, instrumentTag, demoTag]);
         const onAction = vi.fn().mockResolvedValue(true);
 
         renderLibrary(model, true, onAction);
@@ -188,6 +193,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
             expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
         });
         await commitTag("Caixa");
+        await commitTag("Surdo");
         await commitTag("Demo Score");
 
         const newScoreButton = document.body.querySelector<HTMLButtonElement>("#scoreListNewScore");
@@ -196,6 +202,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         newScoreButton!.click();
 
         await waitFor(() => {
+            // The instrument tag follows the tracks the new score starts with, so it is never passed by hand.
             expect(onAction).toHaveBeenCalledWith("new", undefined, [7]);
         });
     });
@@ -318,6 +325,116 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         const chips = document.body.querySelector(".score-card-tags");
         expect(chips?.textContent).toContain("Wettkampf");
         expect(chips?.textContent).not.toContain("Surdo");
+    });
+
+    it("adds a tag to a card through the model", async () => {
+        const model = createMockDataModel([competitionTag], [createScore(1, "Surdo")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
+        });
+
+        const input = document.body.querySelector<HTMLInputElement>(".score-card-tags .tag-input-field")!;
+        fireEvent.input(input, { target: { value: "Wett" } });
+        expect(document.body.querySelectorAll(".score-card-tags .tag-input-completion")).toHaveLength(1);
+
+        fireEvent.input(input, { target: { value: "Wettkampf" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+
+        expect(model.assignTag).toHaveBeenCalledWith(1, competitionTag.id);
+    });
+
+    it("takes a tag off a card through the model", async () => {
+        const model = createMockDataModel([competitionTag], [createScore(1, "Surdo", [competitionTag.id])]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-card-tags .tag-input-close-button")).toBeTruthy();
+        });
+
+        document.body.querySelector<HTMLButtonElement>(".score-card-tags .tag-input-close-button")!.click();
+
+        expect(model.unassignTag).toHaveBeenCalledWith(1, competitionTag.id);
+    });
+
+    it("offers no instrument tag for assignment", async () => {
+        const model = createMockDataModel([instrumentTag, competitionTag], [createScore(1, "Caixa")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
+        });
+
+        const input = document.body.querySelector<HTMLInputElement>(".score-card-tags .tag-input-field")!;
+        fireEvent.input(input, { target: { value: "Surdo" } });
+
+        expect(document.body.querySelectorAll(".score-card-tags .tag-input-completion")).toHaveLength(0);
+    });
+
+    it("keeps a tag of a scope the account does not manage locked", async () => {
+        const model = createMockDataModel([demoTag, competitionTag], [createScore(1, "Samba", [demoTag.id])]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
+        });
+
+        expect(document.body.querySelector(".score-card-tags")?.textContent).toContain("Demo Score");
+        expect(document.body.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
+    });
+
+    it("keeps the card read-only when the account manages no tag", async () => {
+        const model = createMockDataModel([demoTag], [createScore(1, "Samba", [demoTag.id])]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card")).toHaveLength(1);
+        });
+
+        expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeNull();
+        expect(document.body.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
+    });
+
+    it("queries the current filter again after a tag change", async () => {
+        const model = createMockDataModel([caixaTag], [createScore(1, "Surdo")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+        });
+        await commitTag("Caixa");
+        expect(model.queryScores).toHaveBeenCalledTimes(1);
+
+        await requisitions.execute("scoreTagsChanged", 1);
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenCalledTimes(2);
+        });
+        expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [[caixaTag.id]] });
+    });
+
+    it("queries the list again when another account takes over", async () => {
+        const model = createMockDataModel([caixaTag], [createScore(1, "Surdo")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card")).toHaveLength(1);
+        });
+
+        await requisitions.execute("authChanged", undefined);
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenCalledTimes(1);
+        });
+        expect(model.queryScores).toHaveBeenCalledWith({ groups: [] });
     });
 
     it("closes on Escape and reports the close", async () => {

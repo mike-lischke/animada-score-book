@@ -3675,6 +3675,7 @@ export class ScoreBookDataModel {
             (arrangement as Arrangement).id = data.id;
 
             await this.assignNewArrangementTags(data.id);
+            await this.reloadTags();
             await this.queryScores(this.scoreListCombination);
 
             return content;
@@ -3714,6 +3715,11 @@ export class ScoreBookDataModel {
 
         // Keep the score library entry name in sync with the arrangement title.
         await this.syncScoreLibName(arrangement.id, arrangement.title);
+
+        // The save derives the instrument tags from the tracks, so the catalogue and the filtered list change even
+        // though the arrangement carries no tags of its own.
+        await this.reloadTags();
+        await this.queryScores(this.scoreListCombination);
 
         return content;
     }
@@ -5436,6 +5442,7 @@ export class ScoreBookDataModel {
 
         (arrangement as Arrangement).id = data.id;
 
+        await this.reloadTags();
         await this.queryScores(this.scoreListCombination);
 
         // Re-serialize with the new ID so that AppStorage and future saves use the correct ID.

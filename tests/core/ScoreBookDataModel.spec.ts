@@ -2292,6 +2292,19 @@ describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () 
         expect(content).toBeTruthy();
     });
 
+    it("refreshes the catalogue and the filtered list after a save", async () => {
+        const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(200, { success: true }));
+
+        await model.saveArrangement();
+
+        const actions = fetchMock.mock.calls.map((call) => {
+            return new URL(String(call[0]), "http://localhost").searchParams.get("action");
+        });
+
+        expect(actions).toContain("listTags");
+        expect(actions).toContain("listScores");
+    });
+
     it("claims the missing permission when the backend refuses the save with 403", async () => {
         vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(403, { error: "Forbidden" }));
 

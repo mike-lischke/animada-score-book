@@ -62,7 +62,7 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
         const badge = compact ? undefined : this.renderSaveBadge();
         const statsLabel = compact
             ? undefined : <Label id="scoreStats" className="arrangementIdentityStats" caption={stats} />;
-        const tagRow = compact ? undefined : this.renderTags();
+        const tagRow = this.renderTags();
 
         return (
             <Container
@@ -89,12 +89,13 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
     }
 
     /**
-     * @returns The badges of the score's tags, at most {@link maxTags} of them, or nothing when it carries none.
+     * @returns The badges of the score's user tags, at most {@link maxTags} of them, or nothing when it carries
+     * none. Instrument tags stay out: they follow the tracks and serve the filter, not the display.
      */
     private renderTags(): ComponentChild {
         const { arrangement, dataModel } = this.props;
         const score = dataModel.findScore(arrangement.id);
-        const tags = TagBadges.resolve(score?.tagIds ?? [], dataModel.tags);
+        const tags = TagBadges.userTags(score?.tagIds ?? [], dataModel.tags);
 
         if (tags.length === 0) {
             return undefined;

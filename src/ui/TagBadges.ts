@@ -4,7 +4,7 @@
  */
 
 import type { ITag } from "../components/ui/framework/TagInput.js";
-import type { ITagInfo } from "../core/types/tags.js";
+import { SystemTagKind, type ITagInfo } from "../core/types/tags.js";
 
 /** Turns tag ids into the badges a tag list displays. */
 export class TagBadges {
@@ -23,6 +23,27 @@ export class TagBadges {
             return byId.get(id);
         }).filter((tag): tag is ITagInfo => {
             return tag !== undefined;
+        }).map((tag) => {
+            return { id: tag.id, caption: tag.name, colorIndex: tag.colorIndex };
+        });
+    }
+
+    /**
+     * @param ids The tag ids to resolve.
+     * @param catalogue The tags the current user can use.
+     *
+     * @returns The badges of the tags a person assigned to the entity. Instrument tags are left out: they follow
+     * the tracks of a score and serve the filter, not the display.
+     */
+    public static userTags(ids: readonly number[], catalogue: readonly ITagInfo[]): ITag[] {
+        const byId = new Map(catalogue.map((tag) => {
+            return [tag.id, tag] as [number, ITagInfo];
+        }));
+
+        return ids.map((id) => {
+            return byId.get(id);
+        }).filter((tag): tag is ITagInfo => {
+            return tag !== undefined && tag.systemKind !== SystemTagKind.Instrument;
         }).map((tag) => {
             return { id: tag.id, caption: tag.name, colorIndex: tag.colorIndex };
         });

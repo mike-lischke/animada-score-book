@@ -6,7 +6,7 @@
 import { cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ITag } from "../../src/components/ui/framework/TagInput.js";
+import type { ITag, ITagCompletion } from "../../src/components/ui/framework/TagInput.js";
 import { ScoreLineupStatus, type IScoreLineup } from "../../src/core/DatabaseTypes.js";
 import {
     InstrumentRole, SbDmEntityType, type ISbDmInstrument, type ISbDmScore,
@@ -78,17 +78,24 @@ describe("ScoreCard", { concurrent: false }, () => {
      * @param score The score the card shows.
      * @param expanded Whether the lineup starts open.
      * @param tagChips The chips the card shows.
+     * @param completions The tags the card offers for assignment.
+     * @param canEditTags Whether the caller manages tags at all.
      *
      * @returns The card and the handlers it reports to.
      */
-    const renderCard = (score: ISbDmScore, expanded = false, tagChips = userTags): {
+    const renderCard = (score: ISbDmScore, expanded = false, tagChips = userTags,
+        completions: ITagCompletion[] = [], canEditTags = true): {
         onOpen: ReturnType<typeof vi.fn>;
         onToggleLineup: ReturnType<typeof vi.fn>;
         onAction: ReturnType<typeof vi.fn>;
+        onTagAdd: ReturnType<typeof vi.fn>;
+        onTagRemove: ReturnType<typeof vi.fn>;
     } => {
         const onOpen = vi.fn();
         const onToggleLineup = vi.fn();
         const onAction = vi.fn();
+        const onTagAdd = vi.fn();
+        const onTagRemove = vi.fn();
 
         renderResult = render(
             <ScoreCard
@@ -96,16 +103,20 @@ describe("ScoreCard", { concurrent: false }, () => {
                 position={1}
                 instruments={instruments}
                 tagChips={tagChips}
+                tagCompletions={completions}
+                canEditTags={canEditTags}
                 expanded={expanded}
                 isAdmin={false}
                 showPermission={true}
                 onOpen={onOpen}
                 onToggleLineup={onToggleLineup}
                 onAction={onAction}
+                onTagAdd={onTagAdd}
+                onTagRemove={onTagRemove}
             />,
         );
 
-        return { onOpen, onToggleLineup, onAction };
+        return { onOpen, onToggleLineup, onAction, onTagAdd, onTagRemove };
     };
 
     it("keeps the lineup closed until it is opened", () => {
@@ -232,5 +243,65 @@ describe("ScoreCard", { concurrent: false }, () => {
 
         expect(handlers.onToggleLineup).toHaveBeenCalledTimes(1);
         expect(handlers.onOpen).not.toHaveBeenCalled();
+    });
+
+    it("offers tag editing only to a caller who manages tags", () => {
+        const score = createScore(twoTracks);
+
+        renderCard(score, false, userTags, [], false);
+
+        expect(renderResult!.container.querySelector(".score-card-tags .tag-input-field")).toBeNull();
+        expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
+    });
+
+    it("reports a tag the caller picks from the completions", () => {
+        const score = createScore(twoTracks);
+        const handlers = renderCard(score, false, userTags, [{ caption: "Coco", tagId: 12 }]);
+
+        const input = renderResult!.container.querySelector<HTMLInputElement>(".score-card-tags .tag-input-field");
+        expect(input).toBeTruthy();
+
+        fireEvent.input(input!, { target: { value: "Coco" } });
+        fireEvent.keyDown(input!, { key: "Enter" });
+
+        expect(handlers.onTagAdd).toHaveBeenCalledWith(score, 12);
+    });
+
+    it("reports a tag that is taken off through its close button", () => {
+        const score = createScore(twoTracks);
+        const handlers = renderCard(score);
+
+        const closeButton = renderResult!.container.querySelector<HTMLButtonElement>(
+            ".score-card-tags .tag-input-close-button");
+        expect(closeButton).toBeTruthy();
+
+        closeButton!.click();
+
+        expect(handlers.onTagRemove).toHaveBeenCalledWith(score, 11);
+    });
+
+    it("keeps a locked tag without a close button", () => {
+        renderCard(createScore(twoTracks), false, [{ id: 8, caption: "Demo Score", colorIndex: 1, locked: true }]);
+
+        expect(renderResult!.container.textContent).toContain("Demo Score");
+        expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
+    });
+
+    it("clears its tag entry on Escape instead of letting the key reach the window", () => {
+        const score = createScore(twoTracks);
+        renderCard(score, false, userTags, [{ caption: "Coco", tagId: 12 }]);
+
+        const input = renderResult!.container.querySelector<HTMLInputElement>(".score-card-tags .tag-input-field");
+        expect(input).toBeTruthy();
+
+        fireEvent.input(input!, { target: { value: "Coco" } });
+
+        const windowKeyDown = vi.fn();
+        window.addEventListener("keydown", windowKeyDown);
+        fireEvent.keyDown(input!, { key: "Escape" });
+        window.removeEventListener("keydown", windowKeyDown);
+
+        expect(input!.value).toBe("");
+        expect(windowKeyDown).not.toHaveBeenCalled();
     });
 });

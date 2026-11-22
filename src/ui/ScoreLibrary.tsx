@@ -115,6 +115,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         requisitions.register("scoreEntryUpdated", this.handleScoreEntryUpdated);
         requisitions.register("tagsChanged", this.handleTagsChanged);
         requisitions.register("scoreTagsChanged", this.handleScoreTagsChanged);
+        requisitions.register("authChanged", this.handleAuthChanged);
 
         if (this.props.open) {
             this.dialogRef.current?.open();
@@ -142,6 +143,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         requisitions.unregister("scoreEntryUpdated", this.handleScoreEntryUpdated);
         requisitions.unregister("tagsChanged", this.handleTagsChanged);
         requisitions.unregister("scoreTagsChanged", this.handleScoreTagsChanged);
+        requisitions.unregister("authChanged", this.handleAuthChanged);
     }
 
     public render(): ComponentChild {
@@ -293,6 +295,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const { scores, currentSettings, expandedScoreIds } = this.state;
         const isAdmin = dataModel.user?.isAdmin ?? false;
         const showPermission = currentSettings.showPermMatrix ?? true;
+        const canEditTags = this.canEditTags();
 
         return scores.map((score, index) => {
             return (
@@ -302,12 +305,16 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     position={index + 1}
                     instruments={dataModel.instruments}
                     tagChips={this.tagChips(score)}
+                    tagCompletions={this.assignableCompletions(score)}
+                    canEditTags={canEditTags}
                     expanded={expandedScoreIds.has(score.id)}
                     isAdmin={isAdmin}
                     showPermission={showPermission}
                     onToggleLineup={this.handleToggleLineup}
                     onOpen={this.handleOpenScore}
                     onAction={this.handleCardAction}
+                    onTagAdd={this.handleCardTagAdd}
+                    onTagRemove={this.handleCardTagRemove}
                 />
             );
         });
@@ -316,21 +323,50 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     /**
      * @param score The score whose chips are built.
      *
-     * @returns The tags of the score the caller may see, without the instrument tags: those are filter material and
-     * would repeat what the lineup already says.
+     * @returns The user tags of the score the active account may see. A tag of a scope the caller does not manage
+     * stays locked, because the tag belongs to its scope, not to the score.
      */
     private tagChips(score: ISbDmScore): ITag[] {
         const { dataModel } = this.props;
+        const editable = new Map(dataModel.tags.map((tag) => {
+            return [tag.id, tag.editable] as [number, boolean];
+        }));
 
-        const visible = score.tagIds.filter((tagId) => {
-            const tag = dataModel.tags.find((candidate) => {
-                return candidate.id === tagId;
-            });
-
-            return tag !== undefined && tag.systemKind !== SystemTagKind.Instrument;
+        return TagBadges.userTags(score.tagIds, dataModel.tags).map((chip) => {
+            return editable.get(chip.id) === true ? chip : { ...chip, locked: true };
         });
+    }
 
-        return TagBadges.resolve(visible, dataModel.tags);
+    /**
+     * @param score The score whose card offers the completions.
+     *
+     * @returns The tags of the active account that may be put on that score: the ones of a scope the caller manages,
+     * without instrument tags, which follow the score's tracks, and without the tags it already carries.
+     */
+    private assignableCompletions(score: ISbDmScore): ITagCompletion[] {
+        const { dataModel } = this.props;
+        const assigned = new Set(score.tagIds);
+
+        return dataModel.tags.filter((tag) => {
+            return tag.assignable && tag.systemKind !== SystemTagKind.Instrument && !assigned.has(tag.id);
+        }).map((tag) => {
+            return {
+                caption: tag.name,
+                tagId: tag.id,
+                owner: tag.groupName ?? globalTagOwnerCaption,
+            };
+        });
+    }
+
+    /**
+     * @returns Whether the active account manages at least one tag, which is what makes the card's tags editable.
+     */
+    private canEditTags(): boolean {
+        const { dataModel } = this.props;
+
+        return dataModel.tags.some((tag) => {
+            return tag.assignable && tag.systemKind !== SystemTagKind.Instrument;
+        });
     }
 
     /**
@@ -372,6 +408,28 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         void this.runAction(id, score);
     };
 
+    private handleCardTagAdd = (score: ISbDmScore, tagId: number): void => {
+        const { dataModel } = this.props;
+
+        void dataModel.assignTag(score.id, tagId);
+    };
+
+    private handleCardTagRemove = (score: ISbDmScore, tagId: number): void => {
+        const { dataModel } = this.props;
+
+        void dataModel.unassignTag(score.id, tagId);
+    };
+
+    private handleAuthChanged = (): Promise<boolean> => {
+        const { combination } = this.state;
+
+        // Write access, readable scores and the usable catalogue all belong to the session, so the list is queried
+        // again when another account takes over.
+        void this.applyCombination(combination);
+
+        return Promise.resolve(true);
+    };
+
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
         this.setState({ currentSettings: settings });
 
@@ -402,7 +460,10 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     };
 
     private handleScoreTagsChanged = (): Promise<boolean> => {
-        this.setState({ scores: this.orderedScores() });
+        const { combination } = this.state;
+
+        // A tag change can move a score in or out of the current filter, so the list is queried again.
+        void this.applyCombination(combination);
 
         return Promise.resolve(true);
     };
@@ -484,7 +545,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const active = new Set(this.activeGroup());
 
         return dataModel.tags.filter((tag) => {
-            return active.has(tag.id) && tag.assignable;
+            // An instrument tag follows the tracks the new score starts with, so it is never assigned by hand.
+            return active.has(tag.id) && tag.assignable && tag.systemKind !== SystemTagKind.Instrument;
         }).map((tag) => {
             return tag.id;
         });

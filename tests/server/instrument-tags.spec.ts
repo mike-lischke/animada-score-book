@@ -124,6 +124,17 @@ describe("InstrumentTags.sync", () => {
         ]);
     });
 
+    it("removes every instrument tag when the last track is gone", async () => {
+        const adapter = new FakeDatabaseAdapter([5, 6]);
+
+        await InstrumentTags.sync(adapter, 7, contentWith([]));
+
+        expect(adapter.executed).toEqual([
+            { sql: "DELETE FROM score_tags WHERE score_id = ? AND tag_id = ?", params: [7, 5] },
+            { sql: "DELETE FROM score_tags WHERE score_id = ? AND tag_id = ?", params: [7, 6] },
+        ]);
+    });
+
     it("leaves a score whose tags already match alone", async () => {
         const adapter = new FakeDatabaseAdapter([5]);
 

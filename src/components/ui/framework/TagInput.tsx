@@ -328,6 +328,15 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
         const { inputValue, activeCompletionIndex } = this.state;
         const matches = this.matchingCompletions();
 
+        // Escape closes this entry, not the layer it sits in, while text or a completion list is open.
+        if (e.key === "Escape" && (inputValue.length > 0 || activeCompletionIndex >= 0)) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.setState({ inputValue: "", activeCompletionIndex: -1 });
+
+            return;
+        }
+
         if (e.key === "ArrowDown" && matches.length > 0) {
             e.preventDefault();
             const next = activeCompletionIndex + 1 >= matches.length ? 0 : activeCompletionIndex + 1;

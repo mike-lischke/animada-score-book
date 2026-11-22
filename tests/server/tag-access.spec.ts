@@ -93,11 +93,17 @@ describe("TagAccess — assigning", () => {
         expect(TagAccess.canAssign(member, demoTag)).toBe(false);
     });
 
-    it("lets a member assign an instrument tag it can use", () => {
-        expect(TagAccess.canAssign(member, instrumentTag)).toBe(true);
+    it("keeps a global instrument tag with the administrators", () => {
+        expect(TagAccess.canAssign(administrator, instrumentTag)).toBe(true);
+        expect(TagAccess.canAssign(groupAdmin, instrumentTag)).toBe(false);
     });
 
-    it("refuses a tag the caller cannot use", () => {
+    it("lets a group admin assign the tags of its group", () => {
+        expect(TagAccess.canAssign(groupAdmin, administeredTag)).toBe(true);
+    });
+
+    it("refuses a tag of a scope the caller does not manage", () => {
         expect(TagAccess.canAssign(member, administeredTag)).toBe(false);
+        expect(TagAccess.canAssign(administrator, administeredTag)).toBe(false);
     });
 });

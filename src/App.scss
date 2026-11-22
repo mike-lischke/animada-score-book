@@ -1027,7 +1027,8 @@ h6 {
         position: absolute;
         top: 4px;
         left: 16px;
-        height: 28px;
+        min-height: 28px;
+        max-height: 64px;
         max-width: calc(100% - 32px);
         overflow: hidden;
         background: var(--color-base-100);

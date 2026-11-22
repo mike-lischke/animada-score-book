@@ -674,8 +674,10 @@ export class App extends UIComponent<{}, IAppState> {
                                 onToggleNotifications={this.handleToggleNotifications}
                                 onShowReleaseNotes={this.handleShowReleaseNotes}
                             />
-                            {renderNotificationCenter()}
                         </Container>
+
+                        {/* Outside the app frame, so a toast stays readable above an open portal dialog. */}
+                        {renderNotificationCenter()}
                         <ValueDialog ref={this.valueDialogRef} />
                         {dialogs.scoreLibrary &&
                             <dialogs.scoreLibrary

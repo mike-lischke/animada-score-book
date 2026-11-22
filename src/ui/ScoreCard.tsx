@@ -11,7 +11,7 @@ import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { Menu } from "../components/ui/framework/Menu/Menu.js";
 import type { IMenuItem } from "../components/ui/framework/Menu/MenuItem.js";
-import { TagInput, type ITag } from "../components/ui/framework/TagInput.js";
+import { TagInput, type ITag, type ITagCompletion } from "../components/ui/framework/TagInput.js";
 import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
@@ -70,6 +70,12 @@ export interface IScoreCardProperties extends ICommonUIProperties {
     /** The tags of the score that the card shows as chips; instrument tags are never part of it. */
     tagChips: ITag[];
 
+    /** The tags of the active account that may still be put on the score; empty when the caller may not manage tags. */
+    tagCompletions: ITagCompletion[];
+
+    /** Whether the caller may manage tags at all; a tag belongs to its scope, not to the score. */
+    canEditTags: boolean;
+
     expanded: boolean;
     isAdmin: boolean;
 
@@ -79,6 +85,8 @@ export interface IScoreCardProperties extends ICommonUIProperties {
     onToggleLineup: (score: ISbDmScore) => void;
     onOpen: (score: ISbDmScore) => void;
     onAction: (action: string, score: ISbDmScore) => void;
+    onTagAdd: (score: ISbDmScore, tagId: number) => void;
+    onTagRemove: (score: ISbDmScore, tagId: number) => void;
 }
 
 /**
@@ -129,7 +137,7 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
     }
 
     private renderHeader(): ComponentChild {
-        const { score, position, tagChips, isAdmin, showPermission } = this.props;
+        const { score, position, tagChips, tagCompletions, canEditTags, isAdmin, showPermission } = this.props;
 
         const { perm } = score;
         const canManage = isAdmin || (perm?.isOwner === true);
@@ -161,7 +169,12 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         }
 
         let chips: ComponentChild = undefined;
-        if (tagChips.length > 0) {
+        if (canEditTags) {
+            chips = (
+                <TagInput className="score-card-tags" tags={tagChips} removable completions={tagCompletions}
+                    allowNew={false} onAdd={this.handleTagAdd} onRemove={this.handleTagRemove} />
+            );
+        } else if (tagChips.length > 0) {
             chips = <TagInput className="score-card-tags" tags={tagChips} readOnly />;
         }
 
@@ -359,5 +372,19 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         const { score, onAction } = this.props;
 
         onAction(id, score);
+    };
+
+    private handleTagAdd = (completion: ITagCompletion): void => {
+        const { score, onTagAdd } = this.props;
+
+        if (completion.tagId !== undefined) {
+            onTagAdd(score, completion.tagId);
+        }
+    };
+
+    private handleTagRemove = (tagId: number): void => {
+        const { score, onTagRemove } = this.props;
+
+        onTagRemove(score, tagId);
     };
 }

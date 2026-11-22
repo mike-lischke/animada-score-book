@@ -25,6 +25,7 @@ const memberGroupId = 10;
 const foreignGroupId = 20;
 
 const memberUserId = 3;
+const adminUserId = 1;
 const scoreId = 7;
 
 const config: IServerConfig = {
@@ -60,7 +61,10 @@ class FakeDatabase implements IDatabaseAdapter {
         { id: foreignGroupId, name: "Fremd", adminId: 4 },
     ];
 
-    public readonly userGroups = [{ userId: memberUserId, groupId: memberGroupId }];
+    public readonly userGroups = [
+        { userId: memberUserId, groupId: memberGroupId },
+        { userId: adminUserId, groupId: adminsGroupId },
+    ];
 
     public testConnection(): Promise<ITestConnectionResult> {
         return Promise.resolve({ success: true });
@@ -326,14 +330,34 @@ const setup = (): { database: FakeDatabase; routes: TagActions; } => {
 };
 
 describe("tag actions — assigning", () => {
-    it("assigns a usable tag of the caller's group", async () => {
+    it("assigns a tag of the group the caller administers", async () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleAssignTag(createRequest({ scoreId, tagId: 2 }, memberUserId), res);
+        await routes.handleAssignTag(createRequest({ scoreId, tagId: 4 }, memberUserId), res);
 
         expect(captured.status).toBe(200);
-        expect(Array.from(database.assignments)).toEqual([`${scoreId}:2`]);
+        expect(Array.from(database.assignments)).toEqual([`${scoreId}:4`]);
+    });
+
+    it("lets an administrator assign a global tag", async () => {
+        const { database, routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleAssignTag(createRequest({ scoreId, tagId: 1 }, adminUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(Array.from(database.assignments)).toEqual([`${scoreId}:1`]);
+    });
+
+    it("refuses to assign an instrument tag, which follows the tracks", async () => {
+        const { database, routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleAssignTag(createRequest({ scoreId, tagId: 2 }, adminUserId), res);
+
+        expect(captured.status).toBe(400);
+        expect(database.assignments.size).toBe(0);
     });
 
     it("answers 404 for a tag of a foreign group, so its existence does not leak", async () => {
@@ -346,7 +370,17 @@ describe("tag actions — assigning", () => {
         expect(database.assignments.size).toBe(0);
     });
 
-    it("keeps the demo tag with the administrators, whatever the write permission says", async () => {
+    it("refuses a global tag for a caller who does not manage it", async () => {
+        const { database, routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleAssignTag(createRequest({ scoreId, tagId: 2 }, memberUserId), res);
+
+        expect(captured.status).toBe(403);
+        expect(database.assignments.size).toBe(0);
+    });
+
+    it("keeps the demo tag with the administrators", async () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
@@ -356,16 +390,27 @@ describe("tag actions — assigning", () => {
         expect(database.assignments.size).toBe(0);
     });
 
-    it("refuses to change a score another user holds the lock for", async () => {
+    it("answers 404 for a score the caller cannot read", async () => {
+        const { database, routes } = setup();
+        database.permissions.delete(scoreId);
+        const { res, captured } = createResponse();
+
+        await routes.handleAssignTag(createRequest({ scoreId, tagId: 4 }, memberUserId), res);
+
+        expect(captured.status).toBe(404);
+        expect(database.assignments.size).toBe(0);
+    });
+
+    it("changes the tags while another user edits the score, because tags are not part of the content", async () => {
         const { database, routes } = setup();
         database.locks.set(scoreId, { userId: 9, lockedAt: new Date() });
 
         const { res, captured } = createResponse();
 
-        await routes.handleAssignTag(createRequest({ scoreId, tagId: 2 }, memberUserId), res);
+        await routes.handleAssignTag(createRequest({ scoreId, tagId: 4 }, memberUserId), res);
 
-        expect(captured.status).toBe(409);
-        expect(database.assignments.size).toBe(0);
+        expect(captured.status).toBe(200);
+        expect(Array.from(database.assignments)).toEqual([`${scoreId}:4`]);
     });
 
     it("answers 401 without a session", async () => {
@@ -432,7 +477,7 @@ describe("tag actions — unassigning", () => {
 
         const { res, captured } = createResponse();
 
-        await routes.handleUnassignTag(createRequest({ scoreId, tagId: 2 }, memberUserId), res);
+        await routes.handleUnassignTag(createRequest({ scoreId, tagId: 2 }, adminUserId), res);
 
         expect(captured.status).toBe(409);
         expect(database.assignments.has(`${scoreId}:2`)).toBe(true);
@@ -445,7 +490,7 @@ describe("tag actions — unassigning", () => {
 
         const { res, captured } = createResponse();
 
-        await routes.handleUnassignTag(createRequest({ scoreId, tagId: 2 }, memberUserId), res);
+        await routes.handleUnassignTag(createRequest({ scoreId, tagId: 2 }, adminUserId), res);
 
         expect(captured.status).toBe(200);
         expect(database.assignments.size).toBe(0);

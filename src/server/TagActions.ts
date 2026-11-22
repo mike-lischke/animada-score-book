@@ -12,7 +12,6 @@ import { ScoreLineupStatus, type IScoreLineup } from "../core/DatabaseTypes.js";
 import { AccessLevel, EntityType, type ITokenPayload } from "./Auth.js";
 import { InstrumentTags } from "./InstrumentTags.js";
 import { type RequestContext } from "./RequestContext.js";
-import { ScoreLock } from "./ScoreLock.js";
 import { SystemTagKind, TagAccess, type ITagAccessContext, type ITagRow } from "./TagAccess.js";
 
 /** A tag as the client receives it. */
@@ -294,8 +293,18 @@ export class TagActions {
             return;
         }
 
+        const { tag, scoreId } = resolved;
+
+        // An instrument tag follows the tracks of the score and is maintained by the backend; it is never assigned
+        // by hand, even though its global scope makes it an administrator's tag.
+        if (TagAccess.systemKind(tag) === SystemTagKind.Instrument) {
+            this.ctx.sendError(res, "Instrument tags follow the tracks of a score and cannot be assigned.", 400);
+
+            return;
+        }
+
         await this.ctx.auth.adapter.execute("INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES (?, ?)",
-            [resolved.scoreId, resolved.tag.id]);
+            [scoreId, tag.id]);
 
         this.ctx.sendJson(res, { success: true });
     }
@@ -512,24 +521,18 @@ export class TagActions {
             "SELECT id FROM scores WHERE id = ?", [scoreId],
         );
 
-        if (scores.length === 0) {
+        // A score the caller cannot read answers like an unknown one, so tagging never touches invisible content.
+        const readable = await this.ctx.auth.checkPermission(user, EntityType.Score, scoreId, AccessLevel.Read);
+
+        if (scores.length === 0 || !readable) {
             this.ctx.sendError(res, "Score not found", 404);
 
             return undefined;
         }
 
-        const allowed = TagAccess.systemKind(tag) === SystemTagKind.Demo
-            ? context.isAdmin
-            : await this.ctx.auth.checkPermission(user, EntityType.Score, scoreId, AccessLevel.Write);
-
-        if (!allowed) {
+        // A tag is its own entity: changing it on a score needs the right to manage the tag's scope, not the score.
+        if (!TagAccess.canAssign(context, tag)) {
             this.ctx.sendError(res, "Forbidden", 403);
-
-            return undefined;
-        }
-
-        if (await ScoreLock.heldByOther(this.ctx.auth.adapter, scoreId, user.userId)) {
-            this.ctx.sendError(res, "Score is locked by another user. Refresh and try again.", 409);
 
             return undefined;
         }

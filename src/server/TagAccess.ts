@@ -185,14 +185,11 @@ export class TagAccess {
      * @param context The rules of the caller.
      * @param tag The tag in question.
      *
-     * @returns Whether the caller may put the tag on a score at all. Assigning `Demo Score` publishes a score to
-     * visitors, so it stays with the administrators, independent of the write permission on a score.
+     * @returns Whether the caller may put the tag on a score. A tag is its own entity, so this follows the tag, not
+     * the score: only the owners of its scope manage it, which makes a global tag an administrator's business and a
+     * group tag the business of that group's administrator. `Demo Score` is global and follows the same rule.
      */
     public static canAssign(context: ITagAccessContext, tag: ITagRow): boolean {
-        if (!TagAccess.canUse(context, tag)) {
-            return false;
-        }
-
-        return TagAccess.systemKind(tag) === SystemTagKind.Demo ? context.isAdmin : true;
+        return TagAccess.owns(context, tag);
     }
 }
