@@ -36,11 +36,14 @@ interface ICapturedResponse {
     body: unknown;
 }
 
-const createRequest = (body: unknown, userId?: number, url = "/api?action=x"): IncomingMessage => {
-    const token = userId === undefined
-        ? undefined
-        : Auth.createAccessToken({ userId, email: `user${userId}@example.com`, isAdmin: false });
-
+/**
+ * @param token The access token to send, if any.
+ * @param body The request body.
+ * @param url The request URL.
+ *
+ * @returns A request that carries the token.
+ */
+const createTokenRequest = (token: string | undefined, body: unknown, url: string): IncomingMessage => {
     const headers: Record<string, string> = { host: "localhost" };
     if (token !== undefined) {
         headers.authorization = `Bearer ${token}`;
@@ -51,6 +54,29 @@ const createRequest = (body: unknown, userId?: number, url = "/api?action=x"): I
         method: "POST",
         headers,
     }) as unknown as IncomingMessage;
+};
+
+const createRequest = (body: unknown, userId?: number, url = "/api?action=x"): IncomingMessage => {
+    const token = userId === undefined
+        ? undefined
+        : Auth.createAccessToken({ userId, email: `user${userId}@example.com`, isAdmin: false });
+
+    return createTokenRequest(token, body, url);
+};
+
+/**
+ * @param body The request body.
+ * @param groupId The group whose login token is sent.
+ * @param url The request URL.
+ *
+ * @returns A request as a group login produces it: the anonymous user, authenticated through the group.
+ */
+const createGroupRequest = (body: unknown, groupId: number, url = "/api?action=x"): IncomingMessage => {
+    const token = Auth.createAccessToken({
+        userId: 2, email: Auth.anonymousEmail, isAdmin: false, authType: "group", groupId,
+    });
+
+    return createTokenRequest(token, body, url);
 };
 
 const createResponse = (): { res: ServerResponse; captured: ICapturedResponse; } => {
@@ -454,5 +480,49 @@ describe("set list permissions", () => {
 
         expect(captured.status).toBe(200);
         expect(database.grants.get(`${EntityType.SetList}:${listId}`)?.get(worldGroupId)).toBe(false);
+    });
+});
+
+describe("set list routes — group login", () => {
+    it("reads a list its group was given", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(
+            createGroupRequest({}, memberGroupId, `/api?action=getSetList&id=${listId}`), res,
+        );
+
+        expect(captured.status).toBe(200);
+        expect((captured.body as { id: number; }).id).toBe(listId);
+    });
+
+    it("refuses an edit through a read-only group grant", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleUpdateSetList(
+            createGroupRequest({ id: listId, revision: 1, name: "Bateria" }, memberGroupId), res,
+        );
+
+        expect(captured.status).toBe(403);
+        expect(database.setLists[0].name).toBe("Samba");
+    });
+
+    it("lets a writable group grant edit the list", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]], [{ groupId: memberGroupId, writable: true }]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleUpdateSetList(
+            createGroupRequest({ id: listId, revision: 1, name: "Bateria" }, memberGroupId), res,
+        );
+
+        expect(captured.status).toBe(200);
+        expect(database.setLists[0].name).toBe("Bateria");
     });
 });
