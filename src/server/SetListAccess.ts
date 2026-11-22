@@ -38,6 +38,9 @@ export enum SetListFilterProblem {
 
     /** A group-owned tag is used while the list reaches beyond that group. */
     TagScope = "tag-scope",
+
+    /** A requested filter names a tag the caller may not use. */
+    NotUsable = "not-usable",
 }
 
 /**
@@ -187,6 +190,10 @@ export class SetListAccess {
 
             case SetListFilterProblem.TagScope: {
                 return "The tag combination uses a tag that not everybody the list is shared with can use.";
+            }
+
+            case SetListFilterProblem.NotUsable: {
+                return "The tag combination uses a tag you cannot use.";
             }
 
             case SetListFilterProblem.Malformed: {

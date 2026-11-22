@@ -160,6 +160,11 @@ export class Router {
 
                         break;
 
+                    case "reorderSetList":
+                        await this.setListRoutes.handleReorderSetList(req, res);
+
+                        break;
+
                     case "deleteSetList":
                         await this.setListRoutes.handleDeleteSetList(req, res);
 

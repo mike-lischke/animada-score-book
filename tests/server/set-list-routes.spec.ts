@@ -15,12 +15,11 @@ import type { IServerConfig } from "../../src/server/config.js";
 import { DatabaseEngine } from "../../src/server/database.js";
 import { SetListRoutes } from "../../src/server/SetListRoutes.js";
 import {
-    FakeSetListDatabase, foreignGroupId, foreignUserId, globalTagId, memberGroupId, memberTagId, ownerUserId,
-    scoreId, unknownTagId, worldGroupId,
+    FakeSetListDatabase, foreignGroupId, foreignTagId, foreignUserId, globalTagId, memberGroupId, memberTagId,
+    otherScoreId, ownerUserId, scoreId, unknownTagId, worldGroupId,
 } from "./set-list-fake-database.js";
 
 const memberUserId = 8;
-const otherScoreId = 9;
 
 const config: IServerConfig = {
     host: "127.0.0.1",
@@ -123,6 +122,22 @@ const seedList = (database: FakeSetListDatabase, filters: number[][],
     database.seedGrants(EntityType.SetList, id, owner, grants);
 
     return id;
+};
+
+/**
+ * @param database The fake the test works with.
+ * @param listId The list whose order is read.
+ *
+ * @returns The stored score ids of the list, in their stored order.
+ */
+const storedOrder = (database: FakeSetListDatabase, listId: number): number[] => {
+    return database.setListScores.filter((entry) => {
+        return entry.setListId === listId;
+    }).sort((left, right) => {
+        return left.position - right.position;
+    }).map((entry) => {
+        return entry.scoreId;
+    });
 };
 
 describe("set list routes — creating", () => {
@@ -524,5 +539,242 @@ describe("set list routes — group login", () => {
 
         expect(captured.status).toBe(200);
         expect(database.setLists[0].name).toBe("Bateria");
+    });
+
+    it("lets a writable group grant reorder the list", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]], [{ groupId: memberGroupId, writable: true }]);
+        database.seedGrants(EntityType.Score, scoreId, ownerUserId, [memberGroupId]);
+        database.seedGrants(EntityType.Score, otherScoreId, ownerUserId, [memberGroupId]);
+        database.setListScores.push(
+            { setListId: listId, scoreId: otherScoreId, position: 1 },
+            { setListId: listId, scoreId, position: 2 },
+        );
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createGroupRequest({
+            id: listId, revision: 1, order: [scoreId, otherScoreId],
+        }, memberGroupId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, listId)).toEqual([scoreId, otherScoreId]);
+    });
+});
+
+describe("set list routes — extra filter", () => {
+    it("returns the intersection of the saved and the extra filter", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+        database.scoreTags.push({ scoreId, tagId: memberTagId });
+        database.setListScores.push(
+            { setListId: listId, scoreId: otherScoreId, position: 1 },
+            { setListId: listId, scoreId, position: 2 },
+        );
+
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(
+            createRequest({ groups: [[memberTagId]] }, ownerUserId, `/api?action=getSetList&id=${listId}`), res,
+        );
+
+        expect(captured.status).toBe(200);
+        expect((captured.body as { scores: number[]; }).scores).toEqual([scoreId]);
+        expect(storedOrder(database, listId)).toEqual([otherScoreId, scoreId]);
+    });
+
+    it("reports an extra filter that names a tag no longer known", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(
+            createRequest({ groups: [[unknownTagId]] }, ownerUserId, `/api?action=getSetList&id=${listId}`), res,
+        );
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("unavailable-tag");
+    });
+
+    it("refuses an extra filter with a tag the caller cannot use", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(
+            createRequest({ groups: [[foreignTagId]] }, memberUserId, `/api?action=getSetList&id=${listId}`), res,
+        );
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("not-usable");
+    });
+
+    it("reports a deleted saved tag instead of a narrower list", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[memberTagId]]);
+        database.tags.splice(database.tags.findIndex((tag) => {
+            return tag.id === memberTagId;
+        }), 1);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(
+            createRequest({}, ownerUserId, `/api?action=getSetList&id=${listId}`), res,
+        );
+
+        const body = captured.body as { filterProblem: string; scores: number[]; };
+
+        expect(captured.status).toBe(200);
+        expect(body.filterProblem).toBe("unavailable-tag");
+        expect(body.scores).toEqual([]);
+    });
+});
+
+describe("set list routes — reordering", () => {
+    it("stores the new order and bumps the revision", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+        database.setListScores.push(
+            { setListId: listId, scoreId: otherScoreId, position: 1 },
+            { setListId: listId, scoreId, position: 2 },
+        );
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [scoreId, otherScoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect((captured.body as { revision: number; }).revision).toBe(2);
+        expect(database.setLists[0].revision).toBe(2);
+        expect(storedOrder(database, listId)).toEqual([scoreId, otherScoreId]);
+    });
+
+    it("keeps the places of scores the caller cannot see", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+        database.scores.push({ id: 11, name: "Coco" });
+        database.scoreTags.push({ scoreId: 11, tagId: globalTagId });
+        database.seedGrants(EntityType.Score, 11, ownerUserId);
+        database.seedGrants(EntityType.Score, otherScoreId, foreignUserId);
+        database.setListScores.push(
+            { setListId: listId, scoreId: otherScoreId, position: 1 },
+            { setListId: listId, scoreId, position: 2 },
+            { setListId: listId, scoreId: 11, position: 3 },
+        );
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [11, scoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, listId)).toEqual([otherScoreId, 11, scoreId]);
+    });
+
+    it("keeps the place of a score that stopped matching", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+        database.setListScores.push(
+            { setListId: listId, scoreId, position: 1 },
+            { setListId: listId, scoreId: otherScoreId, position: 2 },
+        );
+        database.scoreTags.splice(database.scoreTags.findIndex((entry) => {
+            return entry.scoreId === otherScoreId;
+        }), 1);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [scoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, listId)).toEqual([scoreId, otherScoreId]);
+    });
+
+    it("refuses an order by a member who may only read the list", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [],
+        }, memberUserId), res);
+
+        expect(captured.status).toBe(403);
+        expect(database.setLists[0].revision).toBe(1);
+    });
+
+    it("refuses an order that builds on an outdated revision", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+        database.setLists[0].revision = 4;
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [scoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { revision: number; }).revision).toBe(4);
+        expect(database.setLists[0].revision).toBe(4);
+    });
+
+    it("refuses an order that leaves out a visible score", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+        database.setListScores.push(
+            { setListId: listId, scoreId: otherScoreId, position: 1 },
+            { setListId: listId, scoreId, position: 2 },
+        );
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [scoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect(database.setLists[0].revision).toBe(1);
+        expect(storedOrder(database, listId)).toEqual([otherScoreId, scoreId]);
+    });
+
+    it("refuses an order that names a score twice", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[globalTagId]]);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [scoreId, scoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(400);
+        expect(database.setLists[0].revision).toBe(1);
+    });
+
+    it("refuses to reorder a list whose saved tag is gone", async () => {
+        const { database, routes } = setup();
+        const listId = seedList(database, [[memberTagId]]);
+        database.tags.splice(database.tags.findIndex((tag) => {
+            return tag.id === memberTagId;
+        }), 1);
+
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: listId, revision: 1, order: [],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("unavailable-tag");
+        expect(database.setLists[0].revision).toBe(1);
     });
 });

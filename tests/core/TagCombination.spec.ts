@@ -45,6 +45,48 @@ describe("TagCombination — equals", () => {
     });
 });
 
+describe("TagCombination — combine", () => {
+    it("treats the empty combination as the identity", () => {
+        expect(TagCombination.combine(TagCombination.empty, { groups: [[1], [2]] }))
+            .toEqual({ groups: [[1], [2]] });
+        expect(TagCombination.combine({ groups: [[1], [2]] }, TagCombination.empty))
+            .toEqual({ groups: [[1], [2]] });
+    });
+
+    it("turns every pair of OR groups into one AND group", () => {
+        expect(TagCombination.combine({ groups: [[1], [2]] }, { groups: [[3]] }))
+            .toEqual({ groups: [[1, 3], [2, 3]] });
+    });
+
+    it("keeps the AND groups of both sides", () => {
+        expect(TagCombination.combine({ groups: [[1], [2]] }, { groups: [[2, 3]] }))
+            .toEqual({ groups: [[1, 2, 3], [2, 3]] });
+    });
+});
+
+describe("TagCombination — matches", () => {
+    it("matches every score for the empty combination", () => {
+        expect(TagCombination.matches(TagCombination.empty, new Set<number>())).toBe(true);
+    });
+
+    it("requires every tag of one AND group", () => {
+        expect(TagCombination.matches({ groups: [[1, 2]] }, new Set([1, 2]))).toBe(true);
+        expect(TagCombination.matches({ groups: [[1, 2]] }, new Set([1]))).toBe(false);
+    });
+
+    it("accepts a score that satisfies any one of the OR groups", () => {
+        const combination = { groups: [[1, 2], [3]] };
+
+        expect(TagCombination.matches(combination, new Set([1, 2]))).toBe(true);
+        expect(TagCombination.matches(combination, new Set([3, 9]))).toBe(true);
+        expect(TagCombination.matches(combination, new Set([1]))).toBe(false);
+    });
+
+    it("ignores the tags a score carries in addition", () => {
+        expect(TagCombination.matches({ groups: [[1]] }, new Set([1, 2, 3]))).toBe(true);
+    });
+});
+
 describe("TagCombination — restrict", () => {
     it("removes the ids the user cannot use", () => {
         const restricted = TagCombination.restrict({ groups: [[1, 2], [3]] }, new Set([1]));

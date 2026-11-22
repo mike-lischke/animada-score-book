@@ -49,6 +49,53 @@ export class TagCombination {
     }
 
     /**
+     * @param left The first combination.
+     * @param right The second combination.
+     *
+     * @returns The combination that matches only what both match, keeping the OR-of-AND shape: every pair of an
+     * AND group from each side becomes one AND group of the result. An empty combination matches everything, so it
+     * is the identity here.
+     */
+    public static combine(left: ITagCombination, right: ITagCombination): ITagCombination {
+        const leftGroups = TagCombination.normalize(left).groups;
+        const rightGroups = TagCombination.normalize(right).groups;
+
+        if (leftGroups.length === 0) {
+            return { groups: rightGroups };
+        }
+
+        if (rightGroups.length === 0) {
+            return { groups: leftGroups };
+        }
+
+        const groups: number[][] = [];
+        for (const leftGroup of leftGroups) {
+            for (const rightGroup of rightGroups) {
+                groups.push([...leftGroup, ...rightGroup]);
+            }
+        }
+
+        return TagCombination.normalize({ groups });
+    }
+
+    /**
+     * @param combination The combination to test.
+     * @param tagIds The tags one score carries.
+     *
+     * @returns Whether the score satisfies the combination. An empty combination matches every score, otherwise
+     * one of its AND groups has to be fully contained in the score's tags.
+     */
+    public static matches(combination: ITagCombination, tagIds: ReadonlySet<number>): boolean {
+        const groups = TagCombination.normalize(combination).groups;
+
+        return groups.length === 0 || groups.some((group) => {
+            return group.every((id) => {
+                return tagIds.has(id);
+            });
+        });
+    }
+
+    /**
      * Drops the tag ids the current user cannot use, which happens for a stored combination when a tag was deleted
      * or belongs to a group the user left.
      *

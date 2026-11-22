@@ -5,7 +5,7 @@
 
 import { Auth } from "../../src/server/Auth.js";
 import type {
-    DbRow, IDatabaseAdapter, IDbExecuteResult, ITestConnectionResult,
+    DbRow, IDatabaseAdapter, IDbExecuteResult, IDbStatement, ITestConnectionResult,
 } from "../../src/server/database.js";
 import type { ITagRow } from "../../src/server/TagAccess.js";
 
@@ -20,9 +20,17 @@ export const foreignUserId = 4;
 
 export const globalTagId = 5;
 export const memberTagId = 6;
+export const foreignTagId = 21;
 export const unknownTagId = 99;
 
 export const scoreId = 7;
+export const otherScoreId = 9;
+
+/** One tag assignment of a score, as the set-list membership reads it. */
+export interface IScoreTagFixture extends DbRow {
+    scoreId: number;
+    tagId: number;
+}
 
 export interface ISetListRowFixture extends DbRow {
     id: number;
@@ -49,13 +57,19 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     public readonly tags: ITagRow[] = [
         { id: globalTagId, name: "Groovy", colorIndex: 1, groupId: null, systemKey: null },
         { id: memberTagId, name: "Bateria Internal", colorIndex: 2, groupId: memberGroupId, systemKey: null },
+        { id: foreignTagId, name: "Fremd Internal", colorIndex: 3, groupId: foreignGroupId, systemKey: null },
     ];
 
     public readonly setLists: ISetListRowFixture[] = [];
 
     public readonly setListScores: Array<{ setListId: number; scoreId: number; position: number; }> = [];
 
-    public readonly scores = [{ id: scoreId, name: "Samba" }];
+    public readonly scores = [{ id: scoreId, name: "Samba" }, { id: otherScoreId, name: "Bateria" }];
+
+    public readonly scoreTags: IScoreTagFixture[] = [
+        { scoreId, tagId: globalTagId },
+        { scoreId: otherScoreId, tagId: globalTagId },
+    ];
 
     /** Owner per entity, keyed by `<entityType>:<entityId>`. */
     public readonly owners = new Map<string, number | null>();
@@ -115,7 +129,11 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
         return Promise.resolve();
     }
 
-    public executeTransaction(): Promise<void> {
+    public executeTransaction(statements: IDbStatement[]): Promise<void> {
+        for (const statement of statements) {
+            this.apply(statement.sql, statement.params ?? []);
+        }
+
         return Promise.resolve();
     }
 
@@ -254,6 +272,18 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             });
         }
 
+        if (sql.includes("FROM score_tags")) {
+            return this.scoreTags.map((entry) => {
+                return { scoreId: entry.scoreId, tagId: entry.tagId };
+            });
+        }
+
+        if (sql.includes("FROM scores")) {
+            return this.scores.map((score) => {
+                return { id: score.id };
+            });
+        }
+
         if (sql.includes("FROM set_lists WHERE id = ?")) {
             return this.setLists.filter((entry) => {
                 return entry.id === Number(params[0]);
@@ -304,6 +334,41 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             return 1;
         }
 
+        if (sql.startsWith("DELETE FROM set_list_scores")) {
+            const setListId = Number(params[0]);
+            const before = this.setListScores.length;
+
+            for (let index = this.setListScores.length - 1; index >= 0; index--) {
+                if (this.setListScores[index].setListId === setListId) {
+                    this.setListScores.splice(index, 1);
+                }
+            }
+
+            return before - this.setListScores.length;
+        }
+
+        if (sql.startsWith("INSERT INTO set_list_scores") || sql.startsWith("INSERT IGNORE INTO set_list_scores")) {
+            let added = 0;
+
+            for (let index = 0; index + 2 < params.length; index += 3) {
+                const setListId = Number(params[index]);
+                const scoreId = Number(params[index + 1]);
+                const position = Number(params[index + 2]);
+                const known = this.setListScores.some((entry) => {
+                    return entry.setListId === setListId && entry.scoreId === scoreId;
+                });
+
+                if (!known && this.scores.some((score) => {
+                    return score.id === scoreId;
+                })) {
+                    this.setListScores.push({ setListId, scoreId, position });
+                    added++;
+                }
+            }
+
+            return added;
+        }
+
         if (sql.startsWith("DELETE FROM set_lists")) {
             const index = this.setLists.findIndex((entry) => {
                 return entry.id === Number(params[0]);
@@ -337,7 +402,7 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
                 return entry.id === Number(params[0]);
             });
 
-            if (!list) {
+            if (!list || (params.length > 1 && list.revision !== Number(params[1]))) {
                 return 0;
             }
 
