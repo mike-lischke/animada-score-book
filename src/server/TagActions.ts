@@ -7,6 +7,7 @@ import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { NameText } from "../core/NameText.js";
 import { ScoreLineup } from "../core/ScoreLineup.js";
+import { TagCombination } from "../core/TagCombination.js";
 import { TagPalette } from "../core/TagPalette.js";
 import { ScoreLineupStatus, type IScoreLineup } from "../core/DatabaseTypes.js";
 import { AccessLevel, EntityType, type ITokenPayload } from "./Auth.js";
@@ -32,17 +33,22 @@ interface ITagJson {
 }
 
 /**
+ * What reading a requested combination yields: the groups the backend can use, and the tag ids it had to leave
+ * out. A filter is never widened silently, so a dropped id turns the request into an explicit rejection.
+ */
+interface IFilterReading {
+    groups: number[][];
+
+    /** Tag ids the caller cannot use, whether they are unknown or belong to a scope the caller has no access to. */
+    ignoredTagIds: number[];
+}
+
+/**
  * The handlers behind the tag and score-list actions. `Router` dispatches to them by `?action=`, so this class is
  * the tag counterpart of `ScoreRoutes`: it serves the tag catalogue, the assignments and the score list that a tag
  * combination matches. The rules themselves live in `TagAccess`; these handlers enforce them and build the JSON.
  */
 export class TagActions {
-    /** The most AND groups one combination may hold. */
-    private static readonly maxFilterGroups = 20;
-
-    /** The most tags one AND group may hold. */
-    private static readonly maxFilterTagsPerGroup = 32;
-
     public constructor(private readonly ctx: RequestContext) { }
 
     /**
@@ -346,16 +352,27 @@ export class TagActions {
      */
     public async handleListScores(req: IncomingMessage, res: ServerResponse): Promise<void> {
         const body = await this.ctx.readJsonBody(req);
-        const groups = await this.effectiveFilterGroups(req, body.groups);
+        const reading = await this.effectiveFilterGroups(req, body.groups);
 
-        if (groups === undefined) {
+        if (reading === undefined) {
             this.ctx.sendError(res, "Invalid tag combination");
 
             return;
         }
 
+        // A tag the caller cannot use would narrow the request. Answering with the scores that remain would show a
+        // wider list than asked for, so the request is rejected instead.
+        if (reading.ignoredTagIds.length > 0) {
+            this.ctx.sendJson(res, {
+                error: "The filter names tags that are not available.",
+                ignoredTagIds: reading.ignoredTagIds,
+            }, 409);
+
+            return;
+        }
+
         const user = this.ctx.getAuthUser(req);
-        const scores = await this.readableScores(user, groups);
+        const scores = await this.readableScores(user, reading.groups);
 
         if (scores.length === 0) {
             this.ctx.sendJson(res, { scores: [] });
@@ -548,12 +565,12 @@ export class TagActions {
      *
      * @returns The effective groups, or undefined when the request is not a valid combination.
      */
-    private async effectiveFilterGroups(req: IncomingMessage, rawGroups: unknown): Promise<number[][] | undefined> {
+    private async effectiveFilterGroups(req: IncomingMessage, rawGroups: unknown): Promise<IFilterReading | undefined> {
         if (rawGroups === undefined) {
-            return [];
+            return { groups: [], ignoredTagIds: [] };
         }
 
-        if (!Array.isArray(rawGroups) || rawGroups.length > TagActions.maxFilterGroups) {
+        if (!Array.isArray(rawGroups) || rawGroups.length > TagCombination.maxGroups) {
             return undefined;
         }
 
@@ -563,15 +580,26 @@ export class TagActions {
         }));
 
         const groups: number[][] = [];
+        const ignoredTagIds: number[] = [];
         for (const rawGroup of rawGroups) {
-            if (!Array.isArray(rawGroup) || rawGroup.length > TagActions.maxFilterTagsPerGroup) {
+            if (!Array.isArray(rawGroup) || rawGroup.length > TagCombination.maxTagsPerGroup) {
                 return undefined;
             }
 
-            const group = rawGroup.map((value) => {
+            const ids = rawGroup.map((value) => {
                 return Number(value);
             }).filter((value) => {
-                return Number.isInteger(value) && usableIds.has(value);
+                return Number.isInteger(value) && value > 0;
+            });
+
+            for (const tagId of ids) {
+                if (!usableIds.has(tagId)) {
+                    ignoredTagIds.push(tagId);
+                }
+            }
+
+            const group = ids.filter((value) => {
+                return usableIds.has(value);
             });
 
             if (group.length > 0) {
@@ -579,7 +607,7 @@ export class TagActions {
             }
         }
 
-        return groups;
+        return { groups, ignoredTagIds: Array.from(new Set(ignoredTagIds)) };
     }
 
     /**

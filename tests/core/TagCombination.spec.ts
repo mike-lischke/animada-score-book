@@ -114,6 +114,10 @@ describe("TagCombination — caption", () => {
         expect(TagCombination.caption({ groups: [[1, 2], [3]] }, tags)).toBe("(Caixa AND Surdo) OR Tamborim");
     });
 
+    it("keeps the order the combination carries, so the caption reads like its rows", () => {
+        expect(TagCombination.caption({ groups: [[3], [1]] }, tags)).toBe("Tamborim OR Caixa");
+    });
+
     it("leaves out ids that no known tag explains", () => {
         expect(TagCombination.caption({ groups: [[1, 9]] }, tags)).toBe("Caixa");
     });

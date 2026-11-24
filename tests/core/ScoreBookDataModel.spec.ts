@@ -10,8 +10,9 @@ import { Arrangement } from "../../src/core/Arrangement.js";
 import { ScoreLineupStatus } from "../../src/core/DatabaseTypes.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
-import { ScoreBookDataModel, SbDmEntityType, type ISbDmScore, type ISbDmTrackPiece }
-    from "../../src/core/ScoreBookDataModel.js";
+import {
+    ScoreBookDataModel, ScoreQueryResult, SbDmEntityType, type ISbDmScore, type ISbDmTrackPiece,
+} from "../../src/core/ScoreBookDataModel.js";
 import { TagCombination } from "../../src/core/TagCombination.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
 import { StepGrid } from "../../src/core/StepGrid.js";
@@ -2502,6 +2503,58 @@ describe("ScoreBookDataModel — tags", { concurrent: false }, () => {
         expect(model.scores[0]).toBe(score);
         expect(score.name).toBe("B");
         expect(score.tagIds).toEqual([]);
+    });
+
+    it("answers a filter the backend refuses with the tags it could not use", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, { scores: [{ id: 1, name: "A", tagIds: [5], perm }] }))
+            .mockResolvedValueOnce(responseOf(409, {
+                error: "The filter names tags that are not available.",
+                ignoredTagIds: [9],
+            }));
+
+        await model.queryScores(TagCombination.empty);
+        const listed = model.scores;
+
+        const outcome = await model.queryScores({ groups: [[9]] });
+
+        expect(outcome.result).toBe(ScoreQueryResult.InvalidFilter);
+        expect(outcome.ignoredTagIds).toEqual([9]);
+
+        // A refused filter leaves the list as it was instead of showing the wider answer the backend would have.
+        expect(model.scores).toBe(listed);
+    });
+
+    it("answers a query the backend did not serve as failed", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(responseOf(500, { error: "Database is gone" }));
+
+        const outcome = await model.queryScores({ groups: [[5]] });
+
+        expect(outcome.result).toBe(ScoreQueryResult.Failed);
+    });
+
+    it("drops the answer of a query a newer one replaced", async () => {
+        const pending: Array<(response: Response) => void> = [];
+
+        vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+            return new Promise<Response>((resolve) => {
+                pending.push(resolve);
+            });
+        });
+
+        const older = model.queryScores({ groups: [[5]] });
+        const newer = model.queryScores({ groups: [[7]] });
+
+        pending[1](responseOf(200, { scores: [{ id: 2, name: "Newer", tagIds: [7], perm }] }));
+        await newer;
+
+        pending[0](responseOf(200, { scores: [{ id: 1, name: "Older", tagIds: [5], perm }] }));
+        const outcome = await older;
+
+        expect(outcome.result).toBe(ScoreQueryResult.Superseded);
+        expect(model.scores.map((score) => {
+            return score.name;
+        })).toEqual(["Newer"]);
     });
 
     it("repeats the active combination when a save refreshes the list", async () => {

@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { TagCombination } from "../../src/core/TagCombination.js";
 import { Auth, EntityType } from "../../src/server/Auth.js";
 import { SetListAccess, SetListFilterProblem } from "../../src/server/SetListAccess.js";
 import {
@@ -43,7 +44,7 @@ describe("set list access — reading a combination", () => {
     });
 
     it("rejects a combination beyond the group limit", () => {
-        const groups = Array.from({ length: SetListAccess.maxFilterGroups + 1 }, () => {
+        const groups = Array.from({ length: TagCombination.maxGroups + 1 }, () => {
             return [5];
         });
 
@@ -51,7 +52,7 @@ describe("set list access — reading a combination", () => {
     });
 
     it("rejects a group beyond the tag limit", () => {
-        const group = Array.from({ length: SetListAccess.maxFilterTagsPerGroup + 1 }, (value, index) => {
+        const group = Array.from({ length: TagCombination.maxTagsPerGroup + 1 }, (value, index) => {
             return index + 1;
         });
 

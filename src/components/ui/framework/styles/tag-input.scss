@@ -41,8 +41,19 @@
     .tag-input-close-button {
         z-index: 1;
         justify-self: center;
-        height: 16px;
-        width: 16px;
+        height: 12px;
+        width: 12px;
+        min-height: 12px;
+        padding: 0;
+        border: none;
+
+        /* The global icon minimum of 16px would let the icon spill over the button. */
+        .icon {
+            min-width: 0;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+        }
     }
 
     .tag-input-entry {
@@ -67,6 +78,44 @@
     .tag-input-completion-owner {
         margin-left: 6px;
         font-size: 10px;
+        opacity: 0.6;
+    }
+}
+
+/* The pill list a click into the field opens: every tag the field can still take, all at once. It lies in a popup,
+   which renders outside the field, hence not nested in it. The popup does not clip, so its arrow stays visible; the
+   pill list scrolls instead. */
+.popup.tag-input-picker-popup {
+    overflow: visible;
+
+    .tag-input-picker {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-height: min(300px, calc(var(--popup-viewport-height, 100dvh) - 40px));
+        overflow: auto;
+    }
+
+    .tag-input-picker-pill {
+        flex: 0 0 auto;
+        padding: 2px 8px;
+        border: 1px solid var(--color-base-300);
+        border-radius: 999px;
+
+        background-color: var(--color-base-200);
+        color: var(--color-base-content);
+        font-size: 9pt;
+        cursor: pointer;
+
+        &:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+    }
+
+    .tag-input-picker-owner {
+        margin-left: 6px;
+        font-size: 9px;
         opacity: 0.6;
     }
 }

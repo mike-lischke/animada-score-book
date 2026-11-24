@@ -180,9 +180,6 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         const { open } = this.state;
 
         if (!open) {
-            const activeElement = document.activeElement;
-            this.previouslyFocused = activeElement instanceof HTMLElement ? activeElement : undefined;
-
             const activeOptions: IPortalOptions = {
                 closeOnEscape: true,
                 closeOnPortalClick: false,
@@ -190,6 +187,13 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 trapFocus: true,
                 ...options,
             };
+
+            // Only a layer that takes the focus gives it back. A layer without the trap leaves the focus where it
+            // is, so closing it must not pull the focus back from wherever the user moved it meanwhile.
+            const activeElement = document.activeElement;
+            this.previouslyFocused = activeOptions.trapFocus && activeElement instanceof HTMLElement
+                ? activeElement
+                : undefined;
 
             this.setState({ open: true, options: activeOptions }, () => {
                 Portal.portalStack.push(this);

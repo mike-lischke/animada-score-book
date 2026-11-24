@@ -101,30 +101,113 @@
         }
     }
 
-    .score-library-selector {
-        flex: 0 0 auto;
-        align-items: center;
-        gap: 2px;
-
-        .score-library-tag-selector {
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-
-        /* The drag handle of the tag combination. */
-        .score-library-drag-handle {
-            display: inline-flex;
-            flex: 0 0 auto;
-            align-items: center;
-            color: var(--color-base-content);
-            opacity: 0.4;
-        }
+    .score-library-header-actions .btn.imageOnly,
+    .score-filter-row-actions .btn.imageOnly {
+        box-sizing: border-box;
+        width: 24px;
+        min-width: 24px;
+        height: 24px;
+        min-height: 24px;
+        padding: 0;
+        margin: 0;
     }
 
     .score-library-sort {
+        align-self: flex-end;
+        gap: 8px;
+
+        > .label {
+            font-size: 12px;
+        }
+
+        .btn {
+            box-sizing: border-box;
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            min-height: 24px;
+            padding: 0;
+        }
+
+        .icon {
+            color: inherit;
+        }
+    }
+
+    /* The manual tag filter: its summary and one row per AND group. The rows are OR-ed. */
+    .score-filter {
         flex: 0 0 auto;
-        align-items: center;
-        justify-content: flex-end;
+        gap: 4px;
+    }
+
+    .score-filter-summary {
+        gap: 6px;
+        min-width: 0;
+        flex-wrap: wrap;
+        margin: 4px 0;
+
+        .score-filter-icon {
+            flex: 0 0 auto;
+            font-size: 18px;
+            color: var(--color-primary);
+        }
+
+        .score-filter-count {
+            flex: 0 0 auto;
+            font-size: 10pt;
+            font-weight: 600;
+        }
+
+        .score-filter-reset {
+            flex: 0 0 auto;
+            align-items: center;
+            gap: 4px;
+            height: auto;
+            margin: 0 0 0 auto;
+            padding: 2px 8px;
+            border: none;
+            background: none;
+            color: var(--color-primary);
+            font-size: 10pt;
+        }
+    }
+
+    .score-filter-row {
+        gap: 2px;
+        min-width: 0;
+    }
+
+    /* The filter keeps 4px between its children, so two rows add the rest of their 8px gap. */
+    .score-filter-row + .score-filter-row {
+        margin-top: 4px;
+    }
+
+    .score-filter-line {
+        gap: 8px;
+        min-width: 0;
+
+        .score-filter-tags {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+    }
+
+    /* The two buttons that follow their row: one appends a row below it, the other removes the row. */
+    .score-filter-row-actions {
+        flex: 0 0 auto;
+        align-self: flex-start;
+        gap: 4px;
+
+        .btn.imageOnly {
+            width: 30px;
+            min-width: 30px;
+        }
+    }
+
+    .score-filter-missing {
+        padding-left: 4px;
+        font-size: 9pt;
+        color: var(--color-warning);
     }
 
     /* The area below the score list that holds the favourite combinations. */
@@ -149,6 +232,37 @@
     gap: 8px;
     padding-right: 4px;
 
+    /* Loading, a failed request and an unusable filter each say what happened instead of showing an empty list. */
+    .score-list-loading {
+        gap: 8px;
+        padding: 8px 4px;
+        font-size: 11pt;
+        opacity: 0.8;
+    }
+
+    .score-list-problem {
+        gap: 6px;
+        padding: 8px 4px;
+        color: var(--color-base-content);
+
+        .label {
+            font-size: 11pt;
+        }
+
+        .score-filter-reset {
+            align-self: flex-start;
+            align-items: center;
+            gap: 4px;
+            height: auto;
+            margin: 0;
+            padding: 2px 8px;
+            border: none;
+            background: none;
+            color: var(--color-primary);
+            font-size: 10pt;
+        }
+    }
+
     .score-list-empty {
         margin: 4px 0 0 4px;
         opacity: 0.7;
@@ -161,7 +275,6 @@
         border: 1px solid var(--color-base-300);
         border-radius: 12px;
         background-color: var(--color-base-100);
-        box-shadow: 0 1px 4px var(--shadow-color);
         user-select: none;
 
         &:hover {
@@ -177,7 +290,13 @@
 
     .score-card-icon {
         flex: 0 0 auto;
-        font-size: 26px;
+        align-self: flex-start;
+        box-sizing: border-box;
+        width: 40px;
+        height: 40px;
+        padding: 7px;
+        border-radius: 50%;
+        background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
         color: var(--color-primary);
     }
 
@@ -195,8 +314,8 @@
 
     .score-card-position {
         flex: 0 0 auto;
-        padding: 0 4px;
-        border-radius: 4px;
+        padding: 0 8px;
+        border-radius: 999px;
         background-color: var(--color-base-200);
         font-size: 9pt;
         opacity: 0.8;

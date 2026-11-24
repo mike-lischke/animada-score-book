@@ -10,6 +10,12 @@ import type { ITagCombination, ITagInfo } from "./types/tags.js";
  * stored, compared or sent to the backend.
  */
 export class TagCombination {
+    /** The most AND groups a combination may hold. The backend rejects a request that names more. */
+    public static readonly maxGroups = 20;
+
+    /** The most tags one AND group may hold. The backend rejects a request that names more. */
+    public static readonly maxTagsPerGroup = 32;
+
     /** The combination that matches every score. */
     public static readonly empty: ITagCombination = { groups: [] };
 
@@ -137,14 +143,15 @@ export class TagCombination {
      * @param tags The known tags, from which the captions are resolved.
      *
      * @returns A readable caption like `Caixa AND Surdo OR Tamborim`, with the groups that hold more than one tag
-     * in parentheses. Ids without a known tag are left out.
+     * in parentheses. The order is the one the combination carries, so a caption reads like the rows it describes.
+     * Ids without a known tag are left out.
      */
     public static caption(combination: ITagCombination, tags: readonly ITagInfo[]): string {
         const namesById = new Map(tags.map((tag) => {
             return [tag.id, tag.name] as [number, string];
         }));
 
-        const groups = TagCombination.normalize(combination).groups.map((group) => {
+        const groups = combination.groups.map((group) => {
             return group.map((id) => {
                 return namesById.get(id);
             }).filter((name) => {

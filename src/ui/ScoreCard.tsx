@@ -194,16 +194,16 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
                         >
                             <span className="score-card-name" title={score.name}>{score.name}</span>
                         </Button>
+                        {indicator}
+                        <Container className="score-card-actions" orientation={Orientation.LeftToRight}>
+                            <Menu
+                                icon={UIIcon.KebabVertical}
+                                items={menuItems}
+                                onItemClick={this.handleMenuItemClick}
+                            />
+                        </Container>
                     </Container>
                     {chips}
-                </Container>
-                {indicator}
-                <Container className="score-card-actions" orientation={Orientation.LeftToRight}>
-                    <Menu
-                        icon={UIIcon.KebabVertical}
-                        items={menuItems}
-                        onItemClick={this.handleMenuItemClick}
-                    />
                 </Container>
             </Container>
         );

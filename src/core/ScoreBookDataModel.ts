@@ -669,6 +669,27 @@ export type ScoreBookDataModelEntry =
     | ISbDmInstrumentImage
     ;
 
+/** What a score-list query did with its response. */
+export enum ScoreQueryResult {
+    /** The response became the current list. */
+    Applied,
+
+    /** A newer query had started while this one ran, so its answer was dropped instead of replacing the list. */
+    Superseded,
+
+    /** The filter names tags the caller cannot use, so no list was shown: a narrower result must not look wider. */
+    InvalidFilter,
+
+    /** The backend did not answer, or refused the request. */
+    Failed,
+}
+
+/** The outcome of a score-list query, with the tag ids a filter named that could not be used. */
+export interface IScoreQueryOutcome {
+    result: ScoreQueryResult;
+    ignoredTagIds: number[];
+}
+
 /**
  * A data model to share score book data between components.
  */
@@ -954,6 +975,9 @@ export class ScoreBookDataModel {
      */
     private scoreListCombination: ITagCombination = TagCombination.empty;
 
+    /** Counts the score-list queries, so only the answer to the latest one may replace the list. */
+    private scoreQueryCount = 0;
+
     /**
      * The tags the current new arrangement starts with. They cannot be assigned before the arrangement has a score
      * row, so they wait here until the first save created one.
@@ -961,7 +985,7 @@ export class ScoreBookDataModel {
     private newArrangementTagIds: number[] = [];
 
     public async initialize(): Promise<void> {
-        const promises: Array<Promise<void>> = [
+        const promises: Array<Promise<unknown>> = [
             this.loadSoundLib(),
             this.loadInstruments(),
             this.loadNumberSounds(),
@@ -3346,24 +3370,52 @@ export class ScoreBookDataModel {
 
     /**
      * Rebuilds the score list from the backend for a tag combination. An empty combination lists every score the
-     * caller can read.
+     * caller can read. Only the answer to the newest query is applied, so a slow response cannot replace a list that
+     * a later filter already produced.
      *
      * @param combination The tags to filter by.
+     *
+     * @returns What became of the response.
      */
-    public async queryScores(combination: ITagCombination): Promise<void> {
-        this.scoreListCombination = TagCombination.normalize(combination);
+    public async queryScores(combination: ITagCombination): Promise<IScoreQueryOutcome> {
+        const normalized = TagCombination.normalize(combination);
+        this.scoreListCombination = normalized;
+
+        const token = ++this.scoreQueryCount;
 
         const res = await this.fetchApi("/api?action=listScores", {
             method: "POST",
             headers: { Accept: "application/json" },
-            body: JSON.stringify({ groups: combination.groups }),
-        });
+            body: JSON.stringify({ groups: normalized.groups }),
+        }, true, true);
 
         if (!res) {
-            return;
+            return ScoreBookDataModel.queryOutcome(token, this.scoreQueryCount, ScoreQueryResult.Failed);
+        }
+
+        if (res.status === 409) {
+            let refusal: { ignoredTagIds?: number[]; } = {};
+            try {
+                refusal = await res.json() as { ignoredTagIds?: number[]; };
+            } catch {
+                // A refusal without a readable body still means the filter names tags that cannot be used.
+            }
+
+            return ScoreBookDataModel.queryOutcome(token, this.scoreQueryCount, ScoreQueryResult.InvalidFilter,
+                refusal.ignoredTagIds ?? []);
+        }
+
+        if (!res.ok) {
+            return ScoreBookDataModel.queryOutcome(token, this.scoreQueryCount, ScoreQueryResult.Failed);
         }
 
         const data = await res.json() as { scores?: IScoreListEntry[]; };
+
+        // A newer query started while this response was on its way; its answer is the one the user asked for.
+        if (token !== this.scoreQueryCount) {
+            return { result: ScoreQueryResult.Superseded, ignoredTagIds: [] };
+        }
+
         const existing = new Map(this.data.scores.map((score) => {
             return [score.id, score] as [number, ISbDmScore];
         }));
@@ -3398,6 +3450,8 @@ export class ScoreBookDataModel {
         });
 
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.LibraryRefreshed);
+
+        return { result: ScoreQueryResult.Applied, ignoredTagIds: [] };
     }
 
     /**
@@ -3722,6 +3776,23 @@ export class ScoreBookDataModel {
         await this.queryScores(this.scoreListCombination);
 
         return content;
+    }
+
+    /**
+     * @param token The query that produced an answer.
+     * @param current The newest query.
+     * @param result What the answer means.
+     * @param ignoredTagIds The tag ids the filter named that could not be used.
+     *
+     * @returns The outcome, marked as superseded when a newer query had already started.
+     */
+    private static queryOutcome(token: number, current: number, result: ScoreQueryResult,
+        ignoredTagIds: number[] = []): IScoreQueryOutcome {
+        if (token !== current) {
+            return { result: ScoreQueryResult.Superseded, ignoredTagIds: [] };
+        }
+
+        return { result, ignoredTagIds };
     }
 
     /**

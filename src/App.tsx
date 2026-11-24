@@ -1933,7 +1933,11 @@ export class App extends UIComponent<{}, IAppState> {
         const { editMode } = this.state;
 
         if (action === "new") {
-            // The drawer knows the active AND group, so a score created from a filtered list starts with its tags.
+            await new Promise<void>((resolve) => {
+                this.setState({ libraryOpen: false }, resolve);
+            });
+
+            // A score created from a filtered list starts with the active AND group's tags.
             await this.handleNewSong(tagIds ?? []);
 
             return true;

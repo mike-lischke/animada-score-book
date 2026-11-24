@@ -11,7 +11,8 @@ import { TagPalette } from "../../../core/TagPalette.js";
 import { Button } from "./Button.js";
 import { Container } from "./Container.js";
 import { Icon } from "./Icon.js";
-import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
+import { Popup } from "./Popup.js";
+import { ComponentPlacement, UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 import { UIIcon } from "./UIIcon.js";
 import { ChildAlignment, ChildWrap } from "./ui-types.js";
 
@@ -63,6 +64,12 @@ export interface ITagInputProperties extends ICommonUIProperties {
      */
     allowNew?: boolean;
 
+    /**
+     * Offers every tag of the completion list as a pill, as soon as the field takes the focus. A filter uses this so
+     * a condition can be picked without typing anything.
+     */
+    picker?: boolean;
+
     /** The tags the input offers while typing. */
     completions?: ITagCompletion[];
 
@@ -82,6 +89,9 @@ export interface ITagInputProperties extends ICommonUIProperties {
 interface ITagInputState {
     inputValue: string;
     activeCompletionIndex: number;
+
+    /** Whether the pill list of every tag is open, which a click into the field opens. */
+    pickerOpen: boolean;
 }
 
 /**
@@ -93,6 +103,11 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
     private static readonly maxCompletions = 5;
 
     private inputRef = createRef<HTMLInputElement | null>();
+    private containerRef = createRef<HTMLDivElement | null>();
+    private pickerRef = createRef<Popup | null>();
+
+    /** Whether the picker popup was asked to open, which its own state reports only a render later. */
+    private pickerShown = false;
 
     public constructor(props: ITagInputProperties) {
         super(props);
@@ -100,7 +115,12 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
         this.state = {
             inputValue: "",
             activeCompletionIndex: -1,
+            pickerOpen: false,
         };
+    }
+
+    public override componentDidUpdate(): void {
+        this.syncPicker();
     }
 
     public render(): ComponentChild {
@@ -116,17 +136,22 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
             entry = this.renderEntry();
         }
 
+        const picker = this.renderPicker();
+
         return (
             <Container
                 id={id}
+                innerRef={this.containerRef}
                 className={className}
                 mainAlignment={ChildAlignment.Start}
+                crossAlignment={ChildAlignment.Center}
                 wrap={wrap}
                 gap="4px"
                 style={style}
             >
                 {tagRows}
                 {entry}
+                {picker}
             </Container>
         );
     }
@@ -217,9 +242,68 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
                     placeholder="Add…"
                     onInput={this.handleInput}
                     onKeyDown={this.handleKeyDown}
+                    onFocus={this.handleFocus}
+                    onBlur={this.handleBlur}
                 />
                 {completionList}
             </div>
+        );
+    }
+
+    /**
+     * @returns The popup with the pill list of every tag the field can still take, or undefined without a picker.
+     */
+    private renderPicker(): ComponentChild {
+        const { picker = false } = this.props;
+
+        if (!picker) {
+            return undefined;
+        }
+
+        const available = this.availableCompletions();
+        const pills = available.map((completion) => {
+            const key = `${completion.tagId ?? "new"}-${completion.caption}-${completion.owner ?? ""}`;
+
+            // The owner only tells same-named tags apart, so it is shown only where it matters.
+            let owner: ComponentChild = undefined;
+            if (completion.owner && this.isAmbiguousName(completion)) {
+                owner = <span className="tag-input-picker-owner">{completion.owner}</span>;
+            }
+
+            return (
+                <button
+                    key={key}
+                    type="button"
+                    className="tag-input-picker-pill"
+                    title={completion.owner ? `${completion.caption} — ${completion.owner}` : completion.caption}
+                    // Keep the focus in the field, so the picker stays open for the next tag.
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        this.commit(completion);
+                    }}
+                >
+                    {completion.caption}
+                    {owner}
+                </button>
+            );
+        });
+
+        // The pills lie in a popup below the field, so opening them does not push the layout around.
+        return (
+            <Popup
+                ref={this.pickerRef}
+                className="tag-input-picker-popup"
+                placement={ComponentPlacement.BottomLeft}
+                showArrow={true}
+                offset={4}
+                restoreFocusOnClose={false}
+                boundsProvider={this.pickerBounds}
+                onClose={this.handlePickerClose}
+            >
+                <div className="tag-input-picker" role="listbox" aria-label="Available tags">
+                    {pills}
+                </div>
+            </Popup>
         );
     }
 
@@ -318,6 +402,60 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
         });
     }
 
+    /** Opens the picker popup while the field wants it and there is a tag left to offer, and closes it otherwise. */
+    private syncPicker(): void {
+        const { pickerOpen } = this.state;
+        const popup = this.pickerRef.current;
+        const anchor = this.containerRef.current;
+
+        if (!popup || !anchor) {
+            return;
+        }
+
+        const show = pickerOpen && this.availableCompletions().length > 0;
+        if (show) {
+            if (!this.pickerShown) {
+                this.pickerShown = true;
+                popup.open(anchor);
+            } else {
+                popup.updatePosition(anchor);
+            }
+        } else if (this.pickerShown) {
+            this.pickerShown = false;
+            popup.close(true);
+        }
+    }
+
+    private pickerBounds = (): DOMRect | undefined => {
+        return this.inputRef.current?.getBoundingClientRect();
+    };
+
+    /** The popup closes on its own after a press beside it or Escape; the field then no longer wants it either. */
+    private handlePickerClose = (): void => {
+        const { pickerOpen } = this.state;
+
+        this.pickerShown = false;
+        if (pickerOpen) {
+            this.setState({ pickerOpen: false });
+        }
+    };
+
+    private handleFocus = (): void => {
+        const { picker = false } = this.props;
+
+        if (picker) {
+            this.setState({ pickerOpen: true });
+        }
+    };
+
+    private handleBlur = (): void => {
+        const { pickerOpen } = this.state;
+
+        if (pickerOpen) {
+            this.setState({ pickerOpen: false });
+        }
+    };
+
     private handleInput = (e: Event): void => {
         const target = e.target as HTMLInputElement;
         this.setState({ inputValue: target.value, activeCompletionIndex: -1 });
@@ -325,14 +463,14 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
 
     private handleKeyDown = (e: KeyboardEvent): void => {
         const { allowNew } = this.props;
-        const { inputValue, activeCompletionIndex } = this.state;
+        const { inputValue, activeCompletionIndex, pickerOpen } = this.state;
         const matches = this.matchingCompletions();
 
-        // Escape closes this entry, not the layer it sits in, while text or a completion list is open.
-        if (e.key === "Escape" && (inputValue.length > 0 || activeCompletionIndex >= 0)) {
+        // Escape closes this entry, not the layer it sits in, while text, a completion list or the picker is open.
+        if (e.key === "Escape" && (inputValue.length > 0 || activeCompletionIndex >= 0 || pickerOpen)) {
             e.preventDefault();
             e.stopPropagation();
-            this.setState({ inputValue: "", activeCompletionIndex: -1 });
+            this.setState({ inputValue: "", activeCompletionIndex: -1, pickerOpen: false });
 
             return;
         }

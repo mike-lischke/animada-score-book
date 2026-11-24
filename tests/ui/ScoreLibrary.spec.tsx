@@ -4,21 +4,26 @@
  */
 
 import { cleanup, fireEvent, render, screen, waitFor, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
-import type { ScoreBookDataModel, ISbDmInstrument, ISbDmScore } from "../../src/core/ScoreBookDataModel.js";
-import { SbDmEntityType } from "../../src/core/ScoreBookDataModel.js";
+import {
+    ScoreBookDataModel, ScoreQueryResult, SbDmEntityType, type ISbDmInstrument, type ISbDmScore,
+    type IScoreQueryOutcome,
+} from "../../src/core/ScoreBookDataModel.js";
 import { ScoreListSortOrder } from "../../src/core/types/general.js";
-import { SystemTagKind, type ITagInfo } from "../../src/core/types/tags.js";
+import { SystemTagKind, type ITagCombination, type ITagInfo } from "../../src/core/types/tags.js";
 import { ScoreLibrary } from "../../src/ui/ScoreLibrary.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
+
+/** What a successful score-list query answers, so a test can override it per case. */
+const appliedOutcome: IScoreQueryOutcome = { result: ScoreQueryResult.Applied, ignoredTagIds: [] };
 
 interface IMockDataModel {
     scores: ISbDmScore[];
     tags: ITagInfo[];
     instruments: ISbDmInstrument[];
-    queryScores: ReturnType<typeof vi.fn>;
+    queryScores: Mock<(combination: ITagCombination) => Promise<IScoreQueryOutcome>>;
     assignTag: ReturnType<typeof vi.fn>;
     unassignTag: ReturnType<typeof vi.fn>;
 }
@@ -47,7 +52,8 @@ const createMockDataModel = (tags: ITagInfo[] = [], scores: ISbDmScore[] = []): 
         scores,
         tags,
         instruments: [],
-        queryScores: vi.fn().mockResolvedValue(undefined),
+        queryScores: vi.fn<(combination: ITagCombination) => Promise<IScoreQueryOutcome>>()
+            .mockResolvedValue(appliedOutcome),
         assignTag: vi.fn().mockResolvedValue(true),
         unassignTag: vi.fn().mockResolvedValue(true),
     };
@@ -91,19 +97,41 @@ const libraryDialog = (): HTMLElement => {
 };
 
 /**
- * Types a tag name into the selector and commits the completion it names.
+ * @param index The AND group of the filter to look at; 0 is the first row.
+ *
+ * @returns The tag input of that group.
+ */
+const filterGroup = (index = 0): HTMLElement => {
+    const id = index === 0 ? "#scoreFilterGroup" : `#scoreFilterGroup-${index}`;
+    const group = document.body.querySelector<HTMLElement>(id);
+    expect(group).toBeTruthy();
+
+    return group!;
+};
+
+/**
+ * @param index The AND group of the filter to look at.
+ *
+ * @returns The text field of that group, looked up afresh: adding a chip re-creates the field.
+ */
+const filterField = (index = 0): HTMLInputElement => {
+    const field = filterGroup(index).querySelector<HTMLInputElement>("input");
+    expect(field).toBeTruthy();
+
+    return field!;
+};
+
+/**
+ * Types a tag name into the first group of the filter and commits the completion it names.
  *
  * @param name The tag name to type.
  */
 const commitTag = async (name: string): Promise<void> => {
-    const input = document.body.querySelector<HTMLInputElement>(".score-library-tag-selector input");
-    expect(input).toBeTruthy();
-
-    fireEvent.input(input!, { target: { value: name } });
-    fireEvent.keyDown(input!, { key: "Enter" });
+    fireEvent.input(filterField(), { target: { value: name } });
+    fireEvent.keyDown(filterField(), { key: "Enter" });
 
     await waitFor(() => {
-        expect(input!.value).toBe("");
+        expect(filterField().value).toBe("");
     });
 };
 
@@ -153,7 +181,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model);
 
         await waitFor(() => {
-            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+            filterGroup();
         });
         await commitTag("Caixa");
 
@@ -169,7 +197,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model);
 
         await waitFor(() => {
-            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+            filterGroup();
         });
         await commitTag("Caixa");
 
@@ -190,7 +218,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model, true, onAction);
 
         await waitFor(() => {
-            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+            filterGroup();
         });
         await commitTag("Caixa");
         await commitTag("Surdo");
@@ -213,12 +241,12 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model);
 
         await waitFor(() => {
-            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+            filterGroup();
         });
 
-        const input = document.body.querySelector<HTMLInputElement>(".score-library-tag-selector input");
-        fireEvent.input(input!, { target: { value: "Tamborim" } });
-        fireEvent.keyDown(input!, { key: "Enter" });
+        const input = filterField();
+        fireEvent.input(input, { target: { value: "Tamborim" } });
+        fireEvent.keyDown(input, { key: "Enter" });
 
         expect(model.queryScores).not.toHaveBeenCalled();
     });
@@ -228,20 +256,18 @@ describe("ScoreLibrary", { concurrent: false }, () => {
 
         renderLibrary(model);
 
-        await waitFor(() => {
-            expect(document.body.querySelector("#scoreListSortOrder button")).toBeTruthy();
-        });
+        const ascending = await screen.findByRole("button", { name: "Name A–Z" });
+        const descending = screen.getByRole("button", { name: "Name Z–A" });
+        expect(ascending.getAttribute("aria-pressed")).toBe("true");
+        expect(descending.getAttribute("aria-pressed")).toBe("false");
 
-        const selector = document.body.querySelector<HTMLButtonElement>("#scoreListSortOrder button")!;
-        expect(selector.textContent).toContain("A–Z");
-
-        fireEvent.click(selector);
-        fireEvent.click(screen.getByText("Name Z–A"));
+        fireEvent.click(descending);
 
         await waitFor(() => {
             expect(AppStorage.loadUISettings()?.scoreListSortOrder).toBe(ScoreListSortOrder.NameDescending);
+            expect(ascending.getAttribute("aria-pressed")).toBe("false");
+            expect(descending.getAttribute("aria-pressed")).toBe("true");
         });
-        expect(selector.textContent).toContain("Z–A");
     });
 
     it("shows the library only while it is open", async () => {
@@ -268,7 +294,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model);
 
         await waitFor(() => {
-            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+            filterGroup();
         });
         await commitTag("Caixa");
         expect(model.queryScores).toHaveBeenCalledTimes(1);
@@ -407,7 +433,7 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model);
 
         await waitFor(() => {
-            expect(document.body.querySelector(".score-library-tag-selector")).toBeTruthy();
+            filterGroup();
         });
         await commitTag("Caixa");
         expect(model.queryScores).toHaveBeenCalledTimes(1);
@@ -455,23 +481,6 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         expect(document.body.querySelector("#scoreLibraryDialog")).toBeNull();
     });
 
-    it("closes from its close button", async () => {
-        const model = createMockDataModel();
-        const onClose = vi.fn();
-
-        renderResult = render(<ScoreLibrary dataModel={asDataModel(model)} open={true} onClose={onClose} />);
-
-        await waitFor(() => {
-            expect(document.body.querySelector("#scoreListClose")).toBeTruthy();
-        });
-
-        document.body.querySelector<HTMLButtonElement>("#scoreListClose")!.click();
-
-        await waitFor(() => {
-            expect(onClose).toHaveBeenCalledTimes(1);
-        });
-    });
-
     it("moves the focus into the dialog and gives it back to the trigger", async () => {
         const model = createMockDataModel();
         const trigger = document.createElement("button");
@@ -491,5 +500,222 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         });
 
         trigger.remove();
+    });
+
+    it("keeps a second AND group as an alternative instead of merging the conditions", async () => {
+        const model = createMockDataModel([caixaTag, competitionTag]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        // Every row offers the button that appends a row below it.
+        document.body.querySelector<HTMLButtonElement>(".score-filter-group-add")!.click();
+
+        await waitFor(() => {
+            filterGroup(1);
+        });
+
+        fireEvent.input(filterField(1), { target: { value: "Wettkampf" } });
+        fireEvent.keyDown(filterField(1), { key: "Enter" });
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({
+                groups: [[caixaTag.id], [competitionTag.id]],
+            });
+        });
+    });
+
+    it("drops a condition together with its group", async () => {
+        const model = createMockDataModel([caixaTag, competitionTag]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+        document.body.querySelector<HTMLButtonElement>(".score-filter-group-add")!.click();
+        await waitFor(() => {
+            filterGroup(1);
+        });
+        fireEvent.input(filterField(1), { target: { value: "Wettkampf" } });
+        fireEvent.keyDown(filterField(1), { key: "Enter" });
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-filter-group-remove")).toHaveLength(2);
+        });
+
+        // The second row is the alternative that was just added, so it is the one to take away.
+        document.body.querySelectorAll<HTMLButtonElement>(".score-filter-group-remove")[1].click();
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [[caixaTag.id]] });
+        });
+        expect(document.body.querySelector("#scoreFilterGroup-1")).toBeNull();
+    });
+
+    it("keeps the last row instead of removing it", async () => {
+        const model = createMockDataModel([caixaTag]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        const remove = document.body.querySelector<HTMLButtonElement>(".score-filter-group-remove");
+        expect(remove?.hasAttribute("disabled")).toBe(true);
+    });
+
+    it("resets the whole filter", async () => {
+        const model = createMockDataModel([caixaTag]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        const reset = document.body.querySelector<HTMLButtonElement>("#scoreFilterReset");
+        expect(reset).toBeTruthy();
+        reset!.click();
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [] });
+        });
+        expect(document.body.querySelector(".score-filter-tags .tag-input-tag")).toBeNull();
+        expect(document.body.querySelector("#scoreFilterReset")).toBeNull();
+    });
+
+    it("counts the scores the caller can see and shows the active filter as a chip", async () => {
+        const model = createMockDataModel([caixaTag], [createScore(1, "Surdo"), createScore(2, "Caixa")]);
+
+        // The backend narrows the list, which the mock shows by leaving only one score behind.
+        model.queryScores.mockImplementation(() => {
+            model.scores = [createScore(1, "Surdo")];
+
+            return Promise.resolve(appliedOutcome);
+        });
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("2 scores");
+        });
+
+        await commitTag("Caixa");
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreFilterGroup .tag-input-tag")?.textContent).toContain("Caixa");
+        });
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("1 score");
+        });
+    });
+
+    it("names a single score in the singular", async () => {
+        const model = createMockDataModel([], [createScore(1, "Surdo")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("1 score");
+        });
+    });
+
+    it("shows that the scores are loading while the query runs", async () => {
+        const model = createMockDataModel([caixaTag]);
+        const pending: Array<(outcome: IScoreQueryOutcome) => void> = [];
+        model.queryScores.mockImplementation(() => {
+            return new Promise((resolve) => {
+                pending.push(resolve);
+            });
+        });
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListLoading")).toBeTruthy();
+        });
+
+        pending[0](appliedOutcome);
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListLoading")).toBeNull();
+        });
+    });
+
+    it("reports a failed request and offers to try again", async () => {
+        const model = createMockDataModel();
+        model.queryScores.mockResolvedValue({ result: ScoreQueryResult.Failed, ignoredTagIds: [] });
+
+        renderLibrary(model);
+
+        // The library follows the session, which is when it asks the backend for the list.
+        await requisitions.execute("authChanged", undefined);
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListFailed")).toBeTruthy();
+        });
+
+        model.queryScores.mockResolvedValue(appliedOutcome);
+        document.body.querySelector<HTMLButtonElement>("#scoreListRetry")!.click();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListFailed")).toBeNull();
+        });
+    });
+
+    it("reports a tag the catalogue no longer holds instead of querying a wider list", async () => {
+        const model = createMockDataModel([caixaTag]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+        expect(model.queryScores).toHaveBeenCalledTimes(1);
+
+        // The tag is deleted: it leaves the catalogue while the filter still names it.
+        model.tags = [];
+        await requisitions.execute("tagsChanged", undefined);
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
+        });
+        expect(document.body.querySelector("#scoreListInvalidFilter")?.textContent).toContain("#7");
+        expect(model.queryScores).toHaveBeenCalledTimes(1);
+        expect(document.body.querySelectorAll(".score-card")).toHaveLength(0);
+    });
+
+    it("reports the tags the backend refuses instead of showing its wider answer", async () => {
+        const model = createMockDataModel([caixaTag]);
+        model.queryScores.mockResolvedValue({
+            result: ScoreQueryResult.InvalidFilter,
+            ignoredTagIds: [caixaTag.id],
+        });
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
+        });
+        expect(document.body.querySelector("#scoreListInvalidFilter")?.textContent).toContain("Caixa");
     });
 });

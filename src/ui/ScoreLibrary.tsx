@@ -8,30 +8,31 @@ import { createRef, type ComponentChild } from "preact";
 import { Button } from "../components/ui/framework/Button.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
-import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
-import { TagInput, type ITag, type ITagCompletion } from "../components/ui/framework/TagInput.js";
+import { ProgressIndicator } from "../components/ui/framework/ProgressIndicator.js";
+import type { ITag, ITagCompletion } from "../components/ui/framework/TagInput.js";
 import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { AppStorage, type IUISettings } from "../core/AppStorage.js";
 import { NameText } from "../core/NameText.js";
 import {
-    ScoreBookChangeReason, type ISbDmScore, type ScoreBookDataModel
+    ScoreBookChangeReason, ScoreQueryResult, type ISbDmScore, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
 import { TagCombination } from "../core/TagCombination.js";
 import { ScoreListSortOrder } from "../core/types/general.js";
 import { globalTagOwnerCaption, SystemTagKind, type ITagCombination } from "../core/types/tags.js";
 import { ScoreCard } from "./ScoreCard.js";
 import { TagBadges } from "./TagBadges.js";
+import { TagFilterBar, type IFilterGroup } from "./TagFilterBar.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { NotificationCenter } from "../components/ui/NotificationCenter/NotificationCenter.js";
 
-/** The sort choices of the score overview: the stored order, the menu label and the caption of the selector. */
-const sortChoices = new Map<ScoreListSortOrder, { label: string; caption: string; }>([
-    [ScoreListSortOrder.NameAscending, { label: "Name A–Z", caption: "A–Z" }],
-    [ScoreListSortOrder.NameDescending, { label: "Name Z–A", caption: "Z–A" }],
+/** The sort choices of the score overview, with an icon and a tooltip for each order. */
+const sortChoices = new Map<ScoreListSortOrder, { label: string; icon: UIIcon; }>([
+    [ScoreListSortOrder.NameAscending, { label: "Name A–Z", icon: UIIcon.SortAlphabeticalAscending }],
+    [ScoreListSortOrder.NameDescending, { label: "Name Z–A", icon: UIIcon.SortAlphabeticalDescending }],
 ]);
 
 /**
@@ -71,14 +72,38 @@ export interface IScoreLibraryProperties extends ICommonUIProperties {
     onAction?: (action: string, score?: ISbDmScore, tagIds?: number[]) => Promise<boolean>;
 }
 
+/** What the collection is currently showing. */
+enum ScoreListState {
+    /** A query is running. */
+    Loading,
+
+    /** The cards of the current filter. */
+    Ready,
+
+    /** The filter names tags the caller cannot use, so no list is shown instead of a wider one. */
+    InvalidFilter,
+
+    /** The last query could not be answered. */
+    Failed,
+}
+
 interface IScoreLibraryState {
     currentSettings: IUISettings;
     sortOrder: ScoreListSortOrder;
 
-    /** The tag combination the selector edits and the list was queried with. */
-    combination: ITagCombination;
+    /**
+     * The AND groups of the manual tag filter, as the user edits them. It is kept apart from anything a set list
+     * contributes later, so selecting a set list never overwrites what the user picked here. An empty trailing group
+     * is a row the user just added and has not filled yet.
+     */
+    manualFilter: number[][];
 
-    /** The scores of the current combination, in the order the overview shows them. */
+    listState: ScoreListState;
+
+    /** The filter tag ids the backend could not use, reported with the invalid filter. */
+    ignoredTagIds: number[];
+
+    /** The scores of the current filter, in the order the overview shows them. */
     scores: ISbDmScore[];
 
     /** The scores whose lineup is open. The ids survive list updates as long as the score stays in it. */
@@ -86,9 +111,9 @@ interface IScoreLibraryState {
 }
 
 /**
- * The overview of the scores: the scores of the current tag combination as cards, with a selector that builds that
- * combination. Opening a card's title loads the score into the player/editor. The overview shows in a modal dialog,
- * which the app opens and closes through the `open` property.
+ * The overview of the scores: the scores of the manual tag filter as cards, with a filter bar that builds that
+ * filter. Opening a card's title loads the score into the player/editor. The overview shows in a modal dialog, which
+ * the app opens and closes through the `open` property.
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
     private dialogRef = createRef<Dialog | null>();
@@ -102,7 +127,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         this.state = {
             currentSettings: settings,
             sortOrder,
-            combination: TagCombination.empty,
+            manualFilter: [],
+            listState: ScoreListState.Ready,
+            ignoredTagIds: [],
             scores: arrangeScores(props.dataModel.scores, sortOrder),
             expandedScoreIds: new Set(),
         };
@@ -148,7 +175,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     public render(): ComponentChild {
         const header = this.renderHeader();
-        const selector = this.renderSelector();
+        const filter = this.renderFilter();
         const sortSelector = this.renderSortSelector();
         const list = this.renderList();
         const favourites = this.renderFavourites();
@@ -158,13 +185,13 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 id="scoreLibraryDialog"
                 ref={this.dialogRef}
                 className="score-library-dialog"
-                ariaLabel="Score Library"
+                ariaLabel="Scores and Repertoires"
                 closeOnBackdropClick={true}
                 onClose={this.handleDialogClose}
             >
                 <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
                     {header}
-                    {selector}
+                    {filter}
                     {sortSelector}
                     {list}
                     {favourites}
@@ -183,9 +210,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 <Button id="scoreListImportScore" imageOnly title="Import Score" onClick={this.handleImportClick}>
                     <Icon src={UIIcon.CloudDownload} />
                 </Button>
-                <Button id="scoreListClose" imageOnly title="Close Score Library" onClick={this.handleCloseClick}>
-                    <Icon src={UIIcon.Close} />
-                </Button>
             </Container>
         );
 
@@ -193,83 +217,115 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             <Container className="score-library-header" orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}>
                 <Icon src={UIIcon.Library} className="score-library-icon" />
-                <Label heading={true}>Score Library</Label>
+                <Label heading={true}>Scores and Repertoires</Label>
                 {actions}
             </Container>
         );
     }
 
-    private renderSelector(): ComponentChild {
-        const { dataModel } = this.props;
+    private renderFilter(): ComponentChild {
+        const { listState, scores } = this.state;
 
-        const selector = (
-            <TagInput
-                id="scoreListTagSelector"
-                className="score-library-tag-selector"
-                tags={TagBadges.resolve(this.activeGroup(), dataModel.tags)}
+        const groups = this.filterGroups();
+        const hasFilter = this.effectiveCombination().groups.length > 0;
+
+        return (
+            <TagFilterBar
+                groups={groups}
                 completions={this.tagCompletions()}
-                removable
-                allowNew={false}
-                onAdd={this.handleTagAdd}
-                onRemove={this.handleTagRemove}
+                scoreCount={listState === ScoreListState.Ready ? scores.length : undefined}
+                hasFilter={hasFilter}
+                onAddTag={this.handleFilterTagAdd}
+                onRemoveTag={this.handleFilterTagRemove}
+                onAddGroup={this.handleFilterGroupAdd}
+                onRemoveGroup={this.handleFilterGroupRemove}
+                onReset={this.handleFilterReset}
             />
         );
+    }
 
-        // Disabled controls: the tag-combination navigation and the drag handle.
-        return (
-            <Container className="score-library-selector" orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}>
-                <Button id="scoreListHistoryBack" imageOnly disabled title="Back to the previous tag combination">
-                    <Icon src={UIIcon.ArrowLeft} />
-                </Button>
-                <Button id="scoreListHistoryForward" imageOnly disabled title="Forward to the next tag combination">
-                    <Icon src={UIIcon.ArrowRight} />
-                </Button>
-                <span className="score-library-drag-handle" title="Drag handle for the current tag combination">
-                    <Icon src={UIIcon.Menu} />
-                </span>
-                {selector}
-            </Container>
-        );
+    /**
+     * @returns The filter rows as the bar shows them, each with its badges and the names of the ids the catalogue no
+     * longer holds. A missing id keeps its place, so the filter is reported instead of quietly narrowed.
+     */
+    private filterGroups(): IFilterGroup[] {
+        const { dataModel } = this.props;
+        const { manualFilter } = this.state;
+
+        return manualFilter.map((group) => {
+            const tags = TagBadges.resolve(group, dataModel.tags);
+
+            return {
+                tags,
+                unavailableNames: group.filter((tagId) => {
+                    return !dataModel.tags.some((tag) => {
+                        return tag.id === tagId;
+                    });
+                }).map((tagId) => {
+                    return `#${tagId}`;
+                }),
+            };
+        });
     }
 
     private renderSortSelector(): ComponentChild {
         const { sortOrder } = this.state;
-        const choice = sortChoices.get(sortOrder);
 
-        const items: IDropdownItem[] = [...sortChoices].map(([order, option]) => {
-            return {
-                label: option.label,
-                onClick: () => {
-                    this.handleSortOrderChange(order);
-                },
-            };
+        const buttons = [...sortChoices].map(([order, option]) => {
+            const selected = order === sortOrder;
+
+            return (
+                <Button key={order} className="du-join-item du-btn-square du-btn-sm" isDefault={selected}
+                    aria-pressed={selected} title={option.label}
+                    onClick={() => {
+                        this.handleSortOrderChange(order);
+                    }}>
+                    <Icon src={option.icon} />
+                </Button>
+            );
         });
 
         return (
             <Container className="score-library-sort" orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}>
-                <Dropdown
-                    id="scoreListSortOrder"
-                    icon={<Icon src={UIIcon.ListOrdered} />}
-                    caption={choice?.caption}
-                    title="Sort order"
-                    items={items}
-                    selectedItem={choice?.label}
-                    closeOnSelect
-                />
+                <Label caption="Sort:" />
+                <Container id="scoreListSortOrder" className="du-join"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}>
+                    {buttons}
+                </Container>
             </Container>
         );
     }
 
     private renderList(): ComponentChild {
-        const { scores } = this.state;
+        const { listState } = this.state;
 
         let content: ComponentChild;
-        if (scores.length === 0) {
-            content = this.renderEmptyState();
-        } else {
-            content = this.renderCards();
+        switch (listState) {
+            case ScoreListState.Loading: {
+                content = this.renderLoadingState();
+
+                break;
+            }
+
+            case ScoreListState.Failed: {
+                content = this.renderFailedState();
+
+                break;
+            }
+
+            case ScoreListState.InvalidFilter: {
+                content = this.renderInvalidFilterState();
+
+                break;
+            }
+
+            case ScoreListState.Ready: {
+                content = this.state.scores.length === 0 ? this.renderEmptyState() : this.renderCards();
+
+                break;
+            }
         }
 
         return (
@@ -279,11 +335,64 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         );
     }
 
+    private renderLoadingState(): ComponentChild {
+        return (
+            <Container id="scoreListLoading" className="score-list-loading" orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}>
+                <ProgressIndicator />
+                <Label caption="Loading the scores…" />
+            </Container>
+        );
+    }
+
+    private renderFailedState(): ComponentChild {
+        return (
+            <Container id="scoreListFailed" className="score-list-problem" orientation={Orientation.TopDown}>
+                <Label caption="The scores could not be loaded." wrap={true} />
+                <Button id="scoreListRetry" className="score-filter-reset" plain={true} title="Load the scores again"
+                    onClick={this.handleFilterRetry}>
+                    <Icon src={UIIcon.Refresh} />
+                    <span>Try again</span>
+                </Button>
+            </Container>
+        );
+    }
+
+    private renderInvalidFilterState(): ComponentChild {
+        const { dataModel } = this.props;
+        const { ignoredTagIds } = this.state;
+        const names = ignoredTagIds.map((tagId) => {
+            const tag = dataModel.tags.find((candidate) => {
+                return candidate.id === tagId;
+            });
+
+            // An id without a known tag is named as such: the tag may have been deleted or left the caller's scope.
+            return tag?.name ?? `#${tagId}`;
+        });
+
+        let caption = "The filter names tags that are not available.";
+        if (names.length > 0) {
+            caption = `The filter names tags that are not available: ${names.join(", ")}.`;
+        }
+
+        return (
+            <Container id="scoreListInvalidFilter" className="score-list-problem" orientation={Orientation.TopDown}>
+                <Label caption={caption} wrap={true} />
+                <Label caption="Remove them or reset the filter to see the scores again." wrap={true} />
+                <Button id="scoreListResetInvalid" className="score-filter-reset" plain={true}
+                    title="Remove the unavailable tags" onClick={this.handleFilterReset}>
+                    <Icon src={UIIcon.ClearAll} />
+                    <span>Reset filter</span>
+                </Button>
+            </Container>
+        );
+    }
+
     private renderEmptyState(): ComponentChild {
-        const { combination } = this.state;
+        const hasFilter = !TagCombination.isEmpty(this.effectiveCombination());
 
         let caption = "No score matches the selected tags.";
-        if (TagCombination.isEmpty(combination)) {
+        if (!hasFilter) {
             caption = "The library holds no scores yet.";
         }
 
@@ -421,11 +530,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     };
 
     private handleAuthChanged = (): Promise<boolean> => {
-        const { combination } = this.state;
-
         // Write access, readable scores and the usable catalogue all belong to the session, so the list is queried
-        // again when another account takes over.
-        void this.applyCombination(combination);
+        // again when another account takes over. The filter stays; tags it may no longer use are reported.
+        void this.applyFilter();
 
         return Promise.resolve(true);
     };
@@ -460,31 +567,16 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     };
 
     private handleScoreTagsChanged = (): Promise<boolean> => {
-        const { combination } = this.state;
-
         // A tag change can move a score in or out of the current filter, so the list is queried again.
-        void this.applyCombination(combination);
+        void this.applyFilter();
 
         return Promise.resolve(true);
     };
 
     private handleTagsChanged = (): Promise<boolean> => {
-        const { dataModel } = this.props;
-        const { combination } = this.state;
-
-        // A deleted tag drops out of the filter; the rest of the combination keeps the list it had.
-        const usableIds = new Set(dataModel.tags.map((tag) => {
-            return tag.id;
-        }));
-        const restricted = TagCombination.restrict(combination, usableIds);
-
-        if (!TagCombination.equals(restricted, combination)) {
-            void this.applyCombination(restricted);
-
-            return Promise.resolve(true);
-        }
-
-        this.setState({ scores: this.orderedScores() });
+        // A deleted tag stays in the filter and is reported: dropping it would answer a wider question than the user
+        // asked. Everything else keeps the list it had.
+        void this.applyFilter();
 
         return Promise.resolve(true);
     };
@@ -495,10 +587,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleImportClick = (): void => {
         void this.runAction("import");
-    };
-
-    private handleCloseClick = (): void => {
-        this.dialogRef.current?.close(true);
     };
 
     /**
@@ -513,21 +601,68 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         }
     };
 
-    private handleTagAdd = (completion: ITagCompletion): void => {
-        const { tagId } = completion;
-        if (tagId === undefined) {
+    private handleFilterTagAdd = (groupIndex: number, tagId: number): void => {
+        const { manualFilter } = this.state;
+
+        // The first row exists in the UI before the filter holds it, so a row may have to be created here.
+        const groups: number[][] = manualFilter.map((group) => {
+            return [...group];
+        });
+        while (groups.length <= groupIndex) {
+            groups.push([]);
+        }
+
+        groups[groupIndex] = Array.from(new Set([...groups[groupIndex], tagId]));
+
+        void this.setManualFilter(groups);
+    };
+
+    private handleFilterTagRemove = (groupIndex: number, tagId: number): void => {
+        const { manualFilter } = this.state;
+        const groups = manualFilter.map((group, index) => {
+            return index === groupIndex ? group.filter((id) => {
+                return id !== tagId;
+            }) : group;
+        });
+
+        void this.setManualFilter(groups);
+    };
+
+    private handleFilterGroupAdd = (groupIndex: number): void => {
+        const { manualFilter } = this.state;
+
+        // The new row goes below the one whose button was pressed; it starts empty.
+        const groups: number[][] = manualFilter.map((group) => {
+            return [...group];
+        });
+        while (groups.length <= groupIndex) {
+            groups.push([]);
+        }
+
+        groups.splice(groupIndex + 1, 0, []);
+
+        void this.setManualFilter(groups);
+    };
+
+    private handleFilterGroupRemove = (groupIndex: number): void => {
+        const { manualFilter } = this.state;
+
+        // One row always stays, so there is always a field to pick a tag in.
+        if (manualFilter.length <= 1) {
             return;
         }
 
-        void this.applyCombination({ groups: [[...this.activeGroup(), tagId]] });
+        void this.setManualFilter(manualFilter.filter((group, index) => {
+            return index !== groupIndex;
+        }));
     };
 
-    private handleTagRemove = (tagId: number): void => {
-        const group = this.activeGroup().filter((id) => {
-            return id !== tagId;
-        });
+    private handleFilterReset = (): void => {
+        void this.setManualFilter([]);
+    };
 
-        void this.applyCombination({ groups: [group] });
+    private handleFilterRetry = (): void => {
+        void this.applyFilter();
     };
 
     private handleSortOrderChange = (sortOrder: ScoreListSortOrder): void => {
@@ -542,7 +677,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
      */
     private assignableTagIds(): number[] {
         const { dataModel } = this.props;
-        const active = new Set(this.activeGroup());
+        const active = new Set(this.effectiveCombination().groups[0] ?? []);
 
         return dataModel.tags.filter((tag) => {
             // An instrument tag follows the tracks the new score starts with, so it is never assigned by hand.
@@ -553,12 +688,26 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     /**
-     * @returns The tag ids of the active AND group, which the selector edits.
+     * @param groups The AND groups a combination is built from; the manual filter by default.
+     *
+     * @returns The combination the collection queries with. The manual filter stands on its own here; a set list
+     * adds a further AND restriction on top of it instead of replacing it.
      */
-    private activeGroup(): number[] {
-        const { combination } = this.state;
+    private effectiveCombination(groups: number[][] = this.state.manualFilter): ITagCombination {
+        return TagCombination.normalize({ groups });
+    }
 
-        return combination.groups[0] ?? [];
+    /**
+     * @param groups The AND groups the manual filter now holds.
+     *
+     * @returns The filter applied, once the list the filter produces is known.
+     */
+    private async setManualFilter(groups: number[][]): Promise<void> {
+        this.setState({ manualFilter: groups });
+
+        // The query is started with the groups at hand: a state update is applied later, so the filter the list is
+        // built for would otherwise still be the previous one.
+        await this.applyFilter(groups);
     }
 
     /**
@@ -588,17 +737,68 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     /**
-     * Applies a combination: the selector shows it and the list is rebuilt from the backend.
+     * Queries the list for the current filter and shows what became of it. A filter that names tags the catalogue
+     * does not hold is reported without a query, so its wider answer never reaches the screen.
      *
-     * @param combination The combination to apply.
+     * @param groups The AND groups of the filter to apply; the manual filter by default.
      */
-    private async applyCombination(combination: ITagCombination): Promise<void> {
+    private async applyFilter(groups: number[][] = this.state.manualFilter): Promise<void> {
         const { dataModel } = this.props;
+        const combination = this.effectiveCombination(groups);
 
-        const normalized = TagCombination.normalize(combination);
+        const unavailable = this.unavailableTagIds(combination);
+        if (unavailable.length > 0) {
+            this.setState({ listState: ScoreListState.InvalidFilter, ignoredTagIds: unavailable });
 
-        this.setState({ combination: normalized });
-        await dataModel.queryScores(normalized);
+            return;
+        }
+
+        this.setState({ listState: ScoreListState.Loading, ignoredTagIds: [] });
+
+        const outcome = await dataModel.queryScores(combination);
+        switch (outcome.result) {
+            case ScoreQueryResult.Applied: {
+                this.setState({ listState: ScoreListState.Ready, scores: this.orderedScores() });
+
+                break;
+            }
+
+            case ScoreQueryResult.InvalidFilter: {
+                this.setState({
+                    listState: ScoreListState.InvalidFilter,
+                    ignoredTagIds: outcome.ignoredTagIds,
+                });
+
+                break;
+            }
+
+            case ScoreQueryResult.Failed: {
+                this.setState({ listState: ScoreListState.Failed });
+
+                break;
+            }
+
+            case ScoreQueryResult.Superseded: {
+                // A newer filter is already on its way, and its answer is the one that counts.
+                break;
+            }
+        }
+    }
+
+    /**
+     * @param combination The combination to inspect.
+     *
+     * @returns The ids it names that the usable catalogue does not hold.
+     */
+    private unavailableTagIds(combination: ITagCombination): number[] {
+        const { dataModel } = this.props;
+        const usable = new Set(dataModel.tags.map((tag) => {
+            return tag.id;
+        }));
+
+        return combination.groups.flat().filter((tagId) => {
+            return !usable.has(tagId);
+        });
     }
 
     /**

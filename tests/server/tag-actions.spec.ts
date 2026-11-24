@@ -203,6 +203,12 @@ class FakeDatabase implements IDatabaseAdapter {
             });
         }
 
+        if (sql.includes("FROM tags") && !sql.includes("WHERE")) {
+            return this.tags.map((tag) => {
+                return { ...tag };
+            });
+        }
+
         if (sql.includes("FROM permissions")) {
             const entityIds = params.slice(1).map((value) => {
                 return Number(value);
@@ -424,6 +430,28 @@ describe("tag actions — assigning", () => {
 });
 
 describe("tag actions — score list", () => {
+    it("refuses a filter that names a tag the caller cannot use instead of widening it", async () => {
+        const { routes } = setup();
+        const { res, captured } = createResponse();
+
+        // Tag 3 belongs to a foreign group, so it stays outside this caller's catalogue.
+        await routes.handleListScores(createRequest({ groups: [[2, 3]] }, memberUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { ignoredTagIds: number[]; }).ignoredTagIds).toEqual([3]);
+        expect((captured.body as { scores?: unknown; }).scores).toBeUndefined();
+    });
+
+    it("refuses a filter that names a tag no score could carry", async () => {
+        const { routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleListScores(createRequest({ groups: [[999]] }, memberUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { ignoredTagIds: number[]; }).ignoredTagIds).toEqual([999]);
+    });
+
     it("returns the lineup of every listed score, keeping repeated instruments apart", async () => {
         const secondScoreId = scoreId + 1;
 

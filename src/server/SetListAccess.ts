@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { TagCombination } from "../core/TagCombination.js";
 import { EntityType, type Auth } from "./Auth.js";
 import type { DbRow, IDatabaseAdapter } from "./database.js";
 import type { ITagRow } from "./TagAccess.js";
@@ -48,12 +49,6 @@ export enum SetListFilterProblem {
  * with. Routes and the permission endpoint both use them, so a filter and the sharing of its list cannot drift apart.
  */
 export class SetListAccess {
-    /** The most AND groups a filter may hold. */
-    public static readonly maxFilterGroups = 20;
-
-    /** The most tags one AND group may hold. */
-    public static readonly maxFilterTagsPerGroup = 32;
-
     /** The longest name a set list may carry; the `name` column holds exactly this many characters. */
     public static readonly maxNameLength = 255;
 
@@ -66,13 +61,13 @@ export class SetListAccess {
      * @returns The AND groups, or undefined when the value is not a combination.
      */
     public static readGroups(value: unknown): number[][] | undefined {
-        if (!Array.isArray(value) || value.length > SetListAccess.maxFilterGroups) {
+        if (!Array.isArray(value) || value.length > TagCombination.maxGroups) {
             return undefined;
         }
 
         const groups: number[][] = [];
         for (const rawGroup of value) {
-            if (!Array.isArray(rawGroup) || rawGroup.length > SetListAccess.maxFilterTagsPerGroup) {
+            if (!Array.isArray(rawGroup) || rawGroup.length > TagCombination.maxTagsPerGroup) {
                 return undefined;
             }
 

@@ -80,9 +80,16 @@ const setupLibraryApi = async (page: Page, options: IScoreLibraryMockOptions = {
             await route.fulfill({
                 status: 200, contentType: "application/json",
                 body: JSON.stringify({
-                    tags: [{
-                        id: 7, name: "Caixa", colorIndex: 2, editable: false, assignable: true, usageCount: 1,
-                    }],
+                    tags: [
+                        {
+                            id: 7, name: "Caixa", colorIndex: 2, editable: false, assignable: true, usageCount: 1,
+                            systemKind: "instrument", instrumentTypeId: "5",
+                        },
+                        {
+                            id: 11, name: "Wettkampf", colorIndex: 4, editable: false, assignable: true,
+                            usageCount: 1,
+                        },
+                    ],
                 }),
             });
 
@@ -94,7 +101,7 @@ const setupLibraryApi = async (page: Page, options: IScoreLibraryMockOptions = {
                 status: 200, contentType: "application/json",
                 body: JSON.stringify({
                     scores: [{
-                        id: 42, name: "Test Score", tagIds: [7],
+                        id: 42, name: "Test Score", tagIds: [7, 11],
                         perm: { isOwner: true, canRead: true, canWrite: true, isWorld: true, groupIds: [] },
                     }],
                 }),
@@ -198,18 +205,6 @@ test.describe("Score library modal", () => {
         await expect(page.locator("#scoreLibraryButton")).toBeFocused();
     });
 
-    test("closes from its close button", async ({ page }) => {
-        await setupLibraryApi(page);
-        await page.goto("/");
-
-        await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator("#scoreLibraryDialog")).toBeVisible();
-
-        await page.locator("#scoreListClose").click();
-
-        await expect(page.locator("#scoreLibraryDialog")).toHaveCount(0);
-    });
-
     test("closes on a click beside the dialog", async ({ page }) => {
         await setupLibraryApi(page);
         await page.goto("/");
@@ -247,16 +242,77 @@ test.describe("Score library modal", () => {
 
         await page.locator("#scoreLibraryButton").click();
 
-        const input = page.locator(".score-library-tag-selector input");
+        const input = page.locator("#scoreFilterGroup input");
         await input.fill("Caixa");
         await input.press("Enter");
-        await expect(page.locator(".score-library-tag-selector")).toContainText("Caixa");
+        await expect(page.locator("#scoreFilterGroup")).toContainText("Caixa");
 
+        // The first Escape closes the tag picker the focused field shows, the second one the library.
+        await page.keyboard.press("Escape");
+        await expect(page.locator(".tag-input-picker")).toHaveCount(0);
         await page.keyboard.press("Escape");
         await expect(page.locator("#scoreLibraryDialog")).toHaveCount(0);
 
         await page.locator("#scoreLibraryButton").click();
-        await expect(page.locator(".score-library-tag-selector")).toContainText("Caixa");
+        await expect(page.locator("#scoreFilterGroup")).toContainText("Caixa");
+    });
+
+    test("filters by an instrument tag and counts the scores", async ({ page }) => {
+        await setupLibraryApi(page);
+        await page.goto("/");
+
+        await page.locator("#scoreLibraryButton").click();
+        await expect(page.locator(".score-filter-count")).toHaveText("1 score");
+
+        const input = page.locator("#scoreFilterGroup input");
+        await input.fill("Caixa");
+        await input.press("Enter");
+
+        await expect(page.locator("#scoreFilterGroup .tag-input-tag")).toHaveText("Caixa");
+        await expect(page.locator(".score-filter-count")).toHaveText("1 score");
+        // The instrument tag filters, but a card does not repeat it as a chip.
+        await expect(page.locator(".score-card-tags")).toContainText("Wettkampf");
+        await expect(page.locator(".score-card-tags")).not.toContainText("Caixa");
+    });
+
+    test("offers every tag as a pill when the filter field takes the focus", async ({ page }) => {
+        await setupLibraryApi(page);
+        await page.goto("/");
+
+        await page.locator("#scoreLibraryButton").click();
+
+        await page.locator("#scoreFilterGroup input").click();
+        await expect(page.locator(".tag-input-picker-pill")).toHaveCount(2);
+
+        // Picking a pill filters the list without typing anything.
+        await page.locator(".tag-input-picker-pill").filter({ hasText: "Caixa" }).click();
+        await expect(page.locator("#scoreFilterGroup .tag-input-tag")).toHaveText("Caixa");
+    });
+
+    test("offers a further tag group below a row and resets the filter", async ({ page }) => {
+        await setupLibraryApi(page);
+        await page.goto("/");
+
+        await page.locator("#scoreLibraryButton").click();
+
+        const first = page.locator("#scoreFilterGroup input");
+        await first.fill("Caixa");
+        await first.press("Enter");
+
+        await page.locator(".score-filter-group-add").first().click();
+        await expect(page.locator("#scoreFilterGroup-1")).toBeVisible();
+
+        const second = page.locator("#scoreFilterGroup-1 input");
+        await second.fill("Wettkampf");
+        await second.press("Enter");
+
+        await expect(page.locator("#scoreFilterGroup .tag-input-tag")).toHaveText("Caixa");
+        await expect(page.locator("#scoreFilterGroup-1 .tag-input-tag")).toHaveText("Wettkampf");
+
+        await page.locator("#scoreFilterReset").click();
+        await expect(page.locator("#scoreFilterGroup-1")).toHaveCount(0);
+        await expect(page.locator("#scoreFilterGroup .tag-input-tag")).toHaveCount(0);
+        await expect(page.locator("#scoreFilterReset")).toHaveCount(0);
     });
 
     test("closes after loading a score", async ({ page }) => {
@@ -301,7 +357,7 @@ test.describe("Score library modal", () => {
         expect(box!.height).toBeGreaterThan(690);
 
         await expect(page.locator("#scoreListNewScore")).toBeVisible();
-        await page.locator("#scoreListClose").click();
+        await page.keyboard.press("Escape");
         await expect(page.locator("#scoreLibraryDialog")).toHaveCount(0);
     });
 });
