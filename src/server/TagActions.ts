@@ -586,11 +586,17 @@ export class TagActions {
                 return undefined;
             }
 
-            const ids = rawGroup.map((value) => {
-                return Number(value);
-            }).filter((value) => {
-                return Number.isInteger(value) && value > 0;
-            });
+            const ids: number[] = [];
+            for (const value of rawGroup) {
+                const tagId = Number(value);
+
+                // A malformed id would drop out of the group and widen the request, so it is rejected instead.
+                if (!Number.isInteger(tagId) || tagId <= 0) {
+                    return undefined;
+                }
+
+                ids.push(tagId);
+            }
 
             for (const tagId of ids) {
                 if (!usableIds.has(tagId)) {

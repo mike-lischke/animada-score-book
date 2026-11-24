@@ -30,6 +30,9 @@ interface IBarOptions {
 
     /** How many scores the list holds; omit the property to model a list that is not known yet. */
     scoreCount?: number;
+
+    /** Whether the list is still loading, which is the only case that names an unknown count. */
+    countLoading?: boolean;
 }
 
 describe("TagFilterBar", { concurrent: false }, () => {
@@ -54,6 +57,7 @@ describe("TagFilterBar", { concurrent: false }, () => {
     const renderBar = (groups: IFilterGroup[], options: IBarOptions = {}): IHandlers => {
         const hasFilter = options.hasFilter ?? groups.length > 0;
         const scoreCount = "scoreCount" in options ? options.scoreCount : 0;
+        const countLoading = options.countLoading ?? false;
 
         const handlers: IHandlers = {
             onAddTag: vi.fn<(groupIndex: number, tagId: number) => void>(),
@@ -68,6 +72,7 @@ describe("TagFilterBar", { concurrent: false }, () => {
                 groups={groups}
                 completions={completions}
                 scoreCount={scoreCount}
+                countLoading={countLoading}
                 hasFilter={hasFilter}
                 {...handlers}
             />,
@@ -218,9 +223,15 @@ describe("TagFilterBar", { concurrent: false }, () => {
     });
 
     it("says that the count is not known while the list loads", () => {
-        renderBar([], { scoreCount: undefined });
+        renderBar([], { scoreCount: undefined, countLoading: true });
 
         expect(renderResult!.container.querySelector(".score-filter-count")?.textContent).toBe("Loading…");
+    });
+
+    it("shows no count while the list is neither loaded nor loading", () => {
+        renderBar([], { scoreCount: undefined });
+
+        expect(renderResult!.container.querySelector(".score-filter-count")).toBeNull();
     });
 
     it("resets the filter only while a condition is set", () => {

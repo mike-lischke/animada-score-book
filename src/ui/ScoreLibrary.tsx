@@ -116,7 +116,16 @@ interface IScoreLibraryState {
  * the app opens and closes through the `open` property.
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
+    /** How long a query may run before the list says it is loading, so a quick answer does not flash a spinner. */
+    private static readonly loadingDelay = 500;
+
     private dialogRef = createRef<Dialog | null>();
+
+    /** Counts the filter requests, so an answer to an older one cannot replace what a newer one showed. */
+    private filterRequest = 0;
+
+    /** The pending delay after which the list names a running query, if it has not answered by then. */
+    private loadingTimer?: ReturnType<typeof setTimeout>;
 
     public constructor(props: IScoreLibraryProperties) {
         super(props);
@@ -171,6 +180,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         requisitions.unregister("tagsChanged", this.handleTagsChanged);
         requisitions.unregister("scoreTagsChanged", this.handleScoreTagsChanged);
         requisitions.unregister("authChanged", this.handleAuthChanged);
+
+        this.stopLoadingTimer();
     }
 
     public render(): ComponentChild {
@@ -234,6 +245,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 groups={groups}
                 completions={this.tagCompletions()}
                 scoreCount={listState === ScoreListState.Ready ? scores.length : undefined}
+                countLoading={listState === ScoreListState.Loading}
                 hasFilter={hasFilter}
                 onAddTag={this.handleFilterTagAdd}
                 onRemoveTag={this.handleFilterTagRemove}
@@ -738,13 +750,17 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     /**
      * Queries the list for the current filter and shows what became of it. A filter that names tags the catalogue
-     * does not hold is reported without a query, so its wider answer never reaches the screen.
+     * does not hold is reported without a query, so its wider answer never reaches the screen. The list keeps what it
+     * shows while the query runs; only a query that takes noticeably long is named as loading.
      *
      * @param groups The AND groups of the filter to apply; the manual filter by default.
      */
     private async applyFilter(groups: number[][] = this.state.manualFilter): Promise<void> {
         const { dataModel } = this.props;
+        const request = ++this.filterRequest;
         const combination = this.effectiveCombination(groups);
+
+        this.stopLoadingTimer();
 
         const unavailable = this.unavailableTagIds(combination);
         if (unavailable.length > 0) {
@@ -753,12 +769,36 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             return;
         }
 
-        this.setState({ listState: ScoreListState.Loading, ignoredTagIds: [] });
+        // The filter is usable again, so a report about unavailable tags would be stale while the query runs. The
+        // list keeps showing what it had, and only a query that takes noticeably long is named as loading.
+        if (this.state.listState === ScoreListState.InvalidFilter) {
+            this.setState({ listState: ScoreListState.Ready, ignoredTagIds: [] });
+        }
+
+        this.loadingTimer = setTimeout(() => {
+            this.loadingTimer = undefined;
+
+            if (request === this.filterRequest) {
+                this.setState({ listState: ScoreListState.Loading, ignoredTagIds: [] });
+            }
+        }, ScoreLibrary.loadingDelay);
 
         const outcome = await dataModel.queryScores(combination);
+
+        // A newer filter was applied while this answer was on its way, and that filter is the one the user asked for.
+        if (request !== this.filterRequest) {
+            return;
+        }
+
+        this.stopLoadingTimer();
+
         switch (outcome.result) {
             case ScoreQueryResult.Applied: {
-                this.setState({ listState: ScoreListState.Ready, scores: this.orderedScores() });
+                this.setState({
+                    listState: ScoreListState.Ready,
+                    ignoredTagIds: [],
+                    scores: this.orderedScores(),
+                });
 
                 break;
             }
@@ -773,7 +813,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             }
 
             case ScoreQueryResult.Failed: {
-                this.setState({ listState: ScoreListState.Failed });
+                this.setState({ listState: ScoreListState.Failed, ignoredTagIds: [] });
 
                 break;
             }
@@ -782,6 +822,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 // A newer filter is already on its way, and its answer is the one that counts.
                 break;
             }
+        }
+    }
+
+    /** Cancels a pending delay that would announce a running query, which an answer makes pointless. */
+    private stopLoadingTimer(): void {
+        if (this.loadingTimer !== undefined) {
+            clearTimeout(this.loadingTimer);
+            this.loadingTimer = undefined;
         }
     }
 

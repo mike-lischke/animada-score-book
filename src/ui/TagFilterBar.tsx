@@ -33,6 +33,12 @@ export interface ITagFilterBarProperties extends ICommonUIProperties {
     /** How many scores the caller may see with this filter; undefined while the list is not known. */
     scoreCount?: number;
 
+    /**
+     * Whether the list is still being loaded. Only then does the summary say so; a failed request or an unusable
+     * filter is explained by the list itself, and a count would be made up.
+     */
+    countLoading?: boolean;
+
     /** Whether the filter holds any condition, which decides whether Reset does anything. */
     hasFilter: boolean;
 
@@ -62,11 +68,17 @@ export class TagFilterBar extends UIComponent<ITagFilterBarProperties> {
     }
 
     private renderSummary(): ComponentChild {
-        const { groups, scoreCount, hasFilter, onReset } = this.props;
+        const { groups, scoreCount, countLoading, hasFilter, onReset } = this.props;
 
-        const countCaption = scoreCount === undefined
-            ? "Loading…"
-            : scoreCount === 1 ? "1 score" : `${scoreCount} scores`;
+        // Without a known list a count would be made up, so only a running query is named; failed and unusable
+        // filters are explained by the list below.
+        let count: ComponentChild = undefined;
+        if (scoreCount !== undefined) {
+            const caption = scoreCount === 1 ? "1 score" : `${scoreCount} scores`;
+            count = <Label className="score-filter-count" caption={caption} />;
+        } else if (countLoading) {
+            count = <Label className="score-filter-count" caption="Loading…" />;
+        }
 
         const active = groups.some((group) => {
             return group.tags.length > 0 || group.unavailableNames.length > 0;
@@ -87,7 +99,7 @@ export class TagFilterBar extends UIComponent<ITagFilterBarProperties> {
             <Container className="score-filter-summary" orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}>
                 <Icon src={UIIcon.Filter} className="score-filter-icon" />
-                <Label className="score-filter-count" caption={countCaption} />
+                {count}
                 {reset}
             </Container>
         );

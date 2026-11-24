@@ -628,8 +628,8 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         });
     });
 
-    it("shows that the scores are loading while the query runs", async () => {
-        const model = createMockDataModel([caixaTag]);
+    it("shows that the scores are loading only while the query takes noticeably long", async () => {
+        const model = createMockDataModel([caixaTag], [createScore(1, "Surdo")]);
         const pending: Array<(outcome: IScoreQueryOutcome) => void> = [];
         model.queryScores.mockImplementation(() => {
             return new Promise((resolve) => {
@@ -640,13 +640,19 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         renderLibrary(model);
 
         await waitFor(() => {
-            filterGroup();
+            expect(document.body.querySelectorAll(".score-card")).toHaveLength(1);
         });
         await commitTag("Caixa");
+
+        // A quick answer must not flash the spinner, so the list keeps what it has and its count.
+        expect(document.body.querySelector("#scoreListLoading")).toBeNull();
+        expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("1 score");
+        expect(document.body.querySelectorAll(".score-card")).toHaveLength(1);
 
         await waitFor(() => {
             expect(document.body.querySelector("#scoreListLoading")).toBeTruthy();
         });
+        expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("Loading…");
 
         pending[0](appliedOutcome);
 
@@ -667,6 +673,8 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         await waitFor(() => {
             expect(document.body.querySelector("#scoreListFailed")).toBeTruthy();
         });
+        // A failed request has no count to name, and the list explains what happened instead.
+        expect(document.body.querySelector(".score-filter-count")).toBeNull();
 
         model.queryScores.mockResolvedValue(appliedOutcome);
         document.body.querySelector<HTMLButtonElement>("#scoreListRetry")!.click();
@@ -699,6 +707,44 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         expect(document.body.querySelectorAll(".score-card")).toHaveLength(0);
     });
 
+    it("clears an unavailable-tag report while the corrected filter is queried", async () => {
+        const model = createMockDataModel([caixaTag]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        // The tag disappears and comes back: the filter is reported, then queried again.
+        model.tags = [];
+        await requisitions.execute("tagsChanged", undefined);
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
+        });
+
+        const pending: Array<(outcome: IScoreQueryOutcome) => void> = [];
+        model.queryScores.mockImplementation(() => {
+            return new Promise((resolve) => {
+                pending.push(resolve);
+            });
+        });
+        model.tags = [caixaTag];
+        model.scores = [createScore(1, "Surdo")];
+        await requisitions.execute("tagsChanged", undefined);
+
+        // The stale report is gone right away; the list keeps what it had while the answer is on its way.
+        expect(document.body.querySelector("#scoreListInvalidFilter")).toBeNull();
+        expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("0 scores");
+
+        pending[0](appliedOutcome);
+        await waitFor(() => {
+            expect(document.body.querySelector(".score-filter-count")?.textContent).toBe("1 score");
+        });
+        expect(document.body.querySelector("#scoreListInvalidFilter")).toBeNull();
+    });
+
     it("reports the tags the backend refuses instead of showing its wider answer", async () => {
         const model = createMockDataModel([caixaTag]);
         model.queryScores.mockResolvedValue({
@@ -717,5 +763,70 @@ describe("ScoreLibrary", { concurrent: false }, () => {
             expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
         });
         expect(document.body.querySelector("#scoreListInvalidFilter")?.textContent).toContain("Caixa");
+    });
+
+    it("keeps the result of the newer filter when an older answer arrives after it", async () => {
+        const model = createMockDataModel([caixaTag, competitionTag]);
+        const pending: Array<(outcome: IScoreQueryOutcome) => void> = [];
+        model.queryScores.mockImplementation(() => {
+            return new Promise((resolve) => {
+                pending.push(resolve);
+            });
+        });
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+        await commitTag("Wettkampf");
+        expect(pending).toHaveLength(2);
+
+        // The newer filter fails, and the older answer that arrives afterwards must not hide that.
+        pending[1]({ result: ScoreQueryResult.Failed, ignoredTagIds: [] });
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListFailed")).toBeTruthy();
+        });
+
+        pending[0](appliedOutcome);
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+
+        expect(document.body.querySelector("#scoreListFailed")).toBeTruthy();
+    });
+
+    it("keeps a filter that names an unavailable tag when an older answer arrives", async () => {
+        const model = createMockDataModel([caixaTag]);
+        const pending: Array<(outcome: IScoreQueryOutcome) => void> = [];
+        model.queryScores.mockImplementation(() => {
+            return new Promise((resolve) => {
+                pending.push(resolve);
+            });
+        });
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            filterGroup();
+        });
+        await commitTag("Caixa");
+
+        // The tag is deleted while the answer to the filter that names it is still on its way.
+        model.tags = [];
+        await requisitions.execute("tagsChanged", undefined);
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
+        });
+
+        pending[0](appliedOutcome);
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+
+        expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
+        expect(document.body.querySelectorAll(".score-card")).toHaveLength(0);
     });
 });

@@ -452,6 +452,16 @@ describe("tag actions — score list", () => {
         expect((captured.body as { ignoredTagIds: number[]; }).ignoredTagIds).toEqual([999]);
     });
 
+    it("rejects a malformed tag id instead of widening the request by dropping it", async () => {
+        const { routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleListScores(createRequest({ groups: [["Caixa"]] }, memberUserId), res);
+
+        expect(captured.status).toBe(400);
+        expect((captured.body as { scores?: unknown; }).scores).toBeUndefined();
+    });
+
     it("returns the lineup of every listed score, keeping repeated instruments apart", async () => {
         const secondScoreId = scoreId + 1;
 
