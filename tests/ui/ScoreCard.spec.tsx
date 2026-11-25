@@ -80,20 +80,23 @@ describe("ScoreCard", { concurrent: false }, () => {
      * @param tagChips The chips the card shows.
      * @param completions The tags the card offers for assignment.
      * @param canEditTags Whether the caller manages tags at all.
+     * @param editing Whether the card's tag editing is switched on.
      *
      * @returns The card and the handlers it reports to.
      */
     const renderCard = (score: ISbDmScore, expanded = false, tagChips = userTags,
-        completions: ITagCompletion[] = [], canEditTags = true): {
+        completions: ITagCompletion[] = [], canEditTags = true, editing = false): {
         onOpen: ReturnType<typeof vi.fn>;
         onToggleLineup: ReturnType<typeof vi.fn>;
         onAction: ReturnType<typeof vi.fn>;
+        onToggleEdit: ReturnType<typeof vi.fn>;
         onTagAdd: ReturnType<typeof vi.fn>;
         onTagRemove: ReturnType<typeof vi.fn>;
     } => {
         const onOpen = vi.fn();
         const onToggleLineup = vi.fn();
         const onAction = vi.fn();
+        const onToggleEdit = vi.fn();
         const onTagAdd = vi.fn();
         const onTagRemove = vi.fn();
 
@@ -105,18 +108,20 @@ describe("ScoreCard", { concurrent: false }, () => {
                 tagChips={tagChips}
                 tagCompletions={completions}
                 canEditTags={canEditTags}
+                editing={editing}
                 expanded={expanded}
                 isAdmin={false}
                 showPermission={true}
                 onOpen={onOpen}
                 onToggleLineup={onToggleLineup}
                 onAction={onAction}
+                onToggleEdit={onToggleEdit}
                 onTagAdd={onTagAdd}
                 onTagRemove={onTagRemove}
             />,
         );
 
-        return { onOpen, onToggleLineup, onAction, onTagAdd, onTagRemove };
+        return { onOpen, onToggleLineup, onAction, onToggleEdit, onTagAdd, onTagRemove };
     };
 
     it("keeps the lineup closed until it is opened", () => {
@@ -201,18 +206,34 @@ describe("ScoreCard", { concurrent: false }, () => {
         expect(handlers.onOpen).toHaveBeenCalledTimes(1);
     });
 
-    it("reports the menu action of the card", () => {
+    it("groups its actions without a separate load button", () => {
+        renderCard(createScore(twoTracks));
+
+        const buttons = Array.from(renderResult!.container.querySelectorAll<HTMLButtonElement>(".score-card-action"));
+
+        expect(buttons.map((button) => {
+            return button.title;
+        })).toEqual(["Edit tags", "Copy Score URL", "Group Access", "Remove Score"]);
+        expect(buttons[0].textContent).toBe("Edit Tags");
+    });
+
+    it("reports the copy, permission and remove actions of the join group", () => {
         const score = createScore(twoTracks);
         const handlers = renderCard(score);
 
-        const item = Array.from(renderResult!.container.querySelectorAll<HTMLElement>(".menu-item")).find((entry) => {
-            return entry.textContent === "Load Score";
-        });
-        expect(item).toBeTruthy();
+        const button = (title: string): HTMLButtonElement => {
+            return renderResult!.container.querySelector<HTMLButtonElement>(`.score-card-action[title="${title}"]`)!;
+        };
 
-        item!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        button("Copy Score URL").click();
+        button("Group Access").click();
+        button("Remove Score").click();
 
-        expect(handlers.onAction).toHaveBeenCalledWith("load", score);
+        expect(handlers.onAction.mock.calls).toEqual([
+            ["copyUrl", score],
+            ["managePerm", score],
+            ["remove", score],
+        ]);
     });
 
     it("offers group access only to a score the caller may manage", () => {
@@ -220,17 +241,40 @@ describe("ScoreCard", { concurrent: false }, () => {
 
         renderCard({ ...score, perm: { ...score.perm!, isOwner: false } });
 
-        const labels = Array.from(renderResult!.container.querySelectorAll<HTMLElement>(".menu-item"), (entry) => {
-            return entry.textContent;
-        });
+        const titles = Array.from(renderResult!.container.querySelectorAll<HTMLElement>(".score-card-action"),
+            (entry) => {
+                return entry.title;
+            });
 
-        expect(labels).not.toContain("Group Access");
+        expect(titles).not.toContain("Group Access");
     });
 
     it("keeps the ordinal of the card in the list", () => {
         renderCard(createScore(twoTracks));
 
         expect(renderResult!.container.textContent).toContain("#1");
+    });
+
+    it("shows the score metadata as read-only badges above the tags", () => {
+        const score = {
+            ...createScore(twoTracks),
+            meta: { bpm: 110, timeSignature: "4/4", barCount: 24, durationSeconds: 127 },
+        };
+
+        renderCard(score);
+
+        const badges = Array.from(renderResult!.container.querySelectorAll(".score-card-meta-tag"), (entry) => {
+            return entry.textContent;
+        });
+
+        expect(badges).toEqual(["110 BPM", "4/4", "24 bars", "2:07"]);
+        expect(renderResult!.container.querySelector(".score-card-meta input")).toBeNull();
+    });
+
+    it("leaves the metadata row out when the content states no metadata", () => {
+        renderCard({ ...createScore(twoTracks), meta: {} });
+
+        expect(renderResult!.container.querySelector(".score-card-meta")).toBeNull();
     });
 
     it("does not open the score when the accordion is clicked through the keyboard", () => {
@@ -245,18 +289,49 @@ describe("ScoreCard", { concurrent: false }, () => {
         expect(handlers.onOpen).not.toHaveBeenCalled();
     });
 
+    it("keeps its tags read-only until the card's edit mode is switched on", () => {
+        const score = createScore(twoTracks);
+
+        renderCard(score, false, userTags, [], true, false);
+
+        expect(renderResult!.container.querySelector(".score-card-tags .tag-input-field")).toBeNull();
+        expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
+        expect(renderResult!.container.querySelector(".score-card-edit")?.classList.contains("is-active")).toBe(false);
+    });
+
+    it("shows the status dot while the card's edit mode is on", () => {
+        renderCard(createScore(twoTracks), false, userTags, [], true, true);
+
+        const edit = renderResult!.container.querySelector<HTMLElement>(".score-card-edit");
+
+        expect(edit?.classList.contains("is-active")).toBe(true);
+        expect(edit?.getAttribute("aria-pressed")).toBe("true");
+        expect(edit?.textContent).toBe("Editing");
+        expect(renderResult!.container.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
+    });
+
+    it("reports the edit toggle of the card", () => {
+        const score = createScore(twoTracks);
+        const handlers = renderCard(score);
+
+        renderResult!.container.querySelector<HTMLButtonElement>(".score-card-edit")!.click();
+
+        expect(handlers.onToggleEdit).toHaveBeenCalledWith(score);
+    });
+
     it("offers tag editing only to a caller who manages tags", () => {
         const score = createScore(twoTracks);
 
-        renderCard(score, false, userTags, [], false);
+        renderCard(score, false, userTags, [], false, true);
 
+        expect(renderResult!.container.querySelector(".score-card-edit")).toBeNull();
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-field")).toBeNull();
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
     });
 
     it("reports a tag the caller picks from the completions", () => {
         const score = createScore(twoTracks);
-        const handlers = renderCard(score, false, userTags, [{ caption: "Coco", tagId: 12 }]);
+        const handlers = renderCard(score, false, userTags, [{ caption: "Coco", tagId: 12 }], true, true);
 
         const input = renderResult!.container.querySelector<HTMLInputElement>(".score-card-tags .tag-input-field");
         expect(input).toBeTruthy();
@@ -269,7 +344,7 @@ describe("ScoreCard", { concurrent: false }, () => {
 
     it("reports a tag that is taken off through its close button", () => {
         const score = createScore(twoTracks);
-        const handlers = renderCard(score);
+        const handlers = renderCard(score, false, userTags, [], true, true);
 
         const closeButton = renderResult!.container.querySelector<HTMLButtonElement>(
             ".score-card-tags .tag-input-close-button");
@@ -281,7 +356,8 @@ describe("ScoreCard", { concurrent: false }, () => {
     });
 
     it("keeps a locked tag without a close button", () => {
-        renderCard(createScore(twoTracks), false, [{ id: 8, caption: "Demo Score", colorIndex: 1, locked: true }]);
+        renderCard(createScore(twoTracks), false, [{ id: 8, caption: "Demo Score", colorIndex: 1, locked: true }], [],
+            true, true);
 
         expect(renderResult!.container.textContent).toContain("Demo Score");
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
@@ -289,7 +365,7 @@ describe("ScoreCard", { concurrent: false }, () => {
 
     it("clears its tag entry on Escape instead of letting the key reach the window", () => {
         const score = createScore(twoTracks);
-        renderCard(score, false, userTags, [{ caption: "Coco", tagId: 12 }]);
+        renderCard(score, false, userTags, [{ caption: "Coco", tagId: 12 }], true, true);
 
         const input = renderResult!.container.querySelector<HTMLInputElement>(".score-card-tags .tag-input-field");
         expect(input).toBeTruthy();

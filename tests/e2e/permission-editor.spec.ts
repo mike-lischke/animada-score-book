@@ -201,6 +201,14 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
             return;
         }
 
+        if (action === "listSetLists") {
+            const body = JSON.stringify({ setLists: [], readableScoreCount: 0 });
+
+            await route.fulfill({ status: 200, contentType: "application/json", body });
+
+            return;
+        }
+
         // Fallback — log unhandled actions so we can see what's missing.
         const unhandledAction = url.searchParams.get("action") ?? "(none)";
 
@@ -229,18 +237,12 @@ const openGroupAccess = async (page: Page): Promise<void> => {
 
     await entry.hover();
 
-    const kebab = entry.locator(".score-card-actions button").first();
-
-    await kebab.click();
-
-    const menuItem = page.locator(".menu-item").filter({ hasText: "Group Access" });
-
-    await menuItem.click();
+    await entry.locator('.score-card-action[title="Group Access"]').click();
     await expect(page.locator("#permissionEditor")).toBeVisible({ timeout: 5000 });
 };
 
 test.describe("Permission Editor", () => {
-    test("opens via Group Access menu item on a score", async ({ page }) => {
+    test("opens via Group Access button on a score", async ({ page }) => {
         await setupPermissionApi(page);
         await openGroupAccess(page);
 

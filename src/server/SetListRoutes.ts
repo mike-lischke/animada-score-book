@@ -6,36 +6,53 @@
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { NameText } from "../core/NameText.js";
-import { TagCombination } from "../core/TagCombination.js";
-import { AccessLevel, EntityType, type IPermissionSummary, type ITokenPayload } from "./Auth.js";
+import { TagPalette } from "../core/TagPalette.js";
+import { EntityType, type ITokenPayload } from "./Auth.js";
 import type { IDbStatement } from "./database.js";
 import { type RequestContext } from "./RequestContext.js";
-import { SetListAccess, SetListFilterProblem, type ISetListRow } from "./SetListAccess.js";
+import { SetListAccess, type ISetListRow } from "./SetListAccess.js";
 import { SetListMembership } from "./SetListMembership.js";
 import { SetListOrder } from "./SetListOrder.js";
-import { TagAccess, type ITagRow } from "./TagAccess.js";
+import { ScoreEntries } from "./ScoreEntries.js";
+import { TagAccess, type ITagAccessContext, type ITagRow } from "./TagAccess.js";
+import { TagFilter, TagFilterProblem } from "./TagFilter.js";
 
 /** A set list as the client receives it. */
 interface ISetListJson {
     id: number;
     name: string;
+    tagId: number;
     revision: number;
-    groups?: number[][];
-    filterProblem?: SetListFilterProblem;
-    perm: IPermissionSummary;
+
+    /** How many member scores the caller may read, which is what the selector's pill shows. */
+    memberCount: number;
+
+    /** The groups the list is granted to, with the write flag the permission rows hold. */
+    groups: Array<{ groupId: number; writable: boolean; }>;
+
+    /** The owner of the list, exactly as a score has one. */
+    ownerId?: number;
+    ownerName?: string;
+
+    /** Whether the caller may change the list. */
+    editable: boolean;
+
+    /** Whether the caller may grant the list to groups: its owner and the administrators, exactly as with a score. */
+    managesAccess: boolean;
 }
 
 /**
- * The handlers behind the set-list actions. A set list is a named, saved tag combination with a score order of its
- * own; it copies no score and grants no score access. These handlers own the list itself: its name, its combination,
- * its revision and its stored order. `SetListMembership` resolves which scores it holds, `SetListOrder` how they are
- * placed, so neither a filter nor an order can widen what a caller may see.
+ * The handlers behind the set-list actions. A set list is defined by one tag: a score belongs to it while that tag is
+ * assigned, so the list copies no score and grants no score access. Ownership and group access follow the score
+ * permission model. These handlers own the list itself - its name, its group grants, its revision and its saved
+ * order. `SetListMembership` resolves which scores it holds and `SetListOrder` how they are placed, so neither a
+ * grant nor an order can widen what a caller may see.
  */
 export class SetListRoutes {
     public constructor(private readonly ctx: RequestContext) { }
 
     /**
-     * Lists the set lists the caller may read, with the stored combination and the state it is in.
+     * Lists the set lists the caller may select, with the number of member scores they may read.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -43,29 +60,44 @@ export class SetListRoutes {
     public async handleListSetLists(req: IncomingMessage, res: ServerResponse): Promise<void> {
         const user = this.ctx.getAuthUser(req);
         const rows = await this.ctx.auth.adapter.query<ISetListRow>(
-            "SELECT id, name, filters, revision FROM set_lists", [],
+            "SELECT id, tag_id AS tagId, revision FROM set_lists", [],
         );
 
+        const tags = await this.tagRows(rows.map((row) => {
+            return row.tagId;
+        }));
+        const shares = await this.sharingRows();
+        const owners = await this.ownerRows();
         const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.SetList, rows.map((row) => {
             return row.id;
         }));
+        const isAdmin = user ? await this.ctx.auth.isUserInAdminGroup(user.userId) : false;
+        const counts = await this.memberCounts(user, rows, tags, summaries);
 
         const entries: ISetListJson[] = [];
         for (const row of rows) {
+            const tag = tags.get(row.tagId);
             const summary = summaries.get(row.id);
-            if (summary?.canRead !== true) {
+            if (tag === undefined || summary?.canRead !== true) {
                 continue;
             }
 
-            entries.push(await this.listJson(row, summary));
+            const owner = owners.get(row.id);
+
+            entries.push(this.listJson(row, tag, summary.canWrite, summary.isOwner || isAdmin,
+                shares.get(row.id) ?? [], owner?.ownerId, counts.get(row.id) ?? 0, owner?.ownerName));
         }
 
-        this.ctx.sendJson(res, { setLists: entries });
+        entries.sort((left, right) => {
+            return NameText.compare(left.name, right.name);
+        });
+
+        this.ctx.sendJson(res, { setLists: entries, readableScoreCount: await this.readableScoreCount(user) });
     }
 
     /**
-     * Reads one set list with its scores: the saved combination, an optional extra filter, and the visible scores
-     * in the list's order. Scores the caller cannot read stay out of the result, but keep their places.
+     * Reads one set list with its scores: the visible members in the list's saved order, narrowed by the optional
+     * manual filter. Scores the caller cannot read stay out of the result and never influence its count.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -83,54 +115,54 @@ export class SetListRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, EntityType.SetList, listId, AccessLevel.Read);
-        if (!allowed) {
-            this.ctx.sendError(res, "Forbidden", 403);
-
-            return;
-        }
-
-        const row = await SetListAccess.find(this.ctx.auth.adapter, listId);
-        if (row === undefined) {
+        const entry = await SetListAccess.load(this.ctx.auth.adapter, listId);
+        const summary = user === undefined
+            ? undefined
+            : await this.ctx.auth.getPermissionSummary(user, EntityType.SetList, listId);
+        if (entry === undefined || user === undefined || summary?.canRead !== true) {
             this.ctx.sendError(res, "Set list not found", 404);
 
             return;
         }
 
-        const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.SetList, listId);
-        const entry = await this.listJson(row, summary);
+        const isAdmin = await this.ctx.auth.isUserInAdminGroup(user.userId);
+        const editable = summary.canWrite;
+        const sharedGroups = await SetListAccess.sharedGroups(this.ctx.auth, listId);
+        const ownerId = await this.ctx.auth.getExplicitOwner(EntityType.SetList, listId) ?? undefined;
+        const ownerName = await this.ownerName(ownerId);
 
-        if (entry.groups === undefined || entry.filterProblem !== undefined) {
-            this.ctx.sendJson(res, { ...entry, scores: [] });
-
-            return;
-        }
-
-        const extraGroups = body.groups === undefined ? [] : SetListAccess.readGroups(body.groups);
+        const extraGroups = body.groups === undefined ? TagFilter.empty : TagFilter.readGroups(body.groups);
         if (extraGroups === undefined) {
             this.ctx.sendError(res, "Invalid tag combination");
 
             return;
         }
 
-        const extraProblem = await this.extraFilterProblem(user, extraGroups);
+        const extraProblem = await TagFilter.problem(this.ctx.auth, user, extraGroups);
         if (extraProblem !== undefined) {
             this.sendFilterProblem(res, extraProblem);
 
             return;
         }
 
-        const groups = TagCombination.combine({ groups: entry.groups }, { groups: extraGroups }).groups;
         const storedIds = await this.scoreOrder(listId);
-        const membership = await SetListMembership.resolve(this.ctx.auth, user, storedIds, groups);
 
-        this.ctx.sendJson(res, { ...entry, scores: membership.visible });
+        // The count belongs to the list itself, not to the manual filter the caller currently uses.
+        const members = await SetListMembership.resolve(this.ctx.auth, user, storedIds, entry.tag.id, TagFilter.empty);
+        const membership = extraGroups.length === 0
+            ? members
+            : await SetListMembership.resolve(this.ctx.auth, user, storedIds, entry.tag.id, extraGroups);
+        const scores = await ScoreEntries.list(this.ctx.auth, user, membership.visible);
+        const json = this.listJson(entry.row, entry.tag, editable, summary.isOwner || isAdmin, sharedGroups, ownerId,
+            members.visible.length, ownerName);
+
+        this.ctx.sendJson(res, { ...json, scores });
     }
 
     /**
-     * Stores the order a caller wants for the scores it can see. Scores it cannot see, and scores that stopped
-     * matching, keep their places, so nothing is lost when only a part of the list is visible. The revision has to
-     * be the stored one, so two people cannot overwrite each other's order.
+     * Stores the order a caller wants for the members it can read. Members it cannot read keep their places, so
+     * nothing is lost when only a part of the list is visible. The revision has to be the stored one, so two people
+     * cannot overwrite each other's order.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -162,50 +194,32 @@ export class SetListRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, EntityType.SetList, listId, AccessLevel.Write);
-        if (!allowed) {
+        const allowed = await SetListAccess.canEdit(this.ctx.auth, user, listId);
+        const entry = allowed ? await SetListAccess.load(this.ctx.auth.adapter, listId) : undefined;
+        if (!allowed || entry === undefined) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
-        const row = await SetListAccess.find(this.ctx.auth.adapter, listId);
-        if (row === undefined) {
-            this.ctx.sendError(res, "Set list not found", 404);
-
-            return;
-        }
-
-        if (row.revision !== revision) {
-            this.sendConflict(res, row.revision);
-
-            return;
-        }
-
-        const groups = SetListRoutes.storedGroups(row);
-        if (groups === undefined) {
-            this.sendFilterProblem(res, SetListFilterProblem.Malformed);
-
-            return;
-        }
-
-        const audience = await SetListAccess.audience(this.ctx.auth, listId);
-        const ownerId = (await this.ctx.auth.getExplicitOwner(EntityType.SetList, listId)) ?? undefined;
-        const problem = await SetListAccess.filterProblem(this.ctx.auth, groups, audience, ownerId);
-        if (problem !== undefined) {
-            this.sendFilterProblem(res, problem);
+        if (entry.row.revision !== revision) {
+            this.sendConflict(res, entry.row.revision);
 
             return;
         }
 
         const storedIds = await this.scoreOrder(listId);
-        const membership = await SetListMembership.resolve(this.ctx.auth, user, storedIds, groups);
+        const membership = await SetListMembership.resolve(this.ctx.auth, user, storedIds, entry.tag.id,
+            TagFilter.empty);
+
+        // Reordering starts without a manual filter, so the submitted order names exactly the members the caller can
+        // read. Anything else would silently move members the caller does not know about.
         const nextOrder = SetListOrder.applyVisibleOrder(membership.canonical, membership.visible, order);
 
         if (nextOrder === undefined) {
             this.ctx.sendJson(res, {
                 error: "The order must name exactly the scores the list shows to you.",
-                revision: row.revision,
+                revision: entry.row.revision,
             }, 409);
 
             return;
@@ -228,7 +242,8 @@ export class SetListRoutes {
     }
 
     /**
-     * Creates a private set list that belongs to the caller.
+     * Creates a set list together with its tag. The caller chooses the owner scope: a group administrator one of the
+     * groups they administer, an administrator any group or the global scope.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -244,41 +259,72 @@ export class SetListRoutes {
 
         const body = await this.ctx.readJsonBody(req);
         const name = this.storableName(res, body.name);
-        const groups = SetListAccess.readGroups(body.groups ?? []);
-
         if (name === undefined) {
             return;
         }
 
-        if (groups === undefined) {
-            this.ctx.sendError(res, "Invalid tag combination");
+        const groupId = SetListRoutes.optionalId(body.groupId);
+        if (body.groupId !== undefined && body.groupId !== null && groupId === undefined) {
+            this.ctx.sendError(res, "Invalid group id");
 
             return;
         }
 
-        // A new list is private, so the owner is the only one who has to be able to use its tags.
-        const privateAudience = { groupIds: [], isWorld: false };
-        const problem = await SetListAccess.filterProblem(this.ctx.auth, groups, privateAudience, user.userId);
-        if (problem !== undefined) {
-            this.sendFilterProblem(res, problem);
+        const context = await TagAccess.contextFor(this.ctx.auth, user);
+        if (!SetListRoutes.createsInScope(context, groupId)) {
+            this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
-        const result = await this.ctx.auth.adapter.insertReturningId(
-            "INSERT INTO set_lists (name, filters, revision) VALUES (?, ?, 1)",
-            [name, JSON.stringify(groups)],
+        const clash = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0)", [name, groupId ?? null],
         );
-        const listId = result.insertId;
 
-        await this.ctx.auth.setOwner(EntityType.SetList, listId, user.userId);
+        if (clash.length > 0) {
+            this.ctx.sendError(res, "A tag with that name already exists in this scope.", 409);
 
-        this.ctx.sendJson(res, { success: true, id: listId, revision: 1 });
+            return;
+        }
+
+        const scopeParams = [name, groupId ?? null];
+        const statements: IDbStatement[] = [
+            {
+                sql: "INSERT INTO tags (name, color_index, group_id) VALUES (?, 0, ?)",
+                params: [name, groupId ?? null],
+            },
+            {
+                // The list is created from the tag in the same transaction, so neither exists without the other.
+                sql: "INSERT INTO set_lists (tag_id) SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0)",
+                params: scopeParams,
+            },
+            {
+                sql: "UPDATE tags SET color_index = id % ? WHERE name = ? AND owner_scope = IFNULL(?, 0)",
+                params: [TagPalette.count, ...scopeParams],
+            },
+            {
+                // The creator owns the list until other groups are granted access, exactly as a new score does.
+                sql: "INSERT INTO permissions (entity_type, entity_id, owner_id) "
+                    + "SELECT ?, l.id, ? FROM set_lists l JOIN tags t ON t.id = l.tag_id "
+                    + "WHERE t.name = ? AND t.owner_scope = IFNULL(?, 0) "
+                    + "ON DUPLICATE KEY UPDATE owner_id = ?",
+                params: [EntityType.SetList, user.userId, ...scopeParams, user.userId],
+            },
+        ];
+
+        await this.ctx.auth.adapter.executeTransaction(statements);
+
+        const entries = await this.ctx.auth.adapter.query<ISetListRow>(
+            "SELECT l.id, l.tag_id AS tagId, l.revision FROM set_lists l JOIN tags t ON t.id = l.tag_id "
+            + "WHERE t.name = ? AND t.owner_scope = IFNULL(?, 0)", scopeParams,
+        );
+
+        this.ctx.sendJson(res, { success: true, id: entries[0]?.id, revision: entries[0]?.revision });
     }
 
     /**
-     * Renames a set list, changes its tag combination, or both. The revision the caller edited has to be the stored
-     * one, so two people cannot overwrite each other's change.
+     * Renames a set list, which renames its tag. The revision the caller edited has to be the stored one, so two
+     * people cannot overwrite each other's change.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -303,67 +349,55 @@ export class SetListRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, EntityType.SetList, listId, AccessLevel.Write);
-        if (!allowed) {
+        const allowed = await SetListAccess.canEdit(this.ctx.auth, user, listId);
+        const entry = allowed ? await SetListAccess.load(this.ctx.auth.adapter, listId) : undefined;
+        if (!allowed || entry === undefined) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
-        const row = await SetListAccess.find(this.ctx.auth.adapter, listId);
-        if (row === undefined) {
-            this.ctx.sendError(res, "Set list not found", 404);
+        if (entry.row.revision !== revision) {
+            this.sendConflict(res, entry.row.revision);
 
             return;
         }
 
-        if (row.revision !== revision) {
-            this.sendConflict(res, row.revision);
-
-            return;
-        }
-
-        const storedGroups = SetListRoutes.storedGroups(row);
-        const groups = body.groups === undefined ? storedGroups : SetListAccess.readGroups(body.groups);
-
-        if (groups === undefined) {
-            this.ctx.sendError(res, "Invalid tag combination");
-
-            return;
-        }
-
-        const name = body.name === undefined ? row.name : this.storableName(res, body.name);
+        const name = this.storableName(res, body.name);
         if (name === undefined) {
             return;
         }
 
-        const audience = await SetListAccess.audience(this.ctx.auth, listId);
-        const ownerId = (await this.ctx.auth.getExplicitOwner(EntityType.SetList, listId)) ?? undefined;
-        const problem = await SetListAccess.filterProblem(this.ctx.auth, groups, audience, ownerId);
-        if (problem !== undefined) {
-            this.sendFilterProblem(res, problem);
+        const duplicate = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0) AND id != ?",
+            [name, entry.tag.groupId, entry.tag.id],
+        );
+
+        if (duplicate.length > 0) {
+            this.ctx.sendError(res, "A tag with that name already exists in this scope.", 409);
 
             return;
         }
 
-        const result = await this.ctx.auth.adapter.execute(
-            "UPDATE set_lists SET name = ?, filters = ?, revision = revision + 1 WHERE id = ? AND revision = ?",
-            [name, JSON.stringify(groups), listId, revision],
+        const claimed = await this.ctx.auth.adapter.execute(
+            "UPDATE set_lists SET revision = revision + 1 WHERE id = ? AND revision = ?", [listId, revision],
         );
 
-        if (result.affectedRows === 0) {
-            // Another change slipped in between the read and the write.
+        if (claimed.affectedRows === 0) {
             const current = await SetListAccess.find(this.ctx.auth.adapter, listId);
             this.sendConflict(res, current?.revision ?? revision);
 
             return;
         }
 
+        await this.ctx.auth.adapter.execute("UPDATE tags SET name = ? WHERE id = ?", [name, entry.tag.id]);
+
         this.ctx.sendJson(res, { success: true, revision: revision + 1 });
     }
 
     /**
-     * Deletes a set list with its order and its permission rows.
+     * Deletes a set list by deleting its tag: the catalog loses the tag, the scores lose the assignment and the list
+     * with its order and sharing goes with it.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -379,37 +413,63 @@ export class SetListRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, EntityType.SetList, listId, AccessLevel.Write);
-        if (!allowed) {
+        const allowed = await SetListAccess.canEdit(this.ctx.auth, user, listId);
+        const entry = allowed ? await SetListAccess.load(this.ctx.auth.adapter, listId) : undefined;
+        if (!allowed || entry === undefined) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
-        const { adapter } = this.ctx.auth;
+        const statements: IDbStatement[] = [
+            { sql: "DELETE FROM tags WHERE id = ?", params: [entry.tag.id] },
+            {
+                sql: "DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?",
+                params: [EntityType.SetList, listId],
+            },
+            {
+                sql: "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+                params: [EntityType.SetList, listId],
+            },
+        ];
 
-        await adapter.execute("DELETE FROM set_lists WHERE id = ?", [listId]);
-        await adapter.execute(
-            "DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?", [EntityType.SetList, listId],
-        );
-        await adapter.execute(
-            "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ?", [EntityType.SetList, listId],
-        );
+        await this.ctx.auth.adapter.executeTransaction(statements);
 
         this.ctx.sendJson(res, { success: true });
     }
 
     /**
-     * @param row The stored list.
+     * @param context The rules of the caller.
+     * @param groupId The owner scope a new list asks for; undefined for the global scope.
      *
-     * @returns The combination the list holds, or undefined when its stored JSON is damaged.
+     * @returns Whether the caller may create a list in that scope. A group administrator chooses among the groups
+     * they administer; an administrator may use any group or the global scope.
      */
-    private static storedGroups(row: ISetListRow): number[][] | undefined {
-        try {
-            return SetListAccess.readGroups(JSON.parse(row.filters) as unknown);
-        } catch {
+    private static createsInScope(context: ITagAccessContext, groupId: number | undefined): boolean {
+        if (!context.isSignedIn) {
+            return false;
+        }
+
+        if (groupId === undefined) {
+            return context.isAdmin;
+        }
+
+        return context.isAdmin || context.adminGroupIds.includes(groupId);
+    }
+
+    /**
+     * @param value A request field that names an id.
+     *
+     * @returns The id, or undefined when the field is missing or not a positive integer.
+     */
+    private static optionalId(value: unknown): number | undefined {
+        if (value === undefined || value === null || value === "") {
             return undefined;
         }
+
+        const id = Number(value);
+
+        return Number.isInteger(id) && id > 0 ? id : undefined;
     }
 
     /**
@@ -436,36 +496,175 @@ export class SetListRoutes {
     }
 
     /**
-     * @param row The stored list.
-     * @param summary The caller's access to it.
+     * @param user The authenticated caller, or undefined for a visitor.
      *
-     * @returns The list as the client receives it, including what its stored combination is worth right now.
+     * @returns How many scores the caller may read, which is the count of the All Scores pill.
      */
-    private async listJson(row: ISetListRow, summary: IPermissionSummary): Promise<ISetListJson> {
-        const groups = SetListRoutes.storedGroups(row);
+    private async readableScoreCount(user: ITokenPayload | undefined): Promise<number> {
+        const rows = await this.ctx.auth.adapter.query<{ id: number; }>("SELECT id FROM scores", []);
+        const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.Score, rows.map((row) => {
+            return row.id;
+        }));
 
-        let problem: SetListFilterProblem | undefined = SetListFilterProblem.Malformed;
-        if (groups !== undefined) {
-            const audience = await SetListAccess.audience(this.ctx.auth, row.id);
-            const ownerId = (await this.ctx.auth.getExplicitOwner(EntityType.SetList, row.id)) ?? undefined;
+        return rows.filter((row) => {
+            return summaries.get(row.id)?.canRead === true;
+        }).length;
+    }
 
-            problem = await SetListAccess.filterProblem(this.ctx.auth, groups, audience, ownerId);
+    /**
+     * @returns The owner of every set list that has one, keyed by list id, with the name the dialog shows.
+     */
+    private async ownerRows(): Promise<Map<number, { ownerId: number; ownerName: string; }>> {
+        const rows = await this.ctx.auth.adapter.query<{ entityId: number; ownerId: number; ownerName: string; }>(
+            "SELECT p.entity_id AS entityId, p.owner_id AS ownerId, "
+            + "COALESCE(NULLIF(u.display_name, ''), u.email) AS ownerName FROM permissions p "
+            + "LEFT JOIN users u ON u.id = p.owner_id WHERE p.entity_type = ? AND p.owner_id IS NOT NULL",
+            [EntityType.SetList],
+        );
+
+        return new Map(rows.map((row) => {
+            return [row.entityId, { ownerId: row.ownerId, ownerName: row.ownerName }] as
+                [number, { ownerId: number; ownerName: string; }];
+        }));
+    }
+
+    /**
+     * @param ownerId The owner in question.
+     *
+     * @returns The display name of that user, or undefined when the list has no owner.
+     */
+    private async ownerName(ownerId: number | undefined): Promise<string | undefined> {
+        if (ownerId === undefined) {
+            return undefined;
         }
 
+        const rows = await this.ctx.auth.adapter.query<{ ownerName: string; }>(
+            "SELECT COALESCE(NULLIF(display_name, ''), email) AS ownerName FROM users WHERE id = ?", [ownerId],
+        );
+
+        return rows.length > 0 ? rows[0].ownerName : undefined;
+    }
+
+    /**
+     * @param tagIds The tags to read.
+     *
+     * @returns The tag rows, keyed by id.
+     */
+    private async tagRows(tagIds: number[]): Promise<Map<number, ITagRow>> {
+        if (tagIds.length === 0) {
+            return new Map();
+        }
+
+        const placeholders = tagIds.map(() => {
+            return "?";
+        }).join(", ");
+        const rows = await this.ctx.auth.adapter.query<ITagRow>(
+            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey "
+            + `FROM tags WHERE id IN (${placeholders})`, tagIds,
+        );
+
+        return new Map(rows.map((row) => {
+            return [row.id, row] as [number, ITagRow];
+        }));
+    }
+
+    /**
+     * @returns The group grants of every set list, keyed by list id.
+     */
+    private async sharingRows(): Promise<Map<number, Array<{ groupId: number; writable: boolean; }>>> {
+        const rows = await this.ctx.auth.adapter.query<{ entityId: number; groupId: number; writable: number; }>(
+            "SELECT entity_id AS entityId, group_id AS groupId, writable FROM entity_groups WHERE entity_type = ?",
+            [EntityType.SetList],
+        );
+
+        const result = new Map<number, Array<{ groupId: number; writable: boolean; }>>();
+        for (const row of rows) {
+            const groups = result.get(row.entityId) ?? [];
+            groups.push({ groupId: row.groupId, writable: Boolean(row.writable) });
+            result.set(row.entityId, groups);
+        }
+
+        return result;
+    }
+
+    /**
+     * @param user The authenticated caller, or undefined for a visitor.
+     * @param rows Every stored list; unreadable ones produce no count.
+     * @param tags The tags of those lists, keyed by tag id.
+     * @param listAccess The caller's access to those lists, keyed by list id.
+     *
+     * @returns How many members of each list the caller may read, keyed by list id.
+     */
+    private async memberCounts(user: ITokenPayload | undefined, rows: ISetListRow[], tags: Map<number, ITagRow>,
+        listAccess: Map<number, { canRead: boolean; }>): Promise<Map<number, number>> {
+        const readable = rows.filter((row) => {
+            return tags.has(row.tagId) && listAccess.get(row.id)?.canRead === true;
+        });
+
+        const counts = new Map<number, number>();
+        if (readable.length === 0) {
+            return counts;
+        }
+
+        const tagIds = readable.map((row) => {
+            return row.tagId;
+        });
+        const placeholders = tagIds.map(() => {
+            return "?";
+        }).join(", ");
+        const assignments = await this.ctx.auth.adapter.query<{ tagId: number; scoreId: number; }>(
+            `SELECT tag_id AS tagId, score_id AS scoreId FROM score_tags WHERE tag_id IN (${placeholders})`, tagIds,
+        );
+
+        const scoreIds = Array.from(new Set(assignments.map((entry) => {
+            return entry.scoreId;
+        })));
+        const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.Score, scoreIds);
+
+        for (const row of readable) {
+            const members = assignments.filter((entry) => {
+                return entry.tagId === row.tagId && summaries.get(entry.scoreId)?.canRead === true;
+            });
+
+            counts.set(row.id, members.length);
+        }
+
+        return counts;
+    }
+
+    /**
+     * @param row The stored list.
+     * @param tag The tag that defines it.
+     * @param editable Whether the caller may change the list.
+     * @param managesAccess Whether the caller may grant the list to groups.
+     * @param groups The group grants of the list.
+     * @param ownerId The owner of the list, if it has one.
+     * @param memberCount How many members the caller may read.
+     * @param ownerName The owner's display name, if it has one.
+     *
+     * @returns The list as the client receives it.
+     */
+    private listJson(row: ISetListRow, tag: ITagRow, editable: boolean, managesAccess: boolean,
+        groups: Array<{ groupId: number; writable: boolean; }>, ownerId: number | undefined, memberCount: number,
+        ownerName?: string): ISetListJson {
         return {
             id: row.id,
-            name: row.name,
+            name: tag.name,
+            tagId: tag.id,
             revision: row.revision,
+            memberCount,
             groups,
-            filterProblem: problem,
-            perm: summary,
+            ownerId,
+            ownerName,
+            editable,
+            managesAccess,
         };
     }
 
     /**
      * @param listId The list to read the order of.
      *
-     * @returns The ids the list knows, in its stored order, whether or not they match today.
+     * @returns The ids the list knows, in its saved order.
      */
     private async scoreOrder(listId: number): Promise<number[]> {
         const rows = await this.ctx.auth.adapter.query<{ scoreId: number; }>(
@@ -506,47 +705,6 @@ export class SetListRoutes {
     }
 
     /**
-     * @param user The authenticated caller, or undefined for a visitor.
-     * @param groups The AND groups of the extra filter.
-     *
-     * @returns Why the caller cannot use the filter, or undefined when every tag it names is usable.
-     */
-    private async extraFilterProblem(user: ITokenPayload | undefined,
-        groups: number[][]): Promise<SetListFilterProblem | undefined> {
-        const tagIds = SetListAccess.tagIds(groups);
-        if (tagIds.length === 0) {
-            return undefined;
-        }
-
-        const placeholders = tagIds.map(() => {
-            return "?";
-        }).join(", ");
-        const tags = await this.ctx.auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey "
-            + `FROM tags WHERE id IN (${placeholders})`, tagIds,
-        );
-
-        const known = new Map(tags.map((tag) => {
-            return [tag.id, tag];
-        }));
-        const context = await TagAccess.contextFor(this.ctx.auth, user);
-
-        for (const tagId of tagIds) {
-            const tag = known.get(tagId);
-
-            if (tag === undefined) {
-                return SetListFilterProblem.UnavailableTag;
-            }
-
-            if (!TagAccess.canUse(context, tag)) {
-                return SetListFilterProblem.NotUsable;
-            }
-        }
-
-        return undefined;
-    }
-
-    /**
      * @param res The response to write a rejection to.
      * @param value The `name` field of the request body.
      *
@@ -576,11 +734,11 @@ export class SetListRoutes {
         return name;
     }
 
-    private sendFilterProblem(res: ServerResponse, problem: SetListFilterProblem): void {
-        this.ctx.sendJson(res, { error: SetListAccess.problemMessage(problem), filterProblem: problem }, 409);
+    private sendFilterProblem(res: ServerResponse, problem: TagFilterProblem): void {
+        this.ctx.sendJson(res, { error: TagFilter.problemMessage(problem), filterProblem: problem }, 409);
     }
 
     private sendConflict(res: ServerResponse, revision: number): void {
-        this.ctx.sendJson(res, { error: "The set list was changed in the meantime.", revision }, 409);
+        this.ctx.sendJson(res, { error: "The set list was changed in the meantime.", conflict: true, revision }, 409);
     }
 }

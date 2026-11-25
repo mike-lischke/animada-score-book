@@ -14,12 +14,11 @@ import { RequestContext } from "../../src/server/RequestContext.js";
 import type { IServerConfig } from "../../src/server/config.js";
 import { DatabaseEngine } from "../../src/server/database.js";
 import { SetListRoutes } from "../../src/server/SetListRoutes.js";
+import { TagActions } from "../../src/server/TagActions.js";
 import {
-    FakeSetListDatabase, foreignGroupId, foreignTagId, foreignUserId, globalTagId, memberGroupId, memberTagId,
-    otherScoreId, ownerUserId, scoreId, unknownTagId, worldGroupId,
+    FakeSetListDatabase, adminUserId, foreignGroupId, foreignUserId, foreignTagId, memberGroupId, memberTagId,
+    memberUserId, otherGroupId, otherScoreId, ownerUserId, scoreId, unknownTagId, worldGroupId,
 } from "./set-list-fake-database.js";
-
-const memberUserId = 8;
 
 const config: IServerConfig = {
     host: "127.0.0.1",
@@ -35,47 +34,55 @@ interface ICapturedResponse {
     body: unknown;
 }
 
+interface IRoutes {
+    database: FakeSetListDatabase;
+    routes: SetListRoutes;
+    tags: TagActions;
+    admin: AdminRoutes;
+}
+
 /**
- * @param token The access token to send, if any.
  * @param body The request body.
- * @param url The request URL.
+ * @param userId The caller, or undefined for a visitor.
  *
- * @returns A request that carries the token.
+ * @returns A request that carries the caller's token.
  */
-const createTokenRequest = (token: string | undefined, body: unknown, url: string): IncomingMessage => {
+const createRequest = (body: unknown, userId?: number): IncomingMessage => {
     const headers: Record<string, string> = { host: "localhost" };
-    if (token !== undefined) {
+    if (userId !== undefined) {
+        const token = Auth.createAccessToken({
+            userId, email: `user${userId}@example.com`, isAdmin: false,
+        });
         headers.authorization = `Bearer ${token}`;
     }
 
     return Object.assign(Readable.from([Buffer.from(JSON.stringify(body))]), {
-        url,
+        url: "/api?action=x",
         method: "POST",
         headers,
     }) as unknown as IncomingMessage;
 };
 
-const createRequest = (body: unknown, userId?: number, url = "/api?action=x"): IncomingMessage => {
-    const token = userId === undefined
-        ? undefined
-        : Auth.createAccessToken({ userId, email: `user${userId}@example.com`, isAdmin: false });
-
-    return createTokenRequest(token, body, url);
-};
-
 /**
- * @param body The request body.
- * @param groupId The group whose login token is sent.
- * @param url The request URL.
+ * @param url The full request URL, including its query.
+ * @param userId The caller, or undefined for a visitor.
  *
- * @returns A request as a group login produces it: the anonymous user, authenticated through the group.
+ * @returns A request without a body that carries the caller's token.
  */
-const createGroupRequest = (body: unknown, groupId: number, url = "/api?action=x"): IncomingMessage => {
-    const token = Auth.createAccessToken({
-        userId: 2, email: Auth.anonymousEmail, isAdmin: false, authType: "group", groupId,
-    });
+const createGetRequest = (url: string, userId?: number): IncomingMessage => {
+    const headers: Record<string, string> = { host: "localhost" };
+    if (userId !== undefined) {
+        const token = Auth.createAccessToken({
+            userId, email: `user${userId}@example.com`, isAdmin: false,
+        });
+        headers.authorization = `Bearer ${token}`;
+    }
 
-    return createTokenRequest(token, body, url);
+    return Object.assign(Readable.from([]), {
+        url,
+        method: "GET",
+        headers,
+    }) as unknown as IncomingMessage;
 };
 
 const createResponse = (): { res: ServerResponse; captured: ICapturedResponse; } => {
@@ -95,33 +102,49 @@ const createResponse = (): { res: ServerResponse; captured: ICapturedResponse; }
     return { res, captured };
 };
 
-const setup = (): { database: FakeSetListDatabase; routes: SetListRoutes; admin: AdminRoutes; } => {
+const setup = (): IRoutes => {
     const database = new FakeSetListDatabase();
-    database.userGroups.push({ userId: memberUserId, groupId: memberGroupId });
-    database.seedGrants(EntityType.Score, scoreId, ownerUserId);
-    database.seedGrants(EntityType.Score, otherScoreId, ownerUserId);
+    database.seedGrants(EntityType.Score, scoreId, null, [memberGroupId]);
+    database.seedGrants(EntityType.Score, otherScoreId, null, [memberGroupId]);
 
     const context = new RequestContext(new Auth(database), config);
 
-    return { database, routes: new SetListRoutes(context), admin: new AdminRoutes(context) };
+    return {
+        database,
+        routes: new SetListRoutes(context),
+        tags: new TagActions(context),
+        admin: new AdminRoutes(context),
+    };
 };
+
+/** The permissions a seeded list carries: its owner and the group grants. */
+interface IListAccessFixture {
+    ownerId?: number | null;
+    groups?: Array<number | { groupId: number; writable: boolean; }>;
+}
 
 /**
  * @param database The fake the test works with.
- * @param filters The combination the list holds, as JSON.
- * @param grants The groups the list is shared with.
- * @param owner The owner of the list.
+ * @param name The name of the list and its tag.
+ * @param groupId The tag's owner scope; undefined for the administrators.
+ * @param memberScoreIds The scores that carry the tag.
+ * @param access The list's permissions.
  *
- * @returns The id of the stored list.
+ * @returns The ids of the list and its tag.
  */
-const seedList = (database: FakeSetListDatabase, filters: number[][],
-    grants: Array<number | { groupId: number; writable: boolean; }> = [], owner = ownerUserId): number => {
-    const id = 500 + database.setLists.length;
+const seedList = (database: FakeSetListDatabase, name: string, groupId: number | undefined,
+    memberScoreIds: number[] = [], access: IListAccessFixture = {}): { id: number; tagId: number; } => {
+    const seeded = database.seedSetList(name, groupId);
 
-    database.setLists.push({ id, name: "Samba", filters: JSON.stringify(filters), revision: 1 });
-    database.seedGrants(EntityType.SetList, id, owner, grants);
+    memberScoreIds.forEach((score, index) => {
+        database.scoreTags.push({ scoreId: score, tagId: seeded.tagId });
+        database.setListScores.push({ setListId: seeded.id, scoreId: score, position: index + 1 });
+    });
 
-    return id;
+    database.seedGrants(EntityType.SetList, seeded.id,
+        access.ownerId === undefined ? ownerUserId : access.ownerId, access.groups ?? []);
+
+    return seeded;
 };
 
 /**
@@ -141,640 +164,583 @@ const storedOrder = (database: FakeSetListDatabase, listId: number): number[] =>
 };
 
 describe("set list routes — creating", () => {
-    it("creates a private list that belongs to the caller", async () => {
+    it("lets an administrator create a list in the global scope with its tag", async () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateSetList(createRequest({ name: "Samba", groups: [[globalTagId]] }, ownerUserId), res);
-
-        const body = captured.body as { success: boolean; id: number; revision: number; };
+        await routes.handleCreateSetList(createRequest({ name: "Auftritt" }, adminUserId), res);
 
         expect(captured.status).toBe(200);
-        expect(body.success).toBe(true);
-        expect(body.revision).toBe(1);
-        expect(database.setLists[0].filters).toBe(JSON.stringify([[globalTagId]]));
-        expect(database.owners.get(`${EntityType.SetList}:${body.id}`)).toBe(ownerUserId);
-        expect(database.grants.has(`${EntityType.SetList}:${body.id}`)).toBe(false);
-    });
-
-    it("keeps the owner's own group tag usable in a private list", async () => {
-        const { routes } = setup();
-        const { res, captured } = createResponse();
-
-        await routes.handleCreateSetList(createRequest({ name: "Samba", groups: [[memberTagId]] }, ownerUserId), res);
-
-        expect(captured.status).toBe(200);
-    });
-
-    it("refuses a combination that names a tag no longer known", async () => {
-        const { routes } = setup();
-        const { res, captured } = createResponse();
-
-        await routes.handleCreateSetList(createRequest({ name: "Samba", groups: [[unknownTagId]] }, ownerUserId), res);
-
-        expect(captured.status).toBe(409);
-        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("unavailable-tag");
-    });
-
-    it("refuses a group tag the owner cannot use", async () => {
-        const { database, routes } = setup();
-        database.tags.push({ id: 50, name: "Fremd", colorIndex: 3, groupId: foreignGroupId, systemKey: null });
-
-        const { res, captured } = createResponse();
-
-        await routes.handleCreateSetList(createRequest({ name: "Samba", groups: [[50]] }, ownerUserId), res);
-
-        expect(captured.status).toBe(409);
-        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("tag-scope");
-    });
-
-    it("refuses a combination that is not one", async () => {
-        const { routes } = setup();
-        const { res, captured } = createResponse();
-
-        await routes.handleCreateSetList(createRequest({ name: "Samba", groups: ["Caixa"] }, ownerUserId), res);
-
-        expect(captured.status).toBe(400);
-    });
-
-    it("refuses an empty name", async () => {
-        const { routes } = setup();
-        const { res, captured } = createResponse();
-
-        await routes.handleCreateSetList(createRequest({ name: "  ", groups: [] }, ownerUserId), res);
-
-        expect(captured.status).toBe(400);
-    });
-
-    it("answers 403 without a session", async () => {
-        const { routes } = setup();
-        const { res, captured } = createResponse();
-
-        await routes.handleCreateSetList(createRequest({ name: "Samba", groups: [] }), res);
-
-        expect(captured.status).toBe(403);
-    });
-});
-
-describe("set list routes — listing and reading", () => {
-    it("lists the caller's own list and the one shared with their group, but no other", async () => {
-        const { database, routes } = setup();
-        const own = seedList(database, [[globalTagId]]);
-        const shared = seedList(database, [[globalTagId]], [memberGroupId]);
-        seedList(database, [[globalTagId]], [foreignGroupId], foreignUserId);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleListSetLists(createRequest({}, ownerUserId, "/api?action=listSetLists"), res);
-
-        const ids = (captured.body as { setLists: Array<{ id: number; }>; }).setLists.map((entry) => {
-            return entry.id;
+        const tag = database.tags.find((entry) => {
+            return entry.name === "Auftritt";
         });
-
-        expect(captured.status).toBe(200);
-        expect(ids).toEqual([own, shared]);
-    });
-
-    it("shows a World list to a visitor", async () => {
-        const { database, routes } = setup();
-        const isWorld = seedList(database, [[globalTagId]], [worldGroupId]);
-        seedList(database, [[globalTagId]]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleListSetLists(createRequest({}, undefined, "/api?action=listSetLists"), res);
-
-        const ids = (captured.body as { setLists: Array<{ id: number; }>; }).setLists.map((entry) => {
-            return entry.id;
+        expect(tag?.groupId).toBeNull();
+        const list = database.setLists.find((entry) => {
+            return entry.tagId === tag?.id;
         });
+        expect(list).toBeDefined();
 
-        expect(ids).toEqual([isWorld]);
+        // The creator owns the list, exactly as a new score belongs to the one who created it.
+        expect(database.owners.get(`setlist:${list?.id}`)).toBe(adminUserId);
     });
 
-    it("reads a list with the score ids the caller may read, in the list's order", async () => {
+    it("lets a group administrator create a list for the group they administer", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-        database.setListScores.push(
-            { setListId: listId, scoreId: otherScoreId, position: 1 },
-            { setListId: listId, scoreId: scoreId, position: 2 },
-            { setListId: listId, scoreId: 77, position: 3 },
-        );
-
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(createRequest({}, ownerUserId, `/api?action=getSetList&id=${listId}`), res);
-
-        const body = captured.body as { id: number; groups: number[][]; scores: number[]; };
+        await routes.handleCreateSetList(createRequest({ name: "Bateria Set", groupId: memberGroupId }, ownerUserId),
+            res);
 
         expect(captured.status).toBe(200);
-        expect(body.groups).toEqual([[globalTagId]]);
-        expect(body.scores).toEqual([otherScoreId, scoreId]);
+        expect(database.tags.find((entry) => {
+            return entry.name === "Bateria Set";
+        })?.groupId).toBe(memberGroupId);
     });
 
-    it("lets a visitor read a World list without any score details", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [worldGroupId]);
-        database.setListScores.push({ setListId: listId, scoreId, position: 1 });
-
+    it("refuses a group a group administrator does not administer", async () => {
+        const { routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(createRequest({}, undefined, `/api?action=getSetList&id=${listId}`), res);
-
-        const body = captured.body as { groups: number[][]; scores: number[]; };
-
-        expect(captured.status).toBe(200);
-        expect(body.groups).toEqual([[globalTagId]]);
-        expect(body.scores).toEqual([]);
-    });
-
-    it("answers 403 for a list the caller cannot read", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleGetSetList(createRequest({}, memberUserId, `/api?action=getSetList&id=${listId}`), res);
+        await routes.handleCreateSetList(createRequest({ name: "Fremd Set", groupId: otherGroupId }, ownerUserId), res);
 
         expect(captured.status).toBe(403);
     });
 
-    it("reports a deleted tag instead of a narrowed combination", async () => {
-        const { database, routes } = setup();
-        seedList(database, [[memberTagId]]);
-        database.tags.splice(database.tags.findIndex((tag) => {
-            return tag.id === memberTagId;
-        }), 1);
-
+    it("refuses a member who administers no group", async () => {
+        const { routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleListSetLists(createRequest({}, ownerUserId, "/api?action=listSetLists"), res);
-
-        const entry = (captured.body as {
-            setLists: Array<{ groups: number[][]; filterProblem?: string; }>;
-        }).setLists[0];
-
-        expect(entry.groups).toEqual([[memberTagId]]);
-        expect(entry.filterProblem).toBe("unavailable-tag");
-    });
-});
-
-describe("set list routes — updating", () => {
-    it("renames a list and bumps its revision", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleUpdateSetList(
-            createRequest({ id: listId, revision: 1, name: "Bateria" }, ownerUserId), res,
-        );
-
-        expect(captured.status).toBe(200);
-        expect((captured.body as { revision: number; }).revision).toBe(2);
-        expect(database.setLists[0].name).toBe("Bateria");
-    });
-
-    it("refuses an edit that builds on an outdated revision", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleUpdateSetList(
-            createRequest({ id: listId, revision: 7, name: "Bateria" }, ownerUserId), res,
-        );
-
-        expect(captured.status).toBe(409);
-        expect((captured.body as { revision: number; }).revision).toBe(1);
-        expect(database.setLists[0].name).toBe("Samba");
-    });
-
-    it("refuses a change by a member who may only read the list", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleUpdateSetList(
-            createRequest({ id: listId, revision: 1, name: "Bateria" }, memberUserId), res,
-        );
+        await routes.handleCreateSetList(createRequest({ name: "Meins", groupId: memberGroupId }, memberUserId), res);
 
         expect(captured.status).toBe(403);
     });
 
-    it("lets a group with write access change the list", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [{ groupId: memberGroupId, writable: true }]);
-
+    it("refuses a request without a session", async () => {
+        const { routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleUpdateSetList(
-            createRequest({ id: listId, revision: 1, name: "Bateria" }, memberUserId), res,
-        );
-
-        expect(captured.status).toBe(200);
-    });
-
-    it("refuses a combination that would no longer fit the list's sharing", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [worldGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleUpdateSetList(
-            createRequest({ id: listId, revision: 1, groups: [[memberTagId]] }, ownerUserId), res,
-        );
-
-        expect(captured.status).toBe(409);
-        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("tag-scope");
-    });
-});
-
-describe("set list routes — deleting", () => {
-    it("deletes the list with its permission rows", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleDeleteSetList(createRequest({ id: listId }, ownerUserId), res);
-
-        expect(captured.status).toBe(200);
-        expect(database.setLists.length).toBe(0);
-        expect(database.owners.has(`${EntityType.SetList}:${listId}`)).toBe(false);
-        expect(database.grants.has(`${EntityType.SetList}:${listId}`)).toBe(false);
-    });
-
-    it("refuses a delete by someone who may only read the list", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleDeleteSetList(createRequest({ id: listId }, memberUserId), res);
+        await routes.handleCreateSetList(createRequest({ name: "Anonym" }), res);
 
         expect(captured.status).toBe(403);
-        expect(database.setLists.length).toBe(1);
+    });
+
+    it("refuses a name an existing tag of the same owner already uses", async () => {
+        const { routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Bateria Internal", groupId: memberGroupId },
+            ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+    });
+
+    it("allows a name another owner scope already uses", async () => {
+        const { database, routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Groovy", groupId: memberGroupId }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(database.tags.filter((entry) => {
+            return entry.name === "Groovy";
+        })).toHaveLength(2);
     });
 });
 
-describe("set list permissions", () => {
-    it("refuses to share a list with World while it uses a group tag", async () => {
-        const { database, admin } = setup();
-        const listId = seedList(database, [[memberTagId]]);
-
+describe("set list routes — listing", () => {
+    it("shows a granted group's members the list and their readable member count", async () => {
+        const { database, routes } = setup();
+        seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId], { groups: [memberGroupId] });
+        database.seedGrants(EntityType.Score, otherScoreId, foreignUserId);
         const { res, captured } = createResponse();
 
-        await admin.handleSetPermissions(createRequest({
-            entityType: EntityType.SetList, entityId: listId,
-            addGroups: [{ groupId: worldGroupId, writable: false }],
-        }, ownerUserId), res);
-
-        expect(captured.status).toBe(409);
-        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("tag-scope");
-        expect(database.grants.get(`${EntityType.SetList}:${listId}`)?.size).toBe(0);
-    });
-
-    it("refuses to share a list with a second group while it uses a group tag", async () => {
-        const { database, admin } = setup();
-        const listId = seedList(database, [[memberTagId]], [memberGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await admin.handleSetPermissions(createRequest({
-            entityType: EntityType.SetList, entityId: listId,
-            addGroups: [{ groupId: foreignGroupId, writable: false }],
-        }, ownerUserId), res);
-
-        expect(captured.status).toBe(409);
-        expect(database.grants.get(`${EntityType.SetList}:${listId}`)?.has(foreignGroupId)).toBe(false);
-    });
-
-    it("shares a list that uses global tags with World and bumps its revision", async () => {
-        const { database, admin } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
-        const { res, captured } = createResponse();
-
-        await admin.handleSetPermissions(createRequest({
-            entityType: EntityType.SetList, entityId: listId,
-            addGroups: [{ groupId: worldGroupId, writable: false }],
-        }, ownerUserId), res);
+        await routes.handleListSetLists(createRequest({}, memberUserId), res);
 
         expect(captured.status).toBe(200);
-        expect((captured.body as { revision: number; }).revision).toBe(2);
-        expect(database.grants.get(`${EntityType.SetList}:${listId}`)?.has(worldGroupId)).toBe(true);
+        const body = captured.body as { setLists: Array<{ name: string; memberCount: number; editable: boolean; }>; };
+        expect(body.setLists).toHaveLength(1);
+        expect(body.setLists[0]).toMatchObject({ name: "Auftritt", memberCount: 1, editable: false });
     });
 
-    it("refuses a permission change that builds on an outdated revision", async () => {
-        const { database, admin } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-        database.setLists[0].revision = 4;
-
+    it("shows a list granted to the caller's group, read-only", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId], { groups: [foreignGroupId] });
         const { res, captured } = createResponse();
 
-        await admin.handleSetPermissions(createRequest({
-            entityType: EntityType.SetList, entityId: listId, revision: 1,
-            addGroups: [{ groupId: worldGroupId, writable: false }],
-        }, ownerUserId), res);
+        await routes.handleListSetLists(createRequest({}, foreignUserId), res);
 
-        expect(captured.status).toBe(409);
-        expect((captured.body as { revision: number; }).revision).toBe(4);
+        const body = captured.body as { setLists: Array<{ id: number; editable: boolean; }>; };
+        expect(body.setLists.map((list) => {
+            return list.id;
+        })).toEqual([seeded.id]);
+        expect(body.setLists[0].editable).toBe(false);
     });
 
-    it("stores a World grant as read-only, whatever the request asks for", async () => {
-        const { database, admin } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
+    it("hides the list from a group it is not shared with", async () => {
+        const { database, routes } = setup();
+        seedList(database, "Auftritt", memberGroupId, [scoreId]);
         const { res, captured } = createResponse();
 
-        await admin.handleSetPermissions(createRequest({
-            entityType: EntityType.SetList, entityId: listId,
-            addGroups: [{ groupId: worldGroupId, writable: true }],
-        }, ownerUserId), res);
+        await routes.handleListSetLists(createRequest({}, foreignUserId), res);
 
-        expect(captured.status).toBe(200);
-        expect(database.grants.get(`${EntityType.SetList}:${listId}`)?.get(worldGroupId)).toBe(false);
+        expect((captured.body as { setLists: unknown[]; }).setLists).toEqual([]);
+    });
+
+    it("shows nothing to a visitor, not even a list granted to a group", async () => {
+        const { database, routes } = setup();
+        seedList(database, "Auftritt", memberGroupId, [scoreId], { groups: [foreignGroupId] });
+        const { res, captured } = createResponse();
+
+        await routes.handleListSetLists(createRequest({}), res);
+
+        expect((captured.body as { setLists: unknown[]; }).setLists).toEqual([]);
+    });
+
+    it("shows every list to an administrator and marks the editable ones", async () => {
+        const { database, routes } = setup();
+        seedList(database, "Admin Set", undefined);
+        seedList(database, "Gruppen Set", memberGroupId);
+        const { res, captured } = createResponse();
+
+        await routes.handleListSetLists(createRequest({}, adminUserId), res);
+
+        const body = captured.body as { setLists: Array<{ editable: boolean; }>; };
+        expect(body.setLists).toHaveLength(2);
+        expect(body.setLists.every((list) => {
+            return list.editable;
+        })).toBe(true);
     });
 });
 
-describe("set list routes — group login", () => {
-    it("reads a list its group was given", async () => {
+describe("set list routes — reading", () => {
+    it("returns the members in the saved order, with their tags and access", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
+        const seeded = seedList(database, "Auftritt", memberGroupId, [otherScoreId, scoreId],
+            { groups: [memberGroupId] });
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(
-            createGroupRequest({}, memberGroupId, `/api?action=getSetList&id=${listId}`), res,
-        );
+        await routes.handleGetSetList(createRequest({ id: seeded.id }, memberUserId), res);
 
         expect(captured.status).toBe(200);
-        expect((captured.body as { id: number; }).id).toBe(listId);
+        const body = captured.body as {
+            name: string; memberCount: number; scores: Array<{ id: number; tagIds: number[]; }>;
+        };
+        expect(body.name).toBe("Auftritt");
+        expect(body.memberCount).toBe(2);
+        expect(body.scores.map((entry) => {
+            return entry.id;
+        })).toEqual([otherScoreId, scoreId]);
+        expect(body.scores[1].tagIds).toContain(seeded.tagId);
     });
 
-    it("refuses an edit through a read-only group grant", async () => {
+    it("returns the intersection with the manual filter and keeps the unfiltered count", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleUpdateSetList(
-            createGroupRequest({ id: listId, revision: 1, name: "Bateria" }, memberGroupId), res,
-        );
-
-        expect(captured.status).toBe(403);
-        expect(database.setLists[0].name).toBe("Samba");
-    });
-
-    it("lets a writable group grant edit the list", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [{ groupId: memberGroupId, writable: true }]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleUpdateSetList(
-            createGroupRequest({ id: listId, revision: 1, name: "Bateria" }, memberGroupId), res,
-        );
-
-        expect(captured.status).toBe(200);
-        expect(database.setLists[0].name).toBe("Bateria");
-    });
-
-    it("lets a writable group grant reorder the list", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [{ groupId: memberGroupId, writable: true }]);
-        database.seedGrants(EntityType.Score, scoreId, ownerUserId, [memberGroupId]);
-        database.seedGrants(EntityType.Score, otherScoreId, ownerUserId, [memberGroupId]);
-        database.setListScores.push(
-            { setListId: listId, scoreId: otherScoreId, position: 1 },
-            { setListId: listId, scoreId, position: 2 },
-        );
-
-        const { res, captured } = createResponse();
-
-        await routes.handleReorderSetList(createGroupRequest({
-            id: listId, revision: 1, order: [scoreId, otherScoreId],
-        }, memberGroupId), res);
-
-        expect(captured.status).toBe(200);
-        expect(storedOrder(database, listId)).toEqual([scoreId, otherScoreId]);
-    });
-});
-
-describe("set list routes — extra filter", () => {
-    it("returns the intersection of the saved and the extra filter", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
+        const seeded = seedList(database, "Auftritt", memberGroupId, [otherScoreId, scoreId],
+            { groups: [memberGroupId] });
         database.scoreTags.push({ scoreId, tagId: memberTagId });
-        database.setListScores.push(
-            { setListId: listId, scoreId: otherScoreId, position: 1 },
-            { setListId: listId, scoreId, position: 2 },
-        );
-
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(
-            createRequest({ groups: [[memberTagId]] }, ownerUserId, `/api?action=getSetList&id=${listId}`), res,
-        );
+        await routes.handleGetSetList(createRequest({ id: seeded.id, groups: [[memberTagId]] }, memberUserId), res);
 
-        expect(captured.status).toBe(200);
-        expect((captured.body as { scores: number[]; }).scores).toEqual([scoreId]);
-        expect(storedOrder(database, listId)).toEqual([otherScoreId, scoreId]);
+        const body = captured.body as { memberCount: number; scores: Array<{ id: number; }>; };
+        expect(body.scores.map((entry) => {
+            return entry.id;
+        })).toEqual([scoreId]);
+        expect(body.memberCount).toBe(2);
     });
 
-    it("reports an extra filter that names a tag no longer known", async () => {
+    it("leaves out a member the caller cannot read", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
+        const seeded = seedList(database, "Auftritt", memberGroupId, [otherScoreId, scoreId],
+            { groups: [memberGroupId] });
+        database.seedGrants(EntityType.Score, otherScoreId, foreignUserId);
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(
-            createRequest({ groups: [[unknownTagId]] }, ownerUserId, `/api?action=getSetList&id=${listId}`), res,
-        );
+        await routes.handleGetSetList(createRequest({ id: seeded.id }, memberUserId), res);
+
+        const body = captured.body as { scores: Array<{ id: number; }>; };
+        expect(body.scores.map((entry) => {
+            return entry.id;
+        })).toEqual([scoreId]);
+    });
+
+    it("answers a list the caller cannot select as not found", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId]);
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(createRequest({ id: seeded.id }, foreignUserId), res);
+
+        expect(captured.status).toBe(404);
+    });
+
+    it("rejects a manual filter that names a tag no longer known", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId], { groups: [memberGroupId] });
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(createRequest({ id: seeded.id, groups: [[unknownTagId]] }, memberUserId), res);
 
         expect(captured.status).toBe(409);
         expect((captured.body as { filterProblem: string; }).filterProblem).toBe("unavailable-tag");
     });
 
-    it("refuses an extra filter with a tag the caller cannot use", async () => {
+    it("rejects a manual filter that names a tag the caller cannot use", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId], { groups: [memberGroupId] });
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(
-            createRequest({ groups: [[foreignTagId]] }, memberUserId, `/api?action=getSetList&id=${listId}`), res,
-        );
+        await routes.handleGetSetList(createRequest({ id: seeded.id, groups: [[foreignTagId]] }, memberUserId), res);
 
         expect(captured.status).toBe(409);
         expect((captured.body as { filterProblem: string; }).filterProblem).toBe("not-usable");
     });
+});
 
-    it("reports a deleted saved tag instead of a narrower list", async () => {
+describe("set list routes — renaming", () => {
+    it("renames the tag with the list and bumps the revision", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[memberTagId]]);
-        database.tags.splice(database.tags.findIndex((tag) => {
-            return tag.id === memberTagId;
-        }), 1);
-
+        const seeded = seedList(database, "Auftritt", memberGroupId);
         const { res, captured } = createResponse();
 
-        await routes.handleGetSetList(
-            createRequest({}, ownerUserId, `/api?action=getSetList&id=${listId}`), res,
-        );
-
-        const body = captured.body as { filterProblem: string; scores: number[]; };
+        await routes.handleUpdateSetList(createRequest({ id: seeded.id, revision: 1, name: "Konzert" },
+            ownerUserId), res);
 
         expect(captured.status).toBe(200);
-        expect(body.filterProblem).toBe("unavailable-tag");
-        expect(body.scores).toEqual([]);
+        expect(database.tags.find((entry) => {
+            return entry.id === seeded.tagId;
+        })?.name).toBe("Konzert");
+        expect(database.setLists[0].revision).toBe(2);
+    });
+
+    it("refuses a rename by a member", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
+        const { res, captured } = createResponse();
+
+        await routes.handleUpdateSetList(createRequest({ id: seeded.id, revision: 1, name: "Konzert" },
+            memberUserId), res);
+
+        expect(captured.status).toBe(403);
+    });
+
+    it("refuses an edit that builds on an outdated revision", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
+        database.setLists[0].revision = 3;
+        const { res, captured } = createResponse();
+
+        await routes.handleUpdateSetList(createRequest({ id: seeded.id, revision: 1, name: "Konzert" },
+            ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect((captured.body as { conflict: boolean; }).conflict).toBe(true);
+    });
+
+    it("refuses a name the owner scope already holds", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
+        const { res, captured } = createResponse();
+
+        await routes.handleUpdateSetList(createRequest({
+            id: seeded.id, revision: 1, name: "Bateria Internal",
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(409);
     });
 });
 
-describe("set list routes — reordering", () => {
-    it("stores the new order and bumps the revision", async () => {
+describe("set list routes — deleting", () => {
+    it("removes the tag, its assignments, the list, its order and its access rows", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-        database.setListScores.push(
-            { setListId: listId, scoreId: otherScoreId, position: 1 },
-            { setListId: listId, scoreId, position: 2 },
-        );
-
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId], { groups: [foreignGroupId] });
         const { res, captured } = createResponse();
 
-        await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [scoreId, otherScoreId],
-        }, ownerUserId), res);
+        await routes.handleDeleteSetList(createRequest({ id: seeded.id }, ownerUserId), res);
 
         expect(captured.status).toBe(200);
-        expect((captured.body as { revision: number; }).revision).toBe(2);
+        expect(database.tags.some((entry) => {
+            return entry.id === seeded.tagId;
+        })).toBe(false);
+        expect(database.setLists).toHaveLength(0);
+        expect(database.scoreTags.some((entry) => {
+            return entry.tagId === seeded.tagId;
+        })).toBe(false);
+        expect(database.setListScores).toHaveLength(0);
+        expect(database.grants.get(`setlist:${seeded.id}`)).toBeUndefined();
+    });
+
+    it("refuses a delete by a member", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
+        const { res, captured } = createResponse();
+
+        await routes.handleDeleteSetList(createRequest({ id: seeded.id }, memberUserId), res);
+
+        expect(captured.status).toBe(403);
+        expect(database.setLists).toHaveLength(1);
+    });
+});
+
+describe("set list routes — membership through the tag", () => {
+    it("appends a newly tagged score and bumps the revision", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId]);
+        const { res, captured } = createResponse();
+
+        await tags.handleAssignTag(createRequest({ scoreId: otherScoreId, tagId: seeded.tagId }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId, otherScoreId]);
         expect(database.setLists[0].revision).toBe(2);
-        expect(storedOrder(database, listId)).toEqual([scoreId, otherScoreId]);
     });
 
-    it("keeps the places of scores the caller cannot see", async () => {
+    it("keeps the position when the tag is assigned twice", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
+        const { res, captured } = createResponse();
+
+        await tags.handleAssignTag(createRequest({ scoreId, tagId: seeded.tagId }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId, otherScoreId]);
+        expect(database.setLists[0].revision).toBe(1);
+    });
+
+    it("drops the position when the tag comes off", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
+        const { res, captured } = createResponse();
+
+        await tags.handleUnassignTag(createRequest({ scoreId, tagId: seeded.tagId }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, seeded.id)).toEqual([otherScoreId]);
+        expect(database.scoreTags.some((entry) => {
+            return entry.scoreId === scoreId && entry.tagId === seeded.tagId;
+        })).toBe(false);
+    });
+
+    it("appends a score again after it lost the tag", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
+        await tags.handleUnassignTag(createRequest({ scoreId, tagId: seeded.tagId }, ownerUserId),
+            createResponse().res);
+        const { res, captured } = createResponse();
+
+        await tags.handleAssignTag(createRequest({ scoreId, tagId: seeded.tagId }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, seeded.id)).toEqual([otherScoreId, scoreId]);
+    });
+
+    it("refuses an assignment by a member who may only select the list", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId]);
+        const { res, captured } = createResponse();
+
+        await tags.handleAssignTag(createRequest({ scoreId: otherScoreId, tagId: seeded.tagId }, memberUserId), res);
+
+        expect(captured.status).toBe(403);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId]);
+    });
+
+    it("deletes the list when its tag is deleted", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId]);
+        const { res, captured } = createResponse();
+
+        await tags.handleDeleteTag(createRequest({ id: seeded.tagId }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(database.setLists).toHaveLength(0);
+        expect(database.scoreTags.some((entry) => {
+            return entry.tagId === seeded.tagId;
+        })).toBe(false);
+    });
+
+    it("renames the list when its tag is renamed", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId]);
+        const { res, captured } = createResponse();
+
+        await tags.handleUpdateTag(createRequest({ id: seeded.tagId, name: "Konzert" }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(database.setLists[0].revision).toBe(2);
+        expect(database.tags.find((entry) => {
+            return entry.id === seeded.tagId;
+        })?.name).toBe("Konzert");
+    });
+
+    it("marks the tag as a set-list tag in the tag catalogue", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
+        const { res, captured } = createResponse();
+
+        await tags.handleListTags(createRequest({}, memberUserId), res);
+
+        const body = captured.body as { tags: Array<{ id: number; setListId?: number; }>; };
+        expect(body.tags.find((tag) => {
+            return tag.id === seeded.tagId;
+        })?.setListId).toBe(seeded.id);
+        expect(database.tags).toBeDefined();
+    });
+});
+
+describe("set list routes — ordering", () => {
+    it("stores the order the caller submits and bumps the revision", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-        database.scores.push({ id: 11, name: "Coco" });
-        database.scoreTags.push({ scoreId: 11, tagId: globalTagId });
-        database.seedGrants(EntityType.Score, 11, ownerUserId);
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
+        const { res, captured } = createResponse();
+
+        await routes.handleReorderSetList(createRequest({
+            id: seeded.id, revision: 1, order: [otherScoreId, scoreId],
+        }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect(storedOrder(database, seeded.id)).toEqual([otherScoreId, scoreId]);
+        expect(database.setLists[0].revision).toBe(2);
+    });
+
+    it("keeps the place of a member the caller cannot read", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
         database.seedGrants(EntityType.Score, otherScoreId, foreignUserId);
-        database.setListScores.push(
-            { setListId: listId, scoreId: otherScoreId, position: 1 },
-            { setListId: listId, scoreId, position: 2 },
-            { setListId: listId, scoreId: 11, position: 3 },
-        );
-
         const { res, captured } = createResponse();
 
-        await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [11, scoreId],
-        }, ownerUserId), res);
+        await routes.handleReorderSetList(createRequest({ id: seeded.id, revision: 1, order: [scoreId] },
+            ownerUserId), res);
 
         expect(captured.status).toBe(200);
-        expect(storedOrder(database, listId)).toEqual([otherScoreId, 11, scoreId]);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId, otherScoreId]);
     });
 
-    it("keeps the place of a score that stopped matching", async () => {
+    it("refuses an order that leaves out a visible member", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-        database.setListScores.push(
-            { setListId: listId, scoreId, position: 1 },
-            { setListId: listId, scoreId: otherScoreId, position: 2 },
-        );
-        database.scoreTags.splice(database.scoreTags.findIndex((entry) => {
-            return entry.scoreId === otherScoreId;
-        }), 1);
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
+        const { res, captured } = createResponse();
 
+        await routes.handleReorderSetList(createRequest({ id: seeded.id, revision: 1, order: [scoreId] },
+            ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId, otherScoreId]);
+    });
+
+    it("refuses an order by a member who may only select the list", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
         const { res, captured } = createResponse();
 
         await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [scoreId],
-        }, ownerUserId), res);
-
-        expect(captured.status).toBe(200);
-        expect(storedOrder(database, listId)).toEqual([scoreId, otherScoreId]);
-    });
-
-    it("refuses an order by a member who may only read the list", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]], [memberGroupId]);
-
-        const { res, captured } = createResponse();
-
-        await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [],
+            id: seeded.id, revision: 1, order: [otherScoreId, scoreId],
         }, memberUserId), res);
 
         expect(captured.status).toBe(403);
-        expect(database.setLists[0].revision).toBe(1);
     });
 
     it("refuses an order that builds on an outdated revision", async () => {
         const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId, otherScoreId]);
         database.setLists[0].revision = 4;
-
         const { res, captured } = createResponse();
 
         await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [scoreId],
+            id: seeded.id, revision: 1, order: [otherScoreId, scoreId],
         }, ownerUserId), res);
 
         expect(captured.status).toBe(409);
-        expect((captured.body as { revision: number; }).revision).toBe(4);
-        expect(database.setLists[0].revision).toBe(4);
+        expect((captured.body as { conflict: boolean; }).conflict).toBe(true);
     });
+});
 
-    it("refuses an order that leaves out a visible score", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-        database.setListScores.push(
-            { setListId: listId, scoreId: otherScoreId, position: 1 },
-            { setListId: listId, scoreId, position: 2 },
-        );
-
+describe("set list sharing", () => {
+    it("grants a group write access and bumps the revision", async () => {
+        const { database, admin } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
         const { res, captured } = createResponse();
 
-        await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [scoreId],
+        await admin.handleSetPermissions(createRequest({
+            entityType: "setlist",
+            entityId: seeded.id,
+            revision: 1,
+            addGroups: [{ groupId: foreignGroupId, writable: true }],
         }, ownerUserId), res);
 
-        expect(captured.status).toBe(409);
-        expect(database.setLists[0].revision).toBe(1);
-        expect(storedOrder(database, listId)).toEqual([otherScoreId, scoreId]);
+        expect(captured.status).toBe(200);
+        expect(database.grants.get(`setlist:${seeded.id}`)?.get(foreignGroupId)).toBe(true);
+        expect(database.setLists[0].revision).toBe(2);
     });
 
-    it("refuses an order that names a score twice", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[globalTagId]]);
-
+    it("never shares with the World group", async () => {
+        const { database, admin } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
         const { res, captured } = createResponse();
 
-        await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [scoreId, scoreId],
+        await admin.handleSetPermissions(createRequest({
+            entityType: "setlist",
+            entityId: seeded.id,
+            revision: 1,
+            addGroups: [{ groupId: worldGroupId, writable: false }],
         }, ownerUserId), res);
 
         expect(captured.status).toBe(400);
+        expect(database.grants.get(`setlist:${seeded.id}`)?.size).toBe(0);
         expect(database.setLists[0].revision).toBe(1);
     });
 
-    it("refuses to reorder a list whose saved tag is gone", async () => {
-        const { database, routes } = setup();
-        const listId = seedList(database, [[memberTagId]]);
-        database.tags.splice(database.tags.findIndex((tag) => {
-            return tag.id === memberTagId;
-        }), 1);
-
+    it("refuses a share change by a member of the owning group", async () => {
+        const { database, admin } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
         const { res, captured } = createResponse();
 
-        await routes.handleReorderSetList(createRequest({
-            id: listId, revision: 1, order: [],
+        await admin.handleSetPermissions(createRequest({
+            entityType: "setlist",
+            entityId: seeded.id,
+            addGroups: [{ groupId: foreignGroupId, writable: false }],
+        }, memberUserId), res);
+
+        expect(captured.status).toBe(403);
+    });
+
+    it("refuses a stale share change", async () => {
+        const { database, admin } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId);
+        database.setLists[0].revision = 5;
+        const { res, captured } = createResponse();
+
+        await admin.handleSetPermissions(createRequest({
+            entityType: "setlist",
+            entityId: seeded.id,
+            revision: 1,
+            addGroups: [{ groupId: foreignGroupId, writable: false }],
         }, ownerUserId), res);
 
         expect(captured.status).toBe(409);
-        expect((captured.body as { filterProblem: string; }).filterProblem).toBe("unavailable-tag");
-        expect(database.setLists[0].revision).toBe(1);
+    });
+
+    it("reports the group grants to somebody who may edit the list", async () => {
+        const { database, admin } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [],
+            { groups: [{ groupId: foreignGroupId, writable: false }] });
+        const { res, captured } = createResponse();
+
+        await admin.handleGetPermissions(createGetRequest(
+            `/api?action=getPermissions&entityType=setlist&entityId=${seeded.id}`, ownerUserId), res);
+
+        const body = captured.body as { permission: { groups: Array<{ groupId: number; writable: boolean; }>; }; };
+        expect(body.permission.groups).toEqual([{ groupId: foreignGroupId, writable: false }]);
+    });
+
+    it("lets a group with read access select the list but not change it", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId], { groups: [foreignGroupId] });
+        const { res, captured } = createResponse();
+
+        await routes.handleGetSetList(createRequest({ id: seeded.id }, foreignUserId), res);
+
+        expect(captured.status).toBe(200);
+        expect((captured.body as { editable: boolean; }).editable).toBe(false);
     });
 });

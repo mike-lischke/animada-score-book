@@ -113,6 +113,9 @@ export interface IRequestTypeMap {
     /** The tag assignments of one score changed, so its tag row has to follow. */
     "scoreTagsChanged": (scoreId: number) => Promise<boolean>;
 
+    /** The set lists the current user may select changed, or one of them was renamed, shared or reordered. */
+    "setListsChanged": SimpleCallback;
+
     "undoStackChanged": SimpleCallback;
 
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;

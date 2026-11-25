@@ -2194,6 +2194,9 @@ export class App extends UIComponent<{}, IAppState> {
         const { editMode: requestedEditMode, zenMode } = this.state;
         const editMode = requestedEditMode && !zenMode;
 
+        // Autofill and assistive tools can deliver a key event without a printable key, so reading it is guarded.
+        const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+
         // Ctrl/Cmd+S saves the score in edit mode.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "s") {
             event.preventDefault();
@@ -2214,8 +2217,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         // Clipboard operations. Copy works in every mode; cut/paste require edit mode.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
-            const key = event.key.toLowerCase();
-
             if (key === "x" || key === "c" || key === "v") {
                 const editable = App.isEditableTarget(event.target);
                 const selection = window.getSelection();
@@ -2241,7 +2242,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         // G and S switch the score view, the shortcuts the mode bar names in its tooltips.
         if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
-            const key = event.key.toLowerCase();
             if ((key === "g" || key === "s") && !App.isEditableTarget(event.target)) {
                 event.preventDefault();
                 this.handleTrackViewModeChange(key === "g" ? TrackViewMode.Grid : TrackViewMode.Staff);

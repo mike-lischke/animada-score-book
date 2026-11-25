@@ -2372,9 +2372,11 @@ describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () 
         // A login clears that state, so the next refusal is answered with a refresh again.
         vi.spyOn(globalThis, "fetch")
             .mockResolvedValueOnce(responseOf(200, sessionBody))
-            // A login reloads the tag catalogue and the owner scopes, because both depend on the session.
+            // A login reloads the tag catalogue, the owner scopes and the set lists, because they depend on the
+            // session.
             .mockResolvedValueOnce(responseOf(200, { tags: [] }))
             .mockResolvedValueOnce(responseOf(200, { scopes: [] }))
+            .mockResolvedValueOnce(responseOf(200, { setLists: [], readableScoreCount: 0 }))
             .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
             .mockResolvedValueOnce(responseOf(200, { token: "fresh-token" }))
             .mockResolvedValueOnce(responseOf(200, { authenticated: true, ...sessionBody }))

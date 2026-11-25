@@ -75,6 +75,251 @@
     }
 }
 
+/* The set-list editor: a sidebar of lists and the detail panel of the selected one. */
+.dialog.set-list-dialog {
+    width: min(860px, calc(100% - 48px));
+    height: min(680px, calc(100% - 48px));
+
+    .dialog-content {
+        display: flex;
+        min-height: 0;
+        padding: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .dialog.set-list-dialog {
+        width: calc(100% - 8px);
+        height: calc(100% - 8px);
+        max-width: calc(100% - 8px);
+        max-height: calc(100% - 8px);
+        min-width: 0;
+    }
+}
+
+#setListDialogContent {
+    gap: 12px;
+    height: 100%;
+    min-height: 0;
+    padding: 16px;
+    min-width: 0;
+
+    .set-list-dialog-sidebar {
+        flex: 0 0 240px;
+        min-height: 0;
+        gap: 8px;
+        padding-right: 12px;
+        border-right: 1px solid var(--color-base-300);
+
+        .set-list-dialog-lists {
+            flex: 1 1 auto;
+            min-height: 0;
+            gap: 4px;
+            overflow-y: auto;
+        }
+    }
+
+    .set-list-dialog-detail {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        overflow-y: auto;
+        gap: 12px;
+    }
+}
+
+.set-list-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    .set-list-entry-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .set-list-entry-count {
+        flex: 0 0 auto;
+        font-size: 9pt;
+        opacity: 0.7;
+    }
+
+    &:hover {
+        background-color: var(--color-base-200);
+    }
+
+    &.set-list-entry-selected {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-base-100));
+    }
+}
+
+.set-list-dialog-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-start;
+    height: auto;
+    padding: 4px 10px;
+}
+
+.set-list-dialog-message {
+    padding: 4px 6px;
+    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--color-warning) 15%, var(--color-base-100));
+    font-size: 10pt;
+}
+
+.set-list-dialog-conflict {
+    background-color: color-mix(in srgb, var(--color-error) 15%, var(--color-base-100));
+}
+
+.set-list-dialog-hint {
+    font-size: 10pt;
+    opacity: 0.75;
+}
+
+.set-list-detail-panel,
+.set-list-create {
+    gap: 10px;
+
+    .set-list-detail-header {
+        gap: 8px;
+
+        .set-list-detail-owner {
+            font-size: 10pt;
+            opacity: 0.7;
+        }
+
+        .set-list-detail-actions {
+            margin-left: auto;
+            gap: 4px;
+
+            .btn.imageOnly {
+                box-sizing: border-box;
+                width: 24px;
+                min-width: 24px;
+                height: 24px;
+                min-height: 24px;
+                padding: 0;
+            }
+        }
+    }
+}
+
+.set-list-share {
+    gap: 4px;
+}
+
+.set-list-share-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10pt;
+
+    .set-list-share-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .set-list-access-select {
+        flex: 0 0 auto;
+        padding: 2px 6px;
+        border: 1px solid var(--color-base-300);
+        border-radius: 6px;
+        background-color: var(--color-base-100);
+        color: inherit;
+        font: inherit;
+    }
+}
+
+.set-list-name-input,
+.set-list-owner-select,
+.set-list-add-select {
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid var(--color-base-300);
+    border-radius: 6px;
+    background-color: var(--color-base-100);
+    color: inherit;
+    font: inherit;
+}
+
+.set-list-members {
+    gap: 6px;
+
+    .set-list-member-rows {
+        gap: 2px;
+    }
+}
+
+.set-list-member-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border: 1px solid var(--color-base-300);
+    border-radius: 8px;
+    background-color: var(--color-base-100);
+
+    .set-list-member-handle {
+        flex: 0 0 auto;
+        cursor: grab;
+        opacity: 0.6;
+    }
+
+    .set-list-member-position {
+        flex: 0 0 28px;
+        font-size: 9pt;
+        opacity: 0.7;
+    }
+
+    .set-list-member-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .set-list-member-actions {
+        flex: 0 0 auto;
+        gap: 2px;
+
+        .btn.imageOnly {
+            box-sizing: border-box;
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            min-height: 24px;
+            padding: 0;
+        }
+    }
+}
+
+.set-list-order-actions {
+    gap: 8px;
+}
+
+.set-list-add-row {
+    gap: 8px;
+}
+
 #libraryPaneContent {
     gap: 8px;
     height: 100%;
@@ -132,6 +377,105 @@
         .icon {
             color: inherit;
         }
+    }
+
+    /* The selector above the cards: All Scores and one pill per set list, scrolling horizontally when needed. */
+    .set-list-section {
+        flex: 0 0 auto;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .set-list-bar {
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .set-list-bar-label {
+        flex: 0 0 auto;
+        font-size: 10pt;
+        font-weight: 600;
+    }
+
+    .set-list-bar-empty {
+        flex: 0 0 auto;
+        font-size: 9pt;
+        opacity: 0.6;
+    }
+
+    .set-list-tabs {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        padding-bottom: 2px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+    }
+
+    /* A fade at the right edge signals that more pills follow. */
+    .set-list-tabs-cut {
+        mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    }
+
+    .set-list-pill {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border: 1px solid var(--color-base-300);
+        border-radius: 999px;
+        background-color: var(--color-base-100);
+        color: inherit;
+        font: inherit;
+        font-size: 10pt;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover {
+            border-color: var(--color-primary);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        .set-list-pill-count {
+            padding: 0 5px;
+            border-radius: 999px;
+            background-color: var(--color-base-300);
+            font-size: 8pt;
+        }
+    }
+
+    .set-list-pill-active {
+        border-color: var(--color-primary);
+        background-color: var(--color-primary);
+        color: var(--color-primary-content);
+
+        .set-list-pill-count {
+            background-color: color-mix(in srgb, var(--color-primary-content) 25%, transparent);
+        }
+    }
+
+    .set-list-manage {
+        flex: 0 0 auto;
+        box-sizing: border-box;
+        width: 24px;
+        min-width: 24px;
+        height: 24px;
+        min-height: 24px;
+        padding: 0;
+    }
+
+    .set-list-notice {
+        padding-left: 4px;
+        font-size: 9pt;
+        color: var(--color-warning);
     }
 
     /* The manual tag filter: its summary and one row per AND group. The rows are OR-ed. */
@@ -350,23 +694,106 @@
     }
 
     /* The badges wrap, so a card grows with them. */
+    /* The metadata row above the tags: read-only facts about the score, in the theme accent so they never read as
+       tag chips the user assigned. */
+    .score-card-meta {
+        align-items: center;
+        gap: 3px;
+        width: 100%;
+        min-width: 0;
+        height: 18px;
+
+        .score-card-meta-tag {
+            flex: 0 0 auto;
+            box-sizing: border-box;
+            padding: 0 6px;
+            border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+            border-radius: 999px;
+            background-color: color-mix(in srgb, var(--color-accent) 16%, var(--color-base-100));
+            color: color-mix(in srgb, var(--color-accent) 70%, var(--color-base-content));
+            font-size: 8pt;
+            font-variant-numeric: tabular-nums;
+            line-height: 16px;
+            white-space: nowrap;
+        }
+    }
+
+    /* The tag row keeps one height in both states, so switching a card into edit mode does not resize it. */
     .score-card-tags {
         align-items: center;
         gap: 3px;
         min-width: 0;
         width: 100%;
+        height: 24px;
+        min-height: 24px;
+        margin: 3px 0;
     }
 
+    /* The card's actions: one joined group of small square buttons, the edit switch first. */
     .score-card-actions {
         flex: 0 0 auto;
         margin-left: auto;
 
         .btn {
-            height: auto;
+            box-sizing: border-box;
+            width: 26px;
+            min-width: 26px;
+            height: 26px;
+            min-height: 26px;
             margin: 0;
             padding: 0;
-            border: none;
-            background: none;
+            color: inherit;
+        }
+
+        /* The neighbours share one border: without the overlap their two 1 px borders read as a double line. */
+        .btn + .btn {
+            margin-inline-start: -1px;
+        }
+
+        /* The edit switch is the one labelled button: a dot and "Edit"/"Editing", as the header's mode switch. */
+        .score-card-edit {
+            width: auto;
+            min-width: auto;
+            padding: 0 10px;
+            white-space: nowrap;
+        }
+
+        .icon {
+            color: inherit;
+        }
+    }
+
+    /* The edit switch leads with the status dot of the header's edit-mode button: muted while the card is read-only,
+       primary while its tags can be edited. */
+    .score-card-edit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 600;
+
+        .score-card-edit-dot {
+            flex: 0 0 auto;
+            box-sizing: border-box;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #b4b4b4;
+        }
+
+        .score-card-edit-label {
+            transform: translateY(-0.04em);
+        }
+
+        &.is-active {
+            z-index: 1;
+            border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+            background-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-base-100));
+
+            .score-card-edit-dot {
+                background-color: var(--color-primary);
+            }
         }
     }
 
@@ -403,13 +830,19 @@
         transform: rotate(180deg);
     }
 
+    /* The lineup sections sit in a grid that adds a column whenever the card is wide enough, and falls back to a
+       single column on a narrow card, so the groups stand side by side or all below each other. */
     .score-card-lineup {
-        gap: 8px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        align-items: start;
+        gap: 8px 12px;
         padding: 2px 0 2px 6px;
     }
 
     .score-card-lineup-section {
         gap: 2px;
+        min-width: 0;
     }
 
     .score-card-lineup-heading {

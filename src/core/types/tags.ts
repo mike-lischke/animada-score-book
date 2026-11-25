@@ -35,6 +35,9 @@ export interface ITagInfo {
     /** The instrument type id; set for instrument tags only, which map an instrument to its tag. */
     readonly instrumentTypeId?: string;
 
+    /** The set list this tag defines; absent for an ordinary metadata tag. */
+    readonly setListId?: number;
+
     /** The current user owns the tag's scope, so they may rename, recolour and delete it. */
     readonly editable: boolean;
 

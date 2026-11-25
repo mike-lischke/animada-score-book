@@ -142,6 +142,8 @@ CREATE TABLE IF NOT EXISTS entity_groups (
 -- The column holds 100 characters while the backend accepts 64: the headroom keeps a name storable when the limit
 -- itself grows or when a name arrives from a source that was not checked.
 -- color_index points into the fixed palette of src/core/TagPalette.ts.
+-- A set-list tag is an ordinary tag in its owner's catalogue, referenced from set_lists.tag_id. Code tells the two
+-- apart by that reference, so a list never needs a second name or owner of its own.
 CREATE TABLE IF NOT EXISTS tags (
     id          INT UNSIGNED     NOT NULL AUTO_INCREMENT,
     name        VARCHAR(100)     NOT NULL,
@@ -171,24 +173,26 @@ CREATE TABLE IF NOT EXISTS score_tags (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- A set list is a named, saved tag combination with its own score order. Scores are not copied into it, only
--- referenced, and the order belongs to the list, not to the score. Access follows the score model: the rows live in
--- permissions and entity_groups under the entity type 'setlist'.
--- filters holds the combination as [ [tagId, ...], ... ]: each inner array is an AND group, the array of groups is
--- OR-ed, and an empty array matches every readable score. A tag that is deleted later leaves the stored id in place:
--- the backend reports the list as invalid instead of dropping a condition.
+-- A set list is defined by exactly one tag of the same name: a score belongs to the list when that tag is assigned
+-- to it. The tag carries the name and the owner scope - a global tag for the administrators, a group tag for the
+-- group whose administrator created the list - so renaming one renames the other and deleting the tag deletes the
+-- list. Sharing with further groups lives in entity_groups under the entity type 'setlist' and is always read-only.
 CREATE TABLE IF NOT EXISTS set_lists (
     id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    name       VARCHAR(255) NOT NULL,
-    filters    JSON         NOT NULL,
+    tag_id     INT UNSIGNED NOT NULL,
     revision   INT UNSIGNED NOT NULL DEFAULT 1,
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_set_lists_tag (tag_id),
+    CONSTRAINT fk_set_lists_tag
+        FOREIGN KEY (tag_id) REFERENCES tags(id)
+        ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- The score order of one list. A row stays when its score stops matching the filter, so that a returning score keeps
--- its place. Both foreign keys clean up after a deleted list or score.
+-- The saved score order of one list. Membership is the tag assignment, so a row only exists while the score carries
+-- the list's tag; the backend deletes it when the tag comes off and appends a new row when it goes back on.
+-- Both foreign keys clean up after a deleted list or score.
 CREATE TABLE IF NOT EXISTS set_list_scores (
     set_list_id INT UNSIGNED NOT NULL,
     score_id    INT UNSIGNED NOT NULL,

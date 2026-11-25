@@ -240,6 +240,18 @@ class FakeDatabase implements IDatabaseAdapter {
             return [{ cnt: assigned ? 1 : 0 }];
         }
 
+        if (sql.includes("SELECT id, name FROM scores WHERE id IN")) {
+            const ids = params.map((value) => {
+                return Number(value);
+            });
+
+            return this.scores.filter((score) => {
+                return ids.includes(score.id);
+            }).map((score) => {
+                return { id: score.id, name: score.name };
+            });
+        }
+
         if (sql.includes("SELECT id, content FROM scores")) {
             const ids = params.map((value) => {
                 return Number(value);

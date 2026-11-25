@@ -4,19 +4,18 @@
  */
 
 /**
- * The order of one set list: the places of the scores it knows, the scores that start matching later, and the
- * effect of a caller reordering the part of the list it can see. These are pure rules, so the routes only read and
- * write; they never build an order themselves.
+ * The order of one set list: the places of its members, the scores that become members later, and the effect of a
+ * caller reordering the part of the list it can see. These are pure rules, so the routes only read and write; they
+ * never build an order themselves.
  */
 export class SetListOrder {
     /**
-     * @param storedIds The scores the list knows, in their stored order.
-     * @param matchingIds The scores its tag combination matches right now.
+     * @param storedIds The members whose place the list stores, in their stored order.
+     * @param matchingIds The scores that carry the list's tag right now.
      *
-     * @returns The canonical order: every known score keeps its place, whether it matches or not, and scores the
-     * list does not know yet are appended by ascending id. The tie-breaker is the same for every caller and
-     * session, so new matches land in the same order everywhere; they become known scores as soon as somebody with
-     * write access stores an order.
+     * @returns The canonical order: every stored member keeps its place, and a member without a stored place is
+     * appended by ascending id. The tie-breaker is the same for every caller and session, so such a score lands in
+     * the same place everywhere; assigning the tag normally appends it right away.
      */
     public static merge(storedIds: readonly number[], matchingIds: Iterable<number>): number[] {
         const known = new Set(storedIds);

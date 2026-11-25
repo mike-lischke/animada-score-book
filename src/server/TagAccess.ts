@@ -157,7 +157,8 @@ export class TagAccess {
      *
      * @returns Whether the caller owns the tag's scope, which is what editing and deleting a tag needs. Global
      * tags belong to the administrators together; a group tag belongs to that group, and administrators have no
-     * extra rights on it.
+     * extra rights on it. A set-list tag is the exception: it follows the list rules, where the administrators reach
+     * every list, so code that handles it asks `SetListAccess.canEdit` instead.
      */
     public static owns(context: ITagAccessContext, tag: ITagRow): boolean {
         if (tag.groupId === null) {

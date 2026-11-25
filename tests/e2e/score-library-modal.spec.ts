@@ -110,6 +110,39 @@ const setupLibraryApi = async (page: Page, options: IScoreLibraryMockOptions = {
             return;
         }
 
+        if (action === "listSetLists") {
+            await route.fulfill({
+                status: 200, contentType: "application/json",
+                body: JSON.stringify({
+                    setLists: [
+                        {
+                            id: 4, name: "Auftritt", tagId: 40, revision: 1, memberCount: 1, groups: [],
+                            editable: true, managesAccess: true,
+                        },
+                    ],
+                    readableScoreCount: 2,
+                }),
+            });
+
+            return;
+        }
+
+        if (action === "getSetList") {
+            await route.fulfill({
+                status: 200, contentType: "application/json",
+                body: JSON.stringify({
+                    id: 4, name: "Auftritt", tagId: 40, revision: 1, memberCount: 1, groups: [],
+                    editable: true, managesAccess: true,
+                    scores: [{
+                        id: 43, name: "Set Score", tagIds: [40],
+                        perm: { isOwner: true, canRead: true, canWrite: true, isWorld: false, groupIds: [] },
+                    }],
+                }),
+            });
+
+            return;
+        }
+
         if (action === "getScore") {
             const status = options.getScoreStatus ?? 200;
 
@@ -190,6 +223,31 @@ test.describe("Score library modal", () => {
         await expect(dialog).toHaveAttribute("aria-modal", "true");
         await expect(page.locator(".du-drawer")).toHaveCount(0);
         await expect(page.locator("#scoreCardsHost .score-card")).toHaveCount(1);
+    });
+
+    test("selects a set list pill and shows its saved order", async ({ page }) => {
+        await setupLibraryApi(page);
+        await page.goto("/");
+
+        await page.locator("#scoreLibraryButton").click();
+        await expect(page.locator("#scoreLibraryDialog")).toBeVisible();
+
+        const pills = page.locator(".set-list-pill");
+        await expect(pills).toHaveCount(2);
+        await expect(pills.nth(0)).toContainText("All Scores");
+        await expect(pills.nth(0)).toHaveAttribute("aria-selected", "true");
+        await expect(pills.nth(1)).toContainText("Auftritt");
+
+        await page.locator("#set-list-tab-4").click();
+
+        await expect(page.locator("#set-list-tab-4")).toHaveAttribute("aria-selected", "true");
+        await expect(page.locator("#scoreCardsHost .score-card")).toHaveCount(1);
+        await expect(page.locator("#scoreCardsHost .score-card")).toContainText("Set Score");
+        await expect(page.locator("#libraryPaneContent")).toContainText("saved order");
+
+        await page.locator("#set-list-tab-all").click();
+
+        await expect(page.locator("#scoreCardsHost .score-card")).toContainText("Test Score");
     });
 
     test("closes on Escape and gives the focus back to the library button", async ({ page }) => {

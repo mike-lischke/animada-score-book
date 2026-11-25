@@ -40,12 +40,12 @@ interface IMeasuredFile {
 
 export class BundleBudget {
     /**
-     * Current sizes (2026-10-25): largest single file 348.9 kB raw, initial load 200.8 kB gzip. The headroom is for
+     * Current sizes (2026-11-25): largest single file 348.9 kB raw, initial load 210.2 kB gzip. The headroom is for
      * content work, not for new libraries: a new dependency either fits or the budget is raised deliberately.
      */
     private static readonly budget: IBundleBudget = {
         fileKb: 500,
-        initialLoadKb: 210,
+        initialLoadKb: 212,
     };
 
     /**

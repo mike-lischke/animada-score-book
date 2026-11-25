@@ -3,101 +3,36 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { TagCombination } from "../core/TagCombination.js";
-import { EntityType, type Auth } from "./Auth.js";
+import { AccessLevel, EntityType, type Auth, type ITokenPayload } from "./Auth.js";
 import type { DbRow, IDatabaseAdapter } from "./database.js";
-import type { ITagRow } from "./TagAccess.js";
+import { TagAccess, type ITagRow } from "./TagAccess.js";
 
-/** A set list as it is stored. */
+/** A set list as it is stored; its name and tag scope are those of its tag. */
 export interface ISetListRow extends DbRow {
     id: number;
-    name: string;
 
-    /** The saved tag combination, as JSON: an array of AND groups, OR-ed with each other. */
-    filters: string;
+    /** The tag that defines the list: membership is the tag assignment, the name and scope come from the tag. */
+    tagId: number;
 
     /** Bumped by every change, which is how a stale edit is detected instead of overwriting it. */
     revision: number;
 }
 
-/** Everyone a list is visible to. The owner is checked on top, because they can use group tags too. */
-export interface ISetListAudience {
-    /** The groups the list is shared with. */
-    groupIds: number[];
-
-    /** Whether the list is readable by everybody, anonymous visitors included. */
-    isWorld: boolean;
-}
-
-/** What keeps a stored or requested filter from being used. */
-export enum SetListFilterProblem {
-    /** The value is not a tag combination within the limits. */
-    Malformed = "malformed",
-
-    /** A tag of the combination no longer exists. */
-    UnavailableTag = "unavailable-tag",
-
-    /** A group-owned tag is used while the list reaches beyond that group. */
-    TagScope = "tag-scope",
-
-    /** A requested filter names a tag the caller may not use. */
-    NotUsable = "not-usable",
+/** A stored list together with the tag that defines it. */
+export interface ISetListEntry {
+    row: ISetListRow;
+    tag: ITagRow;
 }
 
 /**
- * The rules of a saved tag combination: how it is read, and which tags it may hold for the people a list is shared
- * with. Routes and the permission endpoint both use them, so a filter and the sharing of its list cannot drift apart.
+ * The rules of a set list: what its tag is, who may select the list and who may change it. The owning scope is the
+ * scope of the tag, so a global tag makes the list the administrators' and a group tag makes it the business of that
+ * group's administrator. Members of the owning group and of every group the list is shared with may select it, and
+ * editing never comes with sharing.
  */
 export class SetListAccess {
-    /** The longest name a set list may carry; the `name` column holds exactly this many characters. */
-    public static readonly maxNameLength = 255;
-
-    /**
-     * Reads the AND groups of a tag combination, from a stored list or a request. Duplicate tags and empty groups
-     * carry no condition and drop out; everything outside the limits is rejected instead of being repaired.
-     *
-     * @param value The combination to read.
-     *
-     * @returns The AND groups, or undefined when the value is not a combination.
-     */
-    public static readGroups(value: unknown): number[][] | undefined {
-        if (!Array.isArray(value) || value.length > TagCombination.maxGroups) {
-            return undefined;
-        }
-
-        const groups: number[][] = [];
-        for (const rawGroup of value) {
-            if (!Array.isArray(rawGroup) || rawGroup.length > TagCombination.maxTagsPerGroup) {
-                return undefined;
-            }
-
-            const group: number[] = [];
-            for (const rawTagId of rawGroup) {
-                const tagId = Number(rawTagId);
-                if (!Number.isInteger(tagId) || tagId <= 0) {
-                    return undefined;
-                }
-
-                group.push(tagId);
-            }
-
-            const distinct = Array.from(new Set(group));
-            if (distinct.length > 0) {
-                groups.push(distinct);
-            }
-        }
-
-        return groups;
-    }
-
-    /**
-     * @param groups The AND groups of a combination.
-     *
-     * @returns Every tag id the combination names.
-     */
-    public static tagIds(groups: number[][]): number[] {
-        return Array.from(new Set(groups.flat()));
-    }
+    /** The longest name a set list may carry; the name is the tag's name, so the tag limit applies. */
+    public static readonly maxNameLength = TagAccess.maxNameLength;
 
     /**
      * @param adapter The database adapter to query.
@@ -107,175 +42,115 @@ export class SetListAccess {
      */
     public static async find(adapter: IDatabaseAdapter, listId: number): Promise<ISetListRow | undefined> {
         const rows = await adapter.query<ISetListRow>(
-            "SELECT id, name, filters, revision FROM set_lists WHERE id = ?", [listId],
+            "SELECT id, tag_id AS tagId, revision FROM set_lists WHERE id = ?", [listId],
         );
 
         return rows.length > 0 ? rows[0] : undefined;
     }
 
     /**
-     * @param auth The authentication helper, used for the permission rows.
-     * @param listId The list to look at.
+     * @param adapter The database adapter to query.
+     * @param tagId The tag in question.
      *
-     * @returns The groups the list is shared with and whether it is readable by everybody.
+     * @returns The tag row, or undefined when there is no tag with that id.
      */
-    public static async audience(auth: Auth, listId: number): Promise<ISetListAudience> {
-        const [groups, worldGroupId] = await Promise.all([
-            auth.getExplicitEntityGroups(EntityType.SetList, listId),
-            auth.getWorldGroupId(),
-        ]);
+    public static async findTag(adapter: IDatabaseAdapter, tagId: number): Promise<ITagRow | undefined> {
+        const rows = await adapter.query<ITagRow>(
+            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey "
+            + "FROM tags WHERE id = ?", [tagId],
+        );
 
-        const groupIds = groups.map((group) => {
-            return group.groupId;
-        });
-
-        return {
-            groupIds: groupIds.filter((groupId) => {
-                return groupId !== worldGroupId;
-            }),
-            isWorld: worldGroupId !== undefined && groupIds.includes(worldGroupId),
-        };
+        return rows.length > 0 ? rows[0] : undefined;
     }
 
     /**
-     * @param auth The authentication helper, used for the permission rows.
-     * @param listId The list whose sharing changes.
-     * @param addGroupIds The groups that receive access.
-     * @param removeGroupIds The groups that lose access.
+     * @param adapter The database adapter to query.
+     * @param listId The list to read.
      *
-     * @returns The people the list will be visible to once the change is applied.
+     * @returns The list with its tag, or undefined when the list does not exist any more.
      */
-    public static async plannedAudience(auth: Auth, listId: number, addGroupIds: number[],
-        removeGroupIds: number[]): Promise<ISetListAudience> {
-        const [current, worldGroupId] = await Promise.all([
-            auth.getExplicitEntityGroups(EntityType.SetList, listId),
-            auth.getWorldGroupId(),
-        ]);
-
-        const groupIds = new Set(current.map((group) => {
-            return group.groupId;
-        }));
-
-        for (const groupId of removeGroupIds) {
-            groupIds.delete(groupId);
-        }
-
-        for (const groupId of addGroupIds) {
-            groupIds.add(groupId);
-        }
-
-        return {
-            groupIds: Array.from(groupIds).filter((groupId) => {
-                return groupId !== worldGroupId;
-            }),
-            isWorld: worldGroupId !== undefined && groupIds.has(worldGroupId),
-        };
-    }
-
-    /**
-     * @param problem The reason a combination cannot be used.
-     *
-     * @returns The sentence the client shows for it.
-     */
-    public static problemMessage(problem: SetListFilterProblem): string {
-        switch (problem) {
-            case SetListFilterProblem.UnavailableTag: {
-                return "The tag combination names a tag that no longer exists.";
-            }
-
-            case SetListFilterProblem.TagScope: {
-                return "The tag combination uses a tag that not everybody the list is shared with can use.";
-            }
-
-            case SetListFilterProblem.NotUsable: {
-                return "The tag combination uses a tag you cannot use.";
-            }
-
-            case SetListFilterProblem.Malformed: {
-                return "The tag combination is not valid.";
-            }
-        }
-    }
-
-    /**
-     * Checks a combination against the people a list is shared with. Every tag has to exist, and a group-owned tag
-     * may only be used while the list reaches no other group and is not readable by everybody: nobody else could
-     * see or use it.
-     *
-     * @param auth The authentication helper, used for the tag and membership rows.
-     * @param groups The AND groups of the combination.
-     * @param audience The people the list is shared with.
-     * @param ownerId The owner of the list, if it has one.
-     *
-     * @returns The reason the combination cannot be used for this list, if any.
-     */
-    public static async filterProblem(auth: Auth, groups: number[][],
-        audience: ISetListAudience, ownerId: number | undefined): Promise<SetListFilterProblem | undefined> {
-        const tagIds = SetListAccess.tagIds(groups);
-        if (tagIds.length === 0) {
+    public static async load(adapter: IDatabaseAdapter, listId: number): Promise<ISetListEntry | undefined> {
+        const row = await SetListAccess.find(adapter, listId);
+        if (row === undefined) {
             return undefined;
         }
 
-        const placeholders = tagIds.map(() => {
-            return "?";
-        }).join(", ");
-        const tags = await auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey "
-            + `FROM tags WHERE id IN (${placeholders})`, tagIds,
+        const tag = await SetListAccess.findTag(adapter, row.tagId);
+
+        return tag === undefined ? undefined : { row, tag };
+    }
+
+    /**
+     * @param adapter The database adapter to query.
+     * @param tagId The tag in question.
+     *
+     * @returns The list that this tag defines, or undefined for an ordinary tag.
+     */
+    public static async forTag(adapter: IDatabaseAdapter, tagId: number): Promise<ISetListRow | undefined> {
+        const rows = await adapter.query<ISetListRow>(
+            "SELECT id, tag_id AS tagId, revision FROM set_lists WHERE tag_id = ?", [tagId],
         );
 
-        const known = new Map(tags.map((tag) => {
-            return [tag.id, tag];
+        return rows.length > 0 ? rows[0] : undefined;
+    }
+
+    /**
+     * @param adapter The database adapter to query.
+     *
+     * @returns The list id of every set-list tag, keyed by tag id. The tag catalogue uses it to mark those tags.
+     */
+    public static async listIdsByTag(adapter: IDatabaseAdapter): Promise<Map<number, number>> {
+        const rows = await adapter.query<{ id: number; tagId: number; }>(
+            "SELECT id, tag_id AS tagId FROM set_lists", [],
+        );
+
+        return new Map(rows.map((row) => {
+            return [row.tagId, row.id] as [number, number];
         }));
+    }
 
-        for (const tagId of tagIds) {
-            if (!known.has(tagId)) {
-                return SetListFilterProblem.UnavailableTag;
-            }
-        }
-
-        for (const tag of tags) {
-            if (tag.groupId === null) {
-                continue;
-            }
-
-            // Everybody the list reaches has to be able to use the tag, so a group tag rules out World and every
-            // other group. A list shared with nobody but its owner keeps the owner's own tags usable.
-            const reachesOtherGroup = audience.isWorld || audience.groupIds.some((groupId) => {
-                return groupId !== tag.groupId;
-            });
-            if (reachesOtherGroup) {
-                return SetListFilterProblem.TagScope;
-            }
-
-            if (ownerId !== undefined && !(await SetListAccess.canUseGroupTag(auth, ownerId, tag.groupId))) {
-                return SetListFilterProblem.TagScope;
-            }
-        }
-
-        return undefined;
+    /**
+     * @param auth The authentication helper, used for the sharing rows.
+     * @param listId The list in question.
+     *
+     * @returns The groups the list is shared with, as the permission rows hold them.
+     */
+    public static async sharedGroups(auth: Auth,
+        listId: number): Promise<Array<{ groupId: number; writable: boolean; }>> {
+        return auth.getExplicitEntityGroups(EntityType.SetList, listId);
     }
 
     /**
      * @param auth The authentication helper.
-     * @param userId The user in question.
-     * @param groupId The group that owns the tag.
+     * @param user The authenticated caller, or undefined for a visitor.
+     * @param listId The list in question.
      *
-     * @returns Whether the user belongs to the group or administers it.
+     * @returns Whether the caller may select the list, following the score permission model: the owner, a member of
+     * a group the list is granted to, or an administrator. There is no World and no anonymous access.
      */
-    private static async canUseGroupTag(auth: Auth, userId: number, groupId: number): Promise<boolean> {
-        const membership = await auth.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM user_groups WHERE user_id = ? AND group_id = ?", [userId, groupId],
-        );
-
-        if ((membership[0]?.cnt ?? 0) > 0) {
-            return true;
+    public static async canRead(auth: Auth, user: ITokenPayload | undefined,
+        listId: number): Promise<boolean> {
+        if (!user) {
+            return false;
         }
 
-        const administration = await auth.adapter.query<{ id: number; }>(
-            "SELECT id FROM `groups` WHERE id = ? AND admin_id = ?", [groupId, userId],
-        );
+        return auth.checkPermission(user, EntityType.SetList, listId, AccessLevel.Read);
+    }
 
-        return administration.length > 0;
+    /**
+     * @param auth The authentication helper.
+     * @param user The authenticated caller, or undefined for a visitor.
+     * @param listId The list in question.
+     *
+     * @returns Whether the caller may rename, delete or share the list, assign its tag and change the order: the
+     * owner, a member of a group with write access, or an administrator.
+     */
+    public static async canEdit(auth: Auth, user: ITokenPayload | undefined,
+        listId: number): Promise<boolean> {
+        if (!user) {
+            return false;
+        }
+
+        return auth.checkPermission(user, EntityType.SetList, listId, AccessLevel.Write);
     }
 }

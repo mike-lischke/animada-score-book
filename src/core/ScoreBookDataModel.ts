@@ -17,7 +17,7 @@ import { decomposeRestSpan } from "./rest-notation.js";
 import { computeIsTuplet, maxTupletLevels } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
-import type { IScoreLineup, IScoreListEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
+import type { IScoreLineup, IScoreListEntry, IScoreMeta, ISetListInfo, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
 import { NameText } from "./NameText.js";
@@ -481,6 +481,9 @@ export interface ISbDmScore extends ISbDmVisual {
 
     /** The tracks with their instruments, as the score card shows them. */
     lineup?: IScoreLineup;
+
+    /** Tempo, meter, length and bar count, as the score's content states them. */
+    meta?: IScoreMeta;
 }
 
 export interface ISbDmTrack extends ISbDmCommon {
@@ -680,6 +683,9 @@ export enum ScoreQueryResult {
     /** The filter names tags the caller cannot use, so no list was shown: a narrower result must not look wider. */
     InvalidFilter,
 
+    /** The selected set list was deleted or is no longer readable, so the caller has to pick another one. */
+    SetListUnavailable,
+
     /** The backend did not answer, or refused the request. */
     Failed,
 }
@@ -688,6 +694,20 @@ export enum ScoreQueryResult {
 export interface IScoreQueryOutcome {
     result: ScoreQueryResult;
     ignoredTagIds: number[];
+}
+
+/** What became of a set-list change: the new revision, a stale-revision conflict, or the backend's reason. */
+export interface ISetListChangeResult {
+    success: boolean;
+
+    /** The revision the list carries after the change. */
+    revision?: number;
+
+    /** The change was based on an outdated revision and was rejected instead of overwriting a newer one. */
+    conflict?: boolean;
+
+    /** The sentence the backend answered with, when it refused the change. */
+    error?: string;
 }
 
 /**
@@ -969,6 +989,15 @@ export class ScoreBookDataModel {
     /** The owner scopes the current user may create tags in. */
     private tagScopes: ITagOwnerScope[] = [];
 
+    /** The set lists the current user may select, as the backend last reported them. */
+    private setListCatalogue: ISetListInfo[] = [];
+
+    /** How many scores the current user may read, which the All Scores pill shows. */
+    private readableScores = 0;
+
+    /** The set list the current score list is restricted to; undefined shows all readable scores. */
+    private activeSetList: number | undefined;
+
     /**
      * The tag combination the current score list was queried with. A refresh that is not a new selection — after a
      * save or a deleted tag, for example — repeats it, so the list the user is looking at stays filtered.
@@ -990,6 +1019,7 @@ export class ScoreBookDataModel {
             this.loadInstruments(),
             this.loadNumberSounds(),
             this.reloadTags(),
+            this.reloadSetLists(),
             this.queryScores(TagCombination.empty),
         ];
 
@@ -1023,6 +1053,27 @@ export class ScoreBookDataModel {
      */
     public get tagOwnerScopes(): readonly ITagOwnerScope[] {
         return this.tagScopes;
+    }
+
+    /**
+     * @returns The set lists the current user may select, sorted by name.
+     */
+    public get setLists(): readonly ISetListInfo[] {
+        return this.setListCatalogue;
+    }
+
+    /**
+     * @returns How many scores the current user may read, independent of the manual filter.
+     */
+    public get readableScoreCount(): number {
+        return this.readableScores;
+    }
+
+    /**
+     * @returns The set list the score list is restricted to, or undefined when it shows all readable scores.
+     */
+    public get activeSetListId(): number | undefined {
+        return this.activeSetList;
     }
 
     public get instruments(): ISbDmInstrument[] {
@@ -2974,6 +3025,9 @@ export class ScoreBookDataModel {
         };
         this.tagCatalogue = [];
         this.tagScopes = [];
+        this.setListCatalogue = [];
+        this.readableScores = 0;
+        this.activeSetList = undefined;
 
         this.clearAuthState();
     }
@@ -2992,6 +3046,7 @@ export class ScoreBookDataModel {
         if (restored) {
             void requisitions.execute("authChanged", undefined);
             void this.reloadTags();
+            void this.reloadSetLists();
         } else {
             await this.loadDemoCapabilities();
         }
@@ -3018,6 +3073,7 @@ export class ScoreBookDataModel {
 
         void requisitions.execute("authChanged", undefined);
         void this.reloadTags();
+        void this.reloadSetLists();
     }
 
     /**
@@ -3370,24 +3426,33 @@ export class ScoreBookDataModel {
 
     /**
      * Rebuilds the score list from the backend for a tag combination. An empty combination lists every score the
-     * caller can read. Only the answer to the newest query is applied, so a slow response cannot replace a list that
-     * a later filter already produced.
+     * caller can read. A set list then restricts the result to its members and puts them in the list's saved order.
+     * Only the answer to the newest query is applied, so a slow response cannot replace a list that a later filter
+     * already produced.
      *
-     * @param combination The tags to filter by.
+     * @param combination The tags of the manual filter.
+     * @param setListId The set list to restrict the result to, or undefined for all readable scores.
      *
      * @returns What became of the response.
      */
-    public async queryScores(combination: ITagCombination): Promise<IScoreQueryOutcome> {
+    public async queryScores(combination: ITagCombination, setListId?: number): Promise<IScoreQueryOutcome> {
         const normalized = TagCombination.normalize(combination);
         this.scoreListCombination = normalized;
+        this.activeSetList = setListId;
 
         const token = ++this.scoreQueryCount;
 
-        const res = await this.fetchApi("/api?action=listScores", {
-            method: "POST",
-            headers: { Accept: "application/json" },
-            body: JSON.stringify({ groups: normalized.groups }),
-        }, true, true);
+        const res = setListId === undefined
+            ? await this.fetchApi("/api?action=listScores", {
+                method: "POST",
+                headers: { Accept: "application/json" },
+                body: JSON.stringify({ groups: normalized.groups }),
+            }, true, true)
+            : await this.fetchApi("/api?action=getSetList", {
+                method: "POST",
+                headers: { Accept: "application/json" },
+                body: JSON.stringify({ id: setListId, groups: normalized.groups }),
+            }, true, true);
 
         if (!res) {
             return ScoreBookDataModel.queryOutcome(token, this.scoreQueryCount, ScoreQueryResult.Failed);
@@ -3403,6 +3468,11 @@ export class ScoreBookDataModel {
 
             return ScoreBookDataModel.queryOutcome(token, this.scoreQueryCount, ScoreQueryResult.InvalidFilter,
                 refusal.ignoredTagIds ?? []);
+        }
+
+        // A set list that is gone or no longer readable has to be given up: the caller picks another one.
+        if (setListId !== undefined && (res.status === 403 || res.status === 404)) {
+            return ScoreBookDataModel.queryOutcome(token, this.scoreQueryCount, ScoreQueryResult.SetListUnavailable);
         }
 
         if (!res.ok) {
@@ -3427,6 +3497,7 @@ export class ScoreBookDataModel {
                 score.name = entry.name;
                 score.tagIds = entry.tagIds;
                 score.lineup = entry.lineup;
+                score.meta = entry.meta;
                 score.perm = entry.perm;
 
                 return score;
@@ -3439,6 +3510,7 @@ export class ScoreBookDataModel {
                 content: "",
                 tagIds: entry.tagIds,
                 lineup: entry.lineup,
+                meta: entry.meta,
                 perm: entry.perm,
                 state: {
                     initialized: false,
@@ -3499,6 +3571,192 @@ export class ScoreBookDataModel {
         const data = await res.json() as { scopes?: ITagOwnerScope[]; };
 
         return data.scopes ?? [];
+    }
+
+    /**
+     * Reloads the set lists the current user may select and tells the collection about it. The set lists depend on
+     * the session and on the tags, so this runs whenever either changes, and after every change to a list.
+     */
+    public async reloadSetLists(): Promise<void> {
+        const res = await this.fetchApi("/api?action=listSetLists", {
+            headers: { Accept: "application/json" },
+        });
+
+        if (res === undefined) {
+            this.setListCatalogue = [];
+        } else {
+            const data = await res.json() as { setLists?: ISetListInfo[]; readableScoreCount?: number; };
+            this.setListCatalogue = data.setLists ?? [];
+            this.readableScores = data.readableScoreCount ?? 0;
+        }
+
+        if (this.activeSetList !== undefined && !this.setListCatalogue.some((list) => {
+            return list.id === this.activeSetList;
+        })) {
+            // The list was deleted or left the caller's reach; the next query shows all readable scores again.
+            this.activeSetList = undefined;
+        }
+
+        void requisitions.execute("setListsChanged", undefined);
+    }
+
+    /**
+     * Creates a set list with the tag of the same name in the given owner scope.
+     *
+     * @param name The name of the list and its tag.
+     * @param groupId The owner scope; undefined creates a list of the administrators.
+     *
+     * @returns What became of the request, with the new list's id.
+     */
+    public async createSetList(name: string, groupId?: number): Promise<ISetListChangeResult & { id?: number; }> {
+        const res = await this.fetchApi("/api?action=createSetList", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, groupId }),
+        }, true, true);
+
+        if (res === undefined) {
+            return { success: false, error: "The set list could not be created." };
+        }
+
+        const data = await res.json() as {
+            success?: boolean; id?: number; revision?: number; conflict?: boolean; error?: string;
+        };
+
+        if (!res.ok || data.success !== true) {
+            return { success: false, conflict: data.conflict, revision: data.revision, error: data.error };
+        }
+
+        await this.reloadSetLists();
+
+        return { success: true, revision: data.revision, id: data.id };
+    }
+
+    /**
+     * Renames a set list, which renames its tag.
+     *
+     * @param id The list to rename.
+     * @param revision The revision the caller edited.
+     * @param name The new name.
+     *
+     * @returns What became of the change.
+     */
+    public async renameSetList(id: number, revision: number, name: string): Promise<ISetListChangeResult> {
+        const res = await this.fetchApi("/api?action=updateSetList", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, revision, name }),
+        }, true, true);
+
+        return this.finishSetListChange(res);
+    }
+
+    /**
+     * Deletes a set list and its tag.
+     *
+     * @param id The list to delete.
+     *
+     * @returns What became of the change.
+     */
+    public async deleteSetList(id: number): Promise<ISetListChangeResult> {
+        const res = await this.fetchApi("/api?action=deleteSetList", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        }, true, true);
+
+        return this.finishSetListChange(res);
+    }
+
+    /**
+     * Stores the order of a set list.
+     *
+     * @param id The list to change.
+     * @param revision The revision the caller edited.
+     * @param order The score ids in the order the list is to hold.
+     *
+     * @returns What became of the change.
+     */
+    public async reorderSetList(id: number, revision: number, order: number[]): Promise<ISetListChangeResult> {
+        const res = await this.fetchApi("/api?action=reorderSetList", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, revision, order }),
+        }, true, true);
+
+        return this.finishSetListChange(res);
+    }
+
+    /**
+     * Grants a set list to groups, changes what a group may do, or ends a grant, exactly like a score is shared.
+     * The World group is refused by the backend; there is no anonymous access to a list.
+     *
+     * @param id The list to change.
+     * @param revision The revision the caller edited.
+     * @param addGroups The groups that receive or keep access, with their new write flag.
+     * @param removeGroupIds The groups that lose access.
+     *
+     * @returns What became of the change.
+     */
+    public async changeSetListAccess(id: number, revision: number,
+        addGroups: Array<{ groupId: number; writable: boolean; }>,
+        removeGroupIds: number[]): Promise<ISetListChangeResult> {
+        const res = await this.fetchApi("/api?action=setPermissions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                entityType: "setlist",
+                entityId: id,
+                revision,
+                addGroups,
+                removeGroups: removeGroupIds.map((groupId) => {
+                    return { groupId };
+                }),
+            }),
+        }, true, true);
+
+        return this.finishSetListChange(res);
+    }
+
+    /**
+     * @param id The set list to read.
+     *
+     * @returns The readable members in the list's saved order, without any manual filter. The set-list editor orders
+     * exactly this set, so no member it cannot see is displaced.
+     */
+    public async loadSetListScores(id: number): Promise<IScoreListEntry[]> {
+        const res = await this.fetchApi("/api?action=getSetList", {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            body: JSON.stringify({ id, groups: [] }),
+        }, true, true);
+
+        if (!res?.ok) {
+            return [];
+        }
+
+        const data = await res.json() as { scores?: IScoreListEntry[]; };
+
+        return data.scores ?? [];
+    }
+
+    /**
+     * @returns The readable scores with their tags and lineups, which the set-list editor offers for adding members.
+     */
+    public async listReadableScores(): Promise<IScoreListEntry[]> {
+        const res = await this.fetchApi("/api?action=listScores", {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            body: JSON.stringify({ groups: [] }),
+        });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { scores?: IScoreListEntry[]; };
+
+        return data.scores ?? [];
     }
 
     /**
@@ -3570,8 +3828,10 @@ export class ScoreBookDataModel {
             return;
         }
 
+        // A set-list tag takes its list with it, so the selector cannot keep showing the old state.
         await this.reloadTags();
-        await this.queryScores(this.scoreListCombination);
+        await this.reloadSetLists();
+        await this.queryScores(this.scoreListCombination, this.activeSetList);
     }
 
     /**
@@ -3730,7 +3990,7 @@ export class ScoreBookDataModel {
 
             await this.assignNewArrangementTags(data.id);
             await this.reloadTags();
-            await this.queryScores(this.scoreListCombination);
+            await this.queryScores(this.scoreListCombination, this.activeSetList);
 
             return content;
         }
@@ -3773,7 +4033,7 @@ export class ScoreBookDataModel {
         // The save derives the instrument tags from the tracks, so the catalogue and the filtered list change even
         // though the arrangement carries no tags of its own.
         await this.reloadTags();
-        await this.queryScores(this.scoreListCombination);
+        await this.queryScores(this.scoreListCombination, this.activeSetList);
 
         return content;
     }
@@ -3878,6 +4138,7 @@ export class ScoreBookDataModel {
 
         void requisitions.execute("authChanged", undefined);
         void this.reloadTags();
+        void this.reloadSetLists();
     }
 
     /**
@@ -3900,6 +4161,7 @@ export class ScoreBookDataModel {
 
         void requisitions.execute("authChanged", undefined);
         void this.reloadTags();
+        void this.reloadSetLists();
     }
 
     /**
@@ -5514,7 +5776,7 @@ export class ScoreBookDataModel {
         (arrangement as Arrangement).id = data.id;
 
         await this.reloadTags();
-        await this.queryScores(this.scoreListCombination);
+        await this.queryScores(this.scoreListCombination, this.activeSetList);
 
         // Re-serialize with the new ID so that AppStorage and future saves use the correct ID.
         return stringifyPackedArrangement((arrangement as Arrangement).toSnapshot());
@@ -5588,6 +5850,8 @@ export class ScoreBookDataModel {
             return false;
         }
 
+        const changed = await res.json() as { setListId?: number; };
+
         const score = this.findScore(scoreId);
         if (score) {
             score.tagIds = action === "assignTag"
@@ -5610,7 +5874,47 @@ export class ScoreBookDataModel {
 
         void requisitions.execute("scoreTagsChanged", scoreId);
 
+        // A set-list tag carries the list's membership and its revision, so the selector has to follow.
+        if (changed.setListId !== undefined) {
+            void this.reloadSetLists();
+        }
+
         return true;
+    }
+
+    /**
+     * @param res The answer to a set-list change, or undefined when the request did not reach the backend.
+     *
+     * @returns The parsed outcome.
+     */
+    private async setListChangeResult(res: Response | undefined): Promise<ISetListChangeResult> {
+        if (res === undefined) {
+            return { success: false, error: "The set list change could not be saved." };
+        }
+
+        const data = await res.json() as {
+            success?: boolean; revision?: number; conflict?: boolean; error?: string;
+        };
+
+        if (!res.ok || data.success !== true) {
+            return { success: false, conflict: data.conflict, revision: data.revision, error: data.error };
+        }
+
+        return { success: true, revision: data.revision };
+    }
+
+    /**
+     * @param res The answer to a successful set-list change.
+     *
+     * @returns The outcome, with the catalogue reloaded so every part of the app sees the new state.
+     */
+    private async finishSetListChange(res: Response | undefined): Promise<ISetListChangeResult> {
+        const result = await this.setListChangeResult(res);
+        if (result.success) {
+            await this.reloadSetLists();
+        }
+
+        return result;
     }
 
     private async rewriteMigratedScore(score: ISbDmScore, arrangement: Arrangement): Promise<void> {

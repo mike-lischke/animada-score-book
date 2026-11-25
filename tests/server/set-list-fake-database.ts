@@ -13,46 +13,55 @@ export const adminsGroupId = 1;
 export const worldGroupId = 2;
 export const memberGroupId = 10;
 export const foreignGroupId = 20;
+export const otherGroupId = 30;
 
 export const adminUserId = 1;
 export const ownerUserId = 3;
 export const foreignUserId = 4;
+export const memberUserId = 8;
 
 export const globalTagId = 5;
 export const memberTagId = 6;
 export const foreignTagId = 21;
+export const setListTagId = 40;
 export const unknownTagId = 99;
 
 export const scoreId = 7;
 export const otherScoreId = 9;
 
-/** One tag assignment of a score, as the set-list membership reads it. */
+/** One tag assignment of a score, as membership and the manual filter read it. */
 export interface IScoreTagFixture extends DbRow {
     scoreId: number;
     tagId: number;
 }
 
+/** One set list as it is stored: the tag defines it, so it carries no name of its own. */
 export interface ISetListRowFixture extends DbRow {
     id: number;
-    name: string;
-    filters: string;
+    tagId: number;
     revision: number;
 }
 
 /**
- * Answers the statements the set-list routes, the permission checks and the tag scope rules issue, with everything
- * in memory. It models the two permission tables the way the backend uses them: one owner row per entity and one
- * row per group grant.
+ * Answers the statements the set-list routes, the tag actions, the permission checks and the tag scope rules issue,
+ * with everything in memory. It models tags with their owner scope, the two permission tables (one owner row and one
+ * group grant per entity), and the tag assignments that decide set-list membership.
  */
 export class FakeSetListDatabase implements IDatabaseAdapter {
     public readonly groups = [
-        { id: adminsGroupId, name: Auth.adminGroupName, adminId: null },
-        { id: worldGroupId, name: Auth.worldGroupName, adminId: null },
-        { id: memberGroupId, name: "Bateria", adminId: ownerUserId },
-        { id: foreignGroupId, name: "Fremd", adminId: foreignUserId },
+        { id: adminsGroupId, name: Auth.adminGroupName, adminId: null as number | null },
+        { id: worldGroupId, name: Auth.worldGroupName, adminId: null as number | null },
+        { id: memberGroupId, name: "Bateria", adminId: ownerUserId as number | null },
+        { id: foreignGroupId, name: "Fremd", adminId: foreignUserId as number | null },
+        { id: otherGroupId, name: "Gäste", adminId: null as number | null },
     ];
 
-    public readonly userGroups = [{ userId: ownerUserId, groupId: memberGroupId }];
+    public readonly userGroups = [
+        { userId: adminUserId, groupId: adminsGroupId },
+        { userId: ownerUserId, groupId: memberGroupId },
+        { userId: memberUserId, groupId: memberGroupId },
+        { userId: foreignUserId, groupId: foreignGroupId },
+    ];
 
     public readonly tags: ITagRow[] = [
         { id: globalTagId, name: "Groovy", colorIndex: 1, groupId: null, systemKey: null },
@@ -66,6 +75,13 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
 
     public readonly scores = [{ id: scoreId, name: "Samba" }, { id: otherScoreId, name: "Bateria" }];
 
+    public readonly users = [
+        { id: adminUserId, email: "admin@example.com", displayName: "Administrator" },
+        { id: ownerUserId, email: "owner@example.com", displayName: "Owner" },
+        { id: foreignUserId, email: "foreign@example.com", displayName: "" },
+        { id: memberUserId, email: "member@example.com", displayName: "Member" },
+    ];
+
     public readonly scoreTags: IScoreTagFixture[] = [
         { scoreId, tagId: globalTagId },
         { scoreId: otherScoreId, tagId: globalTagId },
@@ -78,6 +94,7 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     public readonly grants = new Map<string, Map<number, boolean>>();
 
     private nextListId = 100;
+    private nextTagId = 200;
 
     public testConnection(): Promise<ITestConnectionResult> {
         return Promise.resolve({ success: true });
@@ -110,19 +127,9 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     }
 
     public insertReturningId(sql: string, params: unknown[] = []): Promise<IDbExecuteResult> {
-        if (sql.startsWith("INSERT INTO set_lists")) {
-            const id = this.nextListId++;
-            this.setLists.push({
-                id,
-                name: String(params[0]),
-                filters: String(params[1]),
-                revision: 1,
-            });
+        const affectedRows = this.apply(sql, params);
 
-            return Promise.resolve({ affectedRows: 1, insertId: id });
-        }
-
-        return Promise.resolve({ affectedRows: 1, insertId: 0 });
+        return Promise.resolve({ affectedRows, insertId: this.nextListId - 1 });
     }
 
     public executeMultiple(): Promise<void> {
@@ -139,6 +146,24 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
 
     public shutdown(): Promise<void> {
         return Promise.resolve();
+    }
+
+    /**
+     * Creates a set list in the fixture with a tag of the same name in the given scope, as the backend does.
+     *
+     * @param name The name of both the list and its tag.
+     * @param groupId The owner scope; undefined makes it a global tag.
+     * @param revision The revision the list starts with.
+     *
+     * @returns The ids of the created list and tag.
+     */
+    public seedSetList(name: string, groupId: number | undefined, revision = 1): { id: number; tagId: number; } {
+        const tagId = this.nextTagId++;
+        const id = this.nextListId++;
+        this.tags.push({ id: tagId, name, colorIndex: tagId % 10, groupId: groupId ?? null, systemKey: null });
+        this.setLists.push({ id, tagId, revision });
+
+        return { id, tagId };
     }
 
     /**
@@ -162,6 +187,17 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
         }
 
         this.grants.set(key, grants);
+    }
+
+    /**
+     * @param tagId The set-list tag to look at.
+     *
+     * @returns The list that the tag defines, if any.
+     */
+    private listOfTag(tagId: number): ISetListRowFixture | undefined {
+        return this.setLists.find((entry) => {
+            return entry.tagId === tagId;
+        });
     }
 
     private rows(sql: string, params: unknown[]): DbRow[] {
@@ -216,6 +252,20 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             });
         }
 
+        if (sql.includes("FROM `groups` WHERE id = ?")) {
+            return this.groups.filter((entry) => {
+                return entry.id === Number(params[0]);
+            }).map((entry) => {
+                return { id: entry.id, name: entry.name };
+            });
+        }
+
+        if (sql.includes("FROM `groups`")) {
+            return this.groups.map((entry) => {
+                return { id: entry.id, name: entry.name };
+            });
+        }
+
         if (sql.includes("FROM tags WHERE id IN")) {
             return this.tags.filter((tag) => {
                 return params.map(Number).includes(tag.id);
@@ -225,6 +275,57 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
         if (sql.includes("FROM tags WHERE id = ?")) {
             return this.tags.filter((tag) => {
                 return tag.id === Number(params[0]);
+            });
+        }
+
+        if (sql.includes("FROM tags WHERE name = ? AND owner_scope")) {
+            if (sql.includes("AND id != ?")) {
+                return this.tags.filter((tag) => {
+                    return tag.name === String(params[0]) && (tag.groupId ?? 0) === Number(params[1])
+                        && tag.id !== Number(params[2]);
+                });
+            }
+
+            return this.tags.filter((tag) => {
+                return tag.name === String(params[0]) && (tag.groupId ?? 0) === Number(params[1]);
+            });
+        }
+
+        if (sql.includes("FROM tags")) {
+            return this.tags;
+        }
+
+        if (sql.includes("FROM permissions p")) {
+            const rows: DbRow[] = [];
+            for (const [key, ownerId] of this.owners) {
+                const [entityType, entityId] = key.split(":");
+                if (entityType !== String(params[0]) || ownerId === null) {
+                    continue;
+                }
+
+                const user = this.users.find((entry) => {
+                    return entry.id === ownerId;
+                });
+
+                const ownerName = user === undefined
+                    ? ""
+                    : (user.displayName.length > 0 ? user.displayName : user.email);
+
+                rows.push({
+                    entityId: Number(entityId),
+                    ownerId,
+                    ownerName,
+                });
+            }
+
+            return rows;
+        }
+
+        if (sql.includes("FROM users WHERE id = ?")) {
+            return this.users.filter((entry) => {
+                return entry.id === Number(params[0]);
+            }).map((entry) => {
+                return { ownerName: entry.displayName || entry.email };
             });
         }
 
@@ -262,6 +363,38 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             });
         }
 
+        if (sql.includes("FROM entity_groups WHERE entity_type = ?")) {
+            const rows: DbRow[] = [];
+            for (const [key, grants] of this.grants) {
+                const [entityType, entityId] = key.split(":");
+                if (entityType !== String(params[0])) {
+                    continue;
+                }
+
+                for (const [groupId, writable] of grants) {
+                    rows.push({ entityId: Number(entityId), groupId, writable: writable ? 1 : 0 });
+                }
+            }
+
+            return rows;
+        }
+
+        if (sql.includes("FROM set_list_scores WHERE set_list_id = ? AND score_id = ?")) {
+            return this.setListScores.filter((entry) => {
+                return entry.setListId === Number(params[0]) && entry.scoreId === Number(params[1]);
+            });
+        }
+
+        if (sql.includes("MAX(position)")) {
+            const positions = this.setListScores.filter((entry) => {
+                return entry.setListId === Number(params[0]);
+            }).map((entry) => {
+                return entry.position;
+            });
+
+            return [{ position: positions.length === 0 ? 1 : Math.max(...positions) + 1 }];
+        }
+
         if (sql.includes("FROM set_list_scores")) {
             return this.setListScores.filter((entry) => {
                 return entry.setListId === Number(params[0]);
@@ -272,15 +405,87 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             });
         }
 
+        if (sql.includes("FROM score_tags WHERE tag_id IN")) {
+            return this.scoreTags.filter((entry) => {
+                return params.map(Number).includes(entry.tagId);
+            }).map((entry) => {
+                return { tagId: entry.tagId, scoreId: entry.scoreId };
+            });
+        }
+
+        if (sql.includes("FROM score_tags WHERE tag_id = ?")) {
+            return this.scoreTags.filter((entry) => {
+                return entry.tagId === Number(params[0]);
+            }).map((entry) => {
+                return { scoreId: entry.scoreId };
+            });
+        }
+
+        if (sql.includes("FROM score_tags WHERE score_id = ? AND tag_id = ?")) {
+            return this.scoreTags.filter((entry) => {
+                return entry.scoreId === Number(params[0]) && entry.tagId === Number(params[1]);
+            }).map((entry) => {
+                return { scoreId: entry.scoreId };
+            });
+        }
+
+        if (sql.includes("FROM score_tags WHERE score_id IN")) {
+            return this.scoreTags.filter((entry) => {
+                return params.map(Number).includes(entry.scoreId);
+            }).map((entry) => {
+                return { scoreId: entry.scoreId, tagId: entry.tagId };
+            });
+        }
+
         if (sql.includes("FROM score_tags")) {
             return this.scoreTags.map((entry) => {
                 return { scoreId: entry.scoreId, tagId: entry.tagId };
             });
         }
 
+        if (sql.includes("SELECT id, content FROM scores WHERE id IN")) {
+            return this.scores.filter((score) => {
+                return params.map(Number).includes(score.id);
+            }).map((score) => {
+                return { id: score.id, content: "" };
+            });
+        }
+
+        if (sql.includes("FROM scores WHERE id IN")) {
+            return this.scores.filter((score) => {
+                return params.map(Number).includes(score.id);
+            }).map((score) => {
+                return { id: score.id, name: score.name };
+            });
+        }
+
+        if (sql.includes("FROM scores WHERE id = ?")) {
+            return this.scores.filter((score) => {
+                return score.id === Number(params[0]);
+            }).map((score) => {
+                return { id: score.id, name: score.name };
+            });
+        }
+
         if (sql.includes("FROM scores")) {
             return this.scores.map((score) => {
-                return { id: score.id };
+                return { id: score.id, name: score.name };
+            });
+        }
+
+        if (sql.includes("JOIN tags t ON t.id = l.tag_id")) {
+            return this.setLists.filter((entry) => {
+                const tag = this.tags.find((candidate) => {
+                    return candidate.id === entry.tagId;
+                });
+
+                return tag?.name === String(params[0]) && (tag.groupId ?? 0) === Number(params[1]);
+            });
+        }
+
+        if (sql.includes("FROM set_lists WHERE tag_id = ?")) {
+            return this.setLists.filter((entry) => {
+                return entry.tagId === Number(params[0]);
             });
         }
 
@@ -298,6 +503,25 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     }
 
     private apply(sql: string, params: unknown[]): number {
+        if (sql.startsWith("INSERT INTO permissions") && sql.includes("SELECT")) {
+            const entityType = String(params[0]);
+            const ownerId = Number(params[1]);
+            const name = String(params[2]);
+            const groupId = params[3] === null ? null : Number(params[3]);
+            const tag = this.tags.find((entry) => {
+                return entry.name === name && (entry.groupId ?? 0) === (groupId ?? 0);
+            });
+            const list = tag === undefined ? undefined : this.listOfTag(tag.id);
+
+            if (list === undefined) {
+                return 0;
+            }
+
+            this.owners.set(`${entityType}:${list.id}`, ownerId);
+
+            return 1;
+        }
+
         if (sql.startsWith("INSERT INTO permissions")) {
             this.owners.set(`${String(params[0])}:${Number(params[1])}`, Number(params[2]));
 
@@ -334,64 +558,103 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             return 1;
         }
 
-        if (sql.startsWith("DELETE FROM set_list_scores")) {
-            const setListId = Number(params[0]);
-            const before = this.setListScores.length;
-
-            for (let index = this.setListScores.length - 1; index >= 0; index--) {
-                if (this.setListScores[index].setListId === setListId) {
-                    this.setListScores.splice(index, 1);
-                }
-            }
-
-            return before - this.setListScores.length;
-        }
-
-        if (sql.startsWith("INSERT INTO set_list_scores") || sql.startsWith("INSERT IGNORE INTO set_list_scores")) {
-            let added = 0;
-
-            for (let index = 0; index + 2 < params.length; index += 3) {
-                const setListId = Number(params[index]);
-                const scoreId = Number(params[index + 1]);
-                const position = Number(params[index + 2]);
-                const known = this.setListScores.some((entry) => {
-                    return entry.setListId === setListId && entry.scoreId === scoreId;
-                });
-
-                if (!known && this.scores.some((score) => {
-                    return score.id === scoreId;
-                })) {
-                    this.setListScores.push({ setListId, scoreId, position });
-                    added++;
-                }
-            }
-
-            return added;
-        }
-
-        if (sql.startsWith("DELETE FROM set_lists")) {
-            const index = this.setLists.findIndex((entry) => {
-                return entry.id === Number(params[0]);
+        if (sql.startsWith("INSERT INTO tags")) {
+            const tagId = this.nextTagId++;
+            this.tags.push({
+                id: tagId,
+                name: String(params[0]),
+                colorIndex: 0,
+                groupId: params[1] === null ? null : Number(params[1]),
+                systemKey: null,
             });
 
-            if (index >= 0) {
-                this.setLists.splice(index, 1);
-            }
-
-            return index >= 0 ? 1 : 0;
+            return 1;
         }
 
-        if (sql.startsWith("UPDATE set_lists SET name")) {
-            const list = this.setLists.find((entry) => {
-                return entry.id === Number(params[2]) && entry.revision === Number(params[3]);
+        if (sql.startsWith("UPDATE tags SET name")) {
+            const tag = this.tags.find((entry) => {
+                return entry.id === Number(params[params.length - 1]);
             });
 
-            if (!list) {
+            if (tag) {
+                tag.name = String(params[0]);
+
+                return 1;
+            }
+
+            return 0;
+        }
+
+        if (sql.startsWith("UPDATE tags SET color_index")) {
+            const tag = this.tags.find((entry) => {
+                return entry.name === String(params[1]) && (entry.groupId ?? 0) === Number(params[2]);
+            });
+
+            if (tag) {
+                tag.colorIndex = tag.id % Number(params[0]);
+
+                return 1;
+            }
+
+            return 0;
+        }
+
+        if (sql.startsWith("DELETE FROM tags")) {
+            const tagId = Number(params[0]);
+            const list = this.listOfTag(tagId);
+
+            this.tags.splice(0, this.tags.length, ...this.tags.filter((entry) => {
+                return entry.id !== tagId;
+            }));
+            this.scoreTags.splice(0, this.scoreTags.length, ...this.scoreTags.filter((entry) => {
+                return entry.tagId !== tagId;
+            }));
+
+            if (list !== undefined) {
+                this.setLists.splice(0, this.setLists.length, ...this.setLists.filter((entry) => {
+                    return entry.id !== list.id;
+                }));
+                this.setListScores.splice(0, this.setListScores.length, ...this.setListScores.filter((entry) => {
+                    return entry.setListId !== list.id;
+                }));
+            }
+
+            return 1;
+        }
+
+        if (sql.startsWith("INSERT INTO set_lists")) {
+            const tag = this.tags.find((entry) => {
+                return entry.name === String(params[0]) && (entry.groupId ?? 0) === Number(params[1]);
+            });
+
+            if (tag === undefined) {
                 return 0;
             }
 
-            list.name = String(params[0]);
-            list.filters = String(params[1]);
+            this.setLists.push({ id: this.nextListId++, tagId: tag.id, revision: 1 });
+
+            return 1;
+        }
+
+        if (sql.startsWith("DELETE FROM set_lists")) {
+            const listId = Number(params[0]);
+
+            this.setLists.splice(0, this.setLists.length, ...this.setLists.filter((entry) => {
+                return entry.id !== listId;
+            }));
+
+            return 1;
+        }
+
+        if (sql.startsWith("UPDATE set_lists SET revision") && sql.includes("AND revision = ?")) {
+            const list = this.setLists.find((entry) => {
+                return entry.id === Number(params[0]) && entry.revision === Number(params[1]);
+            });
+
+            if (list === undefined) {
+                return 0;
+            }
+
             list.revision += 1;
 
             return 1;
@@ -402,13 +665,82 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
                 return entry.id === Number(params[0]);
             });
 
-            if (!list || (params.length > 1 && list.revision !== Number(params[1]))) {
+            if (list === undefined) {
                 return 0;
             }
 
             list.revision += 1;
 
             return 1;
+        }
+
+        if (sql.startsWith("INSERT INTO score_tags") || sql.startsWith("INSERT IGNORE INTO score_tags")) {
+            const scoreIdValue = Number(params[0]);
+            const tagId = Number(params[1]);
+            const known = this.scoreTags.some((entry) => {
+                return entry.scoreId === scoreIdValue && entry.tagId === tagId;
+            });
+
+            if (known) {
+                return 0;
+            }
+
+            this.scoreTags.push({ scoreId: scoreIdValue, tagId });
+
+            return 1;
+        }
+
+        if (sql.startsWith("DELETE FROM score_tags")) {
+            const before = this.scoreTags.length;
+
+            this.scoreTags.splice(0, this.scoreTags.length, ...this.scoreTags.filter((entry) => {
+                return !(entry.scoreId === Number(params[0]) && entry.tagId === Number(params[1]));
+            }));
+
+            return before - this.scoreTags.length;
+        }
+
+        if (sql.startsWith("DELETE FROM set_list_scores") && params.length > 1) {
+            const before = this.setListScores.length;
+
+            this.setListScores.splice(0, this.setListScores.length, ...this.setListScores.filter((entry) => {
+                return !(entry.setListId === Number(params[0]) && entry.scoreId === Number(params[1]));
+            }));
+
+            return before - this.setListScores.length;
+        }
+
+        if (sql.startsWith("DELETE FROM set_list_scores")) {
+            const setListId = Number(params[0]);
+            const before = this.setListScores.length;
+
+            this.setListScores.splice(0, this.setListScores.length, ...this.setListScores.filter((entry) => {
+                return entry.setListId !== setListId;
+            }));
+
+            return before - this.setListScores.length;
+        }
+
+        if (sql.startsWith("INSERT INTO set_list_scores") || sql.startsWith("INSERT IGNORE INTO set_list_scores")) {
+            let added = 0;
+
+            for (let index = 0; index + 2 < params.length; index += 3) {
+                const setListId = Number(params[index]);
+                const scoreIdValue = Number(params[index + 1]);
+                const position = Number(params[index + 2]);
+                const known = this.setListScores.some((entry) => {
+                    return entry.setListId === setListId && entry.scoreId === scoreIdValue;
+                });
+
+                if (!known && this.scores.some((score) => {
+                    return score.id === scoreIdValue;
+                })) {
+                    this.setListScores.push({ setListId, scoreId: scoreIdValue, position });
+                    added++;
+                }
+            }
+
+            return added;
         }
 
         return 1;

@@ -7,12 +7,13 @@ import { cleanup, fireEvent, render, screen, waitFor, type RenderResult } from "
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
+import type { ISetListInfo } from "../../src/core/DatabaseTypes.js";
 import {
     ScoreBookDataModel, ScoreQueryResult, SbDmEntityType, type ISbDmInstrument, type ISbDmScore,
     type IScoreQueryOutcome,
 } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreListSortOrder } from "../../src/core/types/general.js";
-import { SystemTagKind, type ITagCombination, type ITagInfo } from "../../src/core/types/tags.js";
+import { SystemTagKind, type ITagCombination, type ITagInfo, type ITagOwnerScope } from "../../src/core/types/tags.js";
 import { ScoreLibrary } from "../../src/ui/ScoreLibrary.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
@@ -23,9 +24,21 @@ interface IMockDataModel {
     scores: ISbDmScore[];
     tags: ITagInfo[];
     instruments: ISbDmInstrument[];
-    queryScores: Mock<(combination: ITagCombination) => Promise<IScoreQueryOutcome>>;
+    setLists: ISetListInfo[];
+    readableScoreCount: number;
+    tagOwnerScopes: ITagOwnerScope[];
+    queryScores: Mock<(combination: ITagCombination, setListId?: number) => Promise<IScoreQueryOutcome>>;
     assignTag: ReturnType<typeof vi.fn>;
     unassignTag: ReturnType<typeof vi.fn>;
+    reloadSetLists: ReturnType<typeof vi.fn>;
+    listGroups: ReturnType<typeof vi.fn>;
+    loadSetListScores: ReturnType<typeof vi.fn>;
+    listReadableScores: ReturnType<typeof vi.fn>;
+    createSetList: ReturnType<typeof vi.fn>;
+    renameSetList: ReturnType<typeof vi.fn>;
+    deleteSetList: ReturnType<typeof vi.fn>;
+    shareSetList: ReturnType<typeof vi.fn>;
+    reorderSetList: ReturnType<typeof vi.fn>;
 }
 
 const caixaTag: ITagInfo = {
@@ -52,10 +65,22 @@ const createMockDataModel = (tags: ITagInfo[] = [], scores: ISbDmScore[] = []): 
         scores,
         tags,
         instruments: [],
-        queryScores: vi.fn<(combination: ITagCombination) => Promise<IScoreQueryOutcome>>()
+        setLists: [],
+        readableScoreCount: scores.length,
+        tagOwnerScopes: [],
+        queryScores: vi.fn<(combination: ITagCombination, setListId?: number) => Promise<IScoreQueryOutcome>>()
             .mockResolvedValue(appliedOutcome),
         assignTag: vi.fn().mockResolvedValue(true),
         unassignTag: vi.fn().mockResolvedValue(true),
+        reloadSetLists: vi.fn().mockResolvedValue(undefined),
+        listGroups: vi.fn().mockResolvedValue([]),
+        loadSetListScores: vi.fn().mockResolvedValue([]),
+        listReadableScores: vi.fn().mockResolvedValue([]),
+        createSetList: vi.fn().mockResolvedValue({ success: false }),
+        renameSetList: vi.fn().mockResolvedValue({ success: false }),
+        deleteSetList: vi.fn().mockResolvedValue({ success: false }),
+        shareSetList: vi.fn().mockResolvedValue({ success: false }),
+        reorderSetList: vi.fn().mockResolvedValue({ success: false }),
     };
 };
 
@@ -74,6 +99,20 @@ const createScore = (id: number, name: string, tagIds: number[] = []): ISbDmScor
         content: "",
         tagIds,
         state: { initialized: true, expanded: true, expandedOnce: true, isLeaf: true },
+    };
+};
+
+/**
+ * @param id The list id.
+ * @param name The list name.
+ * @param memberCount How many members the caller may read.
+ * @param editable Whether the caller may change the list, which also lets them manage its access.
+ *
+ * @returns A set list as the selector receives it.
+ */
+const createSetList = (id: number, name: string, memberCount: number, editable = true): ISetListInfo => {
+    return {
+        id, name, tagId: 40 + id, revision: 1, memberCount, groups: [], editable, managesAccess: editable,
     };
 };
 
@@ -132,6 +171,26 @@ const commitTag = async (name: string): Promise<void> => {
 
     await waitFor(() => {
         expect(filterField().value).toBe("");
+    });
+};
+
+/**
+ * Switches a card's tag editing on, which is what makes its tag chips editable.
+ *
+ * @param index The position of the card in the list; the first card by default.
+ */
+const enterCardEdit = async (index = 0): Promise<void> => {
+    const edit = await waitFor(() => {
+        const button = document.body.querySelectorAll<HTMLElement>(".score-card-edit")[index];
+        expect(button).toBeTruthy();
+
+        return button;
+    });
+
+    fireEvent.click(edit);
+
+    await waitFor(() => {
+        expect(edit.classList.contains("is-active")).toBe(true);
     });
 };
 
@@ -353,10 +412,49 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         expect(chips?.textContent).not.toContain("Surdo");
     });
 
+    it("keeps the card tags read-only until the card's edit mode is switched on", async () => {
+        const model = createMockDataModel([competitionTag], [createScore(1, "Samba", [competitionTag.id])]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card")).toHaveLength(1);
+        });
+
+        expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeNull();
+        expect(document.body.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
+        expect(document.body.querySelector(".score-card-edit")?.classList.contains("is-active")).toBe(false);
+
+        await enterCardEdit();
+
+        expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
+    });
+
+    it("moves the edit mode to another card", async () => {
+        const model = createMockDataModel([competitionTag],
+            [createScore(1, "Samba"), createScore(2, "Bateria")]);
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".score-card-edit")).toHaveLength(2);
+        });
+
+        await enterCardEdit(0);
+        await enterCardEdit(1);
+
+        const buttons = Array.from(document.body.querySelectorAll<HTMLElement>(".score-card-edit"));
+
+        expect(buttons[0].classList.contains("is-active")).toBe(false);
+        expect(buttons[1].classList.contains("is-active")).toBe(true);
+    });
+
     it("adds a tag to a card through the model", async () => {
         const model = createMockDataModel([competitionTag], [createScore(1, "Surdo")]);
 
         renderLibrary(model);
+
+        await enterCardEdit();
 
         await waitFor(() => {
             expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
@@ -377,6 +475,8 @@ describe("ScoreLibrary", { concurrent: false }, () => {
 
         renderLibrary(model);
 
+        await enterCardEdit();
+
         await waitFor(() => {
             expect(document.body.querySelector(".score-card-tags .tag-input-close-button")).toBeTruthy();
         });
@@ -390,6 +490,8 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         const model = createMockDataModel([instrumentTag, competitionTag], [createScore(1, "Caixa")]);
 
         renderLibrary(model);
+
+        await enterCardEdit();
 
         await waitFor(() => {
             expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
@@ -405,6 +507,8 @@ describe("ScoreLibrary", { concurrent: false }, () => {
         const model = createMockDataModel([demoTag, competitionTag], [createScore(1, "Samba", [demoTag.id])]);
 
         renderLibrary(model);
+
+        await enterCardEdit();
 
         await waitFor(() => {
             expect(document.body.querySelector(".score-card-tags .tag-input-field")).toBeTruthy();
@@ -828,5 +932,111 @@ describe("ScoreLibrary", { concurrent: false }, () => {
 
         expect(document.body.querySelector("#scoreListInvalidFilter")).toBeTruthy();
         expect(document.body.querySelectorAll(".score-card")).toHaveLength(0);
+    });
+
+    it("shows All Scores first and one pill per set list with its readable count", async () => {
+        const model = createMockDataModel([], [createScore(1, "Samba")]);
+        model.readableScoreCount = 12;
+        model.setLists = [
+            createSetList(4, "Auftritt", 3),
+            createSetList(5, "Probe", 1, false),
+        ];
+
+        renderLibrary(model);
+
+        await waitFor(() => {
+            expect(document.body.querySelectorAll(".set-list-pill")).toHaveLength(3);
+        });
+
+        const pills = Array.from(document.body.querySelectorAll<HTMLElement>(".set-list-pill"));
+        expect(pills.map((pill) => {
+            return pill.textContent;
+        })).toEqual(["All Scores12", "Auftritt3", "Probe1"]);
+        expect(pills[0].getAttribute("aria-selected")).toBe("true");
+        expect(pills[1].getAttribute("aria-selected")).toBe("false");
+    });
+
+    it("queries the selected set list together with the manual filter", async () => {
+        const model = createMockDataModel([caixaTag], [createScore(1, "Samba", [caixaTag.id])]);
+        model.setLists = [
+            createSetList(4, "Auftritt", 1),
+        ];
+
+        renderLibrary(model);
+        await commitTag("Caixa");
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenCalledTimes(1);
+        });
+
+        const pill = document.body.querySelector<HTMLElement>("#set-list-tab-4");
+        expect(pill).toBeTruthy();
+        fireEvent.click(pill!);
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [[caixaTag.id]] }, 4);
+        });
+        expect(document.body.textContent).toContain("Order: saved order of the set list");
+
+        fireEvent.click(document.body.querySelector<HTMLElement>("#set-list-tab-all")!);
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [[caixaTag.id]] });
+        });
+    });
+
+    it("switches pills with the arrow keys like a tab view", async () => {
+        const model = createMockDataModel();
+        model.setLists = [
+            createSetList(4, "Auftritt", 0),
+            createSetList(5, "Probe", 0),
+        ];
+
+        renderLibrary(model);
+        const row = await waitFor(() => {
+            const tabs = document.body.querySelector<HTMLElement>(".set-list-tabs");
+            expect(tabs).toBeTruthy();
+
+            return tabs!;
+        });
+
+        fireEvent.keyDown(row, { key: "End" });
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [] }, 5);
+        });
+        expect(document.body.querySelector("#set-list-tab-5")?.getAttribute("aria-selected")).toBe("true");
+
+        fireEvent.keyDown(row, { key: "ArrowLeft" });
+
+        await waitFor(() => {
+            expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [] }, 4);
+        });
+    });
+
+    it("falls back to All Scores and says so when the selected list disappears", async () => {
+        const model = createMockDataModel();
+        model.setLists = [
+            createSetList(4, "Auftritt", 0),
+        ];
+        model.queryScores.mockImplementation((combination, setListId) => {
+            return Promise.resolve(setListId === undefined
+                ? appliedOutcome
+                : { result: ScoreQueryResult.SetListUnavailable, ignoredTagIds: [] });
+        });
+
+        renderLibrary(model);
+        fireEvent.click(await waitFor(() => {
+            const pill = document.body.querySelector<HTMLElement>("#set-list-tab-4");
+            expect(pill).toBeTruthy();
+
+            return pill!;
+        }));
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#setListNotice")?.textContent)
+                .toContain("no longer available");
+        });
+        expect(model.queryScores).toHaveBeenLastCalledWith({ groups: [] });
+        expect(document.body.querySelector("#set-list-tab-all")?.getAttribute("aria-selected")).toBe("true");
     });
 });

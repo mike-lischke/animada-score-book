@@ -6,13 +6,13 @@
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { NameText } from "../core/NameText.js";
-import { ScoreLineup } from "../core/ScoreLineup.js";
 import { TagCombination } from "../core/TagCombination.js";
 import { TagPalette } from "../core/TagPalette.js";
-import { ScoreLineupStatus, type IScoreLineup } from "../core/DatabaseTypes.js";
 import { AccessLevel, EntityType, type ITokenPayload } from "./Auth.js";
 import { InstrumentTags } from "./InstrumentTags.js";
 import { type RequestContext } from "./RequestContext.js";
+import { ScoreEntries } from "./ScoreEntries.js";
+import { SetListAccess } from "./SetListAccess.js";
 import { SystemTagKind, TagAccess, type ITagAccessContext, type ITagRow } from "./TagAccess.js";
 
 /** A tag as the client receives it. */
@@ -26,6 +26,9 @@ interface ITagJson {
 
     /** The instrument the tag stands for; set for instrument tags only. */
     instrumentTypeId?: string;
+
+    /** The set list this tag defines; absent for an ordinary metadata tag. */
+    setListId?: number;
 
     editable: boolean;
     assignable: boolean;
@@ -69,12 +72,14 @@ export class TagActions {
         }
 
         const groupNames = await this.groupNames();
+        const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
+        const writableTagIds = await this.writableSetListTags(user);
         const usage = await this.usageCounts(user, usable.map((tag) => {
             return tag.id;
         }));
 
         const entries = usable.map((tag) => {
-            return TagActions.tagJson(context, tag, groupNames, usage.get(tag.id) ?? 0);
+            return TagActions.tagJson(context, tag, groupNames, setListIds, writableTagIds, usage.get(tag.id) ?? 0);
         }).sort((left, right) => {
             return NameText.compare(left.name, right.name);
         });
@@ -98,7 +103,14 @@ export class TagActions {
             scopes.push({ name: TagAccess.globalScopeName });
         }
 
-        for (const groupId of context.adminGroupIds) {
+        // An administrator may create tags in every scope, a group administrator only in the groups they administer.
+        const groupIds = context.isAdmin
+            ? (await this.ctx.auth.adapter.query<{ id: number; }>("SELECT id FROM `groups`", [])).map((row) => {
+                return row.id;
+            })
+            : context.adminGroupIds;
+
+        for (const groupId of groupIds) {
             const rows = await this.ctx.auth.adapter.query<{ name: string; }>(
                 "SELECT name FROM `groups` WHERE id = ?", [groupId],
             );
@@ -150,9 +162,11 @@ export class TagActions {
 
         const existing = await this.usableTagNamed(context, name);
         if (existing !== undefined) {
+            const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
+            const writableTagIds = await this.writableSetListTags(user);
             this.ctx.sendJson(res, {
                 success: true, created: false,
-                tag: TagActions.tagJson(context, existing, await this.groupNames(), 0),
+                tag: TagActions.tagJson(context, existing, await this.groupNames(), setListIds, writableTagIds, 0),
             });
 
             return;
@@ -179,7 +193,8 @@ export class TagActions {
         this.ctx.sendJson(res, {
             success: true,
             created: true,
-            tag: TagActions.tagJson(context, created, await this.groupNames(), 0)
+            tag: TagActions.tagJson(context, created, await this.groupNames(),
+                await SetListAccess.listIdsByTag(this.ctx.auth.adapter), await this.writableSetListTags(user), 0)
         });
     }
 
@@ -201,8 +216,10 @@ export class TagActions {
         }
 
         const context = await TagAccess.contextFor(this.ctx.auth, this.ctx.getAuthUser(req));
+        const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
+        const writableTagIds = await this.writableSetListTags(this.ctx.getAuthUser(req));
 
-        if (!TagAccess.owns(context, tag)) {
+        if (!TagActions.mayManage(context, tag, setListIds, writableTagIds)) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
@@ -239,13 +256,21 @@ export class TagActions {
             return;
         }
 
+        const previousName = tag.name;
+
         await this.ctx.auth.adapter.execute("UPDATE tags SET name = ?, color_index = ? WHERE id = ?",
             [name, colourIndex, tagId]);
+
+        // A set list carries its tag's name, so renaming the tag renames the list and is a change of the list.
+        const listId = setListIds.get(tagId);
+        if (listId !== undefined && name !== previousName) {
+            await this.ctx.auth.adapter.execute("UPDATE set_lists SET revision = revision + 1 WHERE id = ?", [listId]);
+        }
 
         const updated = await this.tagById(tagId);
         const tagJson = updated === undefined
             ? undefined
-            : TagActions.tagJson(context, updated, await this.groupNames(), 0);
+            : TagActions.tagJson(context, updated, await this.groupNames(), setListIds, writableTagIds, 0);
 
         this.ctx.sendJson(res, { success: true, tag: tagJson });
     }
@@ -268,8 +293,10 @@ export class TagActions {
         }
 
         const context = await TagAccess.contextFor(this.ctx.auth, this.ctx.getAuthUser(req));
+        const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
+        const writableTagIds = await this.writableSetListTags(this.ctx.getAuthUser(req));
 
-        if (!TagAccess.owns(context, tag)) {
+        if (!TagActions.mayManage(context, tag, setListIds, writableTagIds)) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
@@ -281,9 +308,30 @@ export class TagActions {
             return;
         }
 
-        await this.ctx.auth.adapter.execute("DELETE FROM tags WHERE id = ?", [tagId]);
+        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tagId);
+        if (list === undefined) {
+            await this.ctx.auth.adapter.execute("DELETE FROM tags WHERE id = ?", [tagId]);
 
-        this.ctx.sendJson(res, { success: true });
+            this.ctx.sendJson(res, { success: true });
+
+            return;
+        }
+
+        // Deleting a set-list tag deletes the list with it. The tag, its assignments and the list rows vanish through
+        // their foreign keys; the sharing rows carry no key, so they are removed here in the same transaction.
+        await this.ctx.auth.adapter.executeTransaction([
+            { sql: "DELETE FROM tags WHERE id = ?", params: [tagId] },
+            {
+                sql: "DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?",
+                params: [EntityType.SetList, list.id],
+            },
+            {
+                sql: "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+                params: [EntityType.SetList, list.id],
+            },
+        ]);
+
+        this.ctx.sendJson(res, { success: true, setListId: list.id });
     }
 
     /**
@@ -309,10 +357,19 @@ export class TagActions {
             return;
         }
 
-        await this.ctx.auth.adapter.execute("INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES (?, ?)",
-            [scoreId, tag.id]);
+        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
+        if (list === undefined) {
+            await this.ctx.auth.adapter.execute("INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES (?, ?)",
+                [scoreId, tag.id]);
 
-        this.ctx.sendJson(res, { success: true });
+            this.ctx.sendJson(res, { success: true });
+
+            return;
+        }
+
+        await this.assignSetListMember(list.id, scoreId, tag.id);
+
+        this.ctx.sendJson(res, { success: true, setListId: list.id });
     }
 
     /**
@@ -337,10 +394,19 @@ export class TagActions {
             return;
         }
 
-        await this.ctx.auth.adapter.execute("DELETE FROM score_tags WHERE score_id = ? AND tag_id = ?",
-            [scoreId, tag.id]);
+        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
+        if (list === undefined) {
+            await this.ctx.auth.adapter.execute("DELETE FROM score_tags WHERE score_id = ? AND tag_id = ?",
+                [scoreId, tag.id]);
 
-        this.ctx.sendJson(res, { success: true });
+            this.ctx.sendJson(res, { success: true });
+
+            return;
+        }
+
+        await this.unassignSetListMember(list.id, scoreId, tag.id);
+
+        this.ctx.sendJson(res, { success: true, setListId: list.id });
     }
 
     /**
@@ -373,55 +439,49 @@ export class TagActions {
 
         const user = this.ctx.getAuthUser(req);
         const scores = await this.readableScores(user, reading.groups);
-
-        if (scores.length === 0) {
-            this.ctx.sendJson(res, { scores: [] });
-
-            return;
-        }
-
-        const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.Score,
-            scores.map((score) => {
-                return score.id;
-            }));
-
-        const context = await TagAccess.contextFor(this.ctx.auth, user);
-        const usableIds = new Set((await this.usableTags(context)).map((tag) => {
-            return tag.id;
-        }));
-        const tagIds = await this.tagIdsPerScore(scores.map((score) => {
-            return score.id;
-        }), usableIds);
-        const lineups = await this.lineups(scores.map((score) => {
+        const entries = await ScoreEntries.list(this.ctx.auth, user, scores.map((score) => {
             return score.id;
         }));
-
-        const entries = scores.map((score) => {
-            const summary = summaries.get(score.id)!;
-
-            return {
-                id: score.id,
-                name: score.name,
-                tagIds: tagIds.get(score.id) ?? [],
-                lineup: lineups.get(score.id)!,
-                perm: summary,
-            };
-        });
 
         this.ctx.sendJson(res, { scores: entries });
     }
 
     /**
      * @param context The rules of the caller.
+     * @param tag The tag in question.
+     * @param setListIds The list id of every set-list tag, keyed by tag id.
+     * @param writableTagIds The set-list tags whose list the caller may change.
+     *
+     * @returns Whether the caller may rename or delete the tag. A set-list tag follows the list permission model,
+     * so its owner and the groups with write access reach it; an ordinary tag follows its owner scope.
+     */
+    private static mayManage(context: ITagAccessContext, tag: ITagRow, setListIds: Map<number, number>,
+        writableTagIds: ReadonlySet<number>): boolean {
+        if (setListIds.has(tag.id)) {
+            return writableTagIds.has(tag.id);
+        }
+
+        return TagAccess.owns(context, tag);
+    }
+
+    /**
+     * @param context The rules of the caller.
      * @param tag The tag to describe.
      * @param groupNames The group names, keyed by id.
+     * @param setListIds The list id of every set-list tag, keyed by tag id.
+     * @param writableTagIds The set-list tags whose list the caller may change.
      * @param usageCount How many readable scores carry the tag.
      *
      * @returns The tag as the client expects it.
      */
     private static tagJson(context: ITagAccessContext, tag: ITagRow, groupNames: Map<number, string>,
+        setListIds: Map<number, number>, writableTagIds: ReadonlySet<number>,
         usageCount: number): ITagJson {
         const groupId = tag.groupId ?? undefined;
+
+        const setListId = setListIds.get(tag.id);
+        const editable = TagActions.mayManage(context, tag, setListIds, writableTagIds);
+        const assignable = setListId === undefined ? TagAccess.canAssign(context, tag) : editable;
 
         return {
             id: tag.id,
@@ -431,8 +491,9 @@ export class TagActions {
             groupName: groupId === undefined ? undefined : groupNames.get(groupId),
             systemKind: TagAccess.systemKind(tag),
             instrumentTypeId: TagAccess.instrumentTypeId(tag),
-            editable: TagAccess.owns(context, tag),
-            assignable: TagAccess.canAssign(context, tag),
+            setListId,
+            editable,
+            assignable,
             usageCount,
         };
     }
@@ -460,6 +521,26 @@ export class TagActions {
      */
     private static colourIndexForId(tagId: number): number {
         return tagId % TagPalette.count;
+    }
+
+    /**
+     * @param user The authenticated caller, or undefined for a visitor.
+     *
+     * @returns The ids of the set-list tags whose list the caller may change, which is what managing the tag needs.
+     */
+    private async writableSetListTags(user: ITokenPayload | undefined): Promise<Set<number>> {
+        const listIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
+        const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.SetList,
+            Array.from(listIds.values()));
+
+        const writable = new Set<number>();
+        for (const [tagId, listId] of listIds) {
+            if (summaries.get(listId)?.canWrite === true) {
+                writable.add(tagId);
+            }
+        }
+
+        return writable;
     }
 
     /**
@@ -548,7 +629,13 @@ export class TagActions {
         }
 
         // A tag is its own entity: changing it on a score needs the right to manage the tag's scope, not the score.
-        if (!TagAccess.canAssign(context, tag)) {
+        // A set-list tag follows the list, so its owner and the groups with write access may assign it.
+        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
+        const mayAssign = list === undefined
+            ? TagAccess.canAssign(context, tag)
+            : await SetListAccess.canEdit(this.ctx.auth, user, list.id);
+
+        if (!mayAssign) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return undefined;
@@ -690,71 +777,65 @@ export class TagActions {
     }
 
     /**
-     * Reads the lineup of every listed score in one query, so showing a card needs no second request for its
-     * content.
+     * Adds a score to a set list: the tag assignment and the appended place are stored together, so the list never
+     * holds a member without a position. A score that already carries the tag keeps its place.
      *
-     * @param scoreIds The scores whose lineups the list shows.
-     *
-     * @returns The lineup of every requested score, keyed by id. A score whose content cannot be read keeps an
-     * unreadable lineup instead of dropping out of the list.
+     * @param listId The list of the assigned tag.
+     * @param scoreId The score that receives the tag.
+     * @param tagId The set-list tag.
      */
-    private async lineups(scoreIds: number[]): Promise<Map<number, IScoreLineup>> {
-        const lineups = new Map<number, IScoreLineup>();
-
-        for (const scoreId of scoreIds) {
-            lineups.set(scoreId, { status: ScoreLineupStatus.Unreadable, tracks: [] });
-        }
-
-        if (scoreIds.length === 0) {
-            return lineups;
-        }
-
-        const placeholders = scoreIds.map(() => {
-            return "?";
-        }).join(", ");
-        const rows = await this.ctx.auth.adapter.query<{ id: number; content: string; }>(
-            `SELECT id, content FROM scores WHERE id IN (${placeholders})`, scoreIds,
+    private async assignSetListMember(listId: number, scoreId: number, tagId: number): Promise<void> {
+        const assigned = await this.ctx.auth.adapter.query<{ scoreId: number; }>(
+            "SELECT score_id AS scoreId FROM score_tags WHERE score_id = ? AND tag_id = ?", [scoreId, tagId],
         );
 
-        for (const row of rows) {
-            lineups.set(row.id, ScoreLineup.read(row.content));
+        if (assigned.length > 0) {
+            return;
         }
 
-        return lineups;
+        // A newly tagged score is appended; the position is read before the transaction so the insert stays a
+        // single statement. A tie can only come from two simultaneous assignments and is broken by the score id.
+        const rows = await this.ctx.auth.adapter.query<{ position: number; }>(
+            "SELECT COALESCE(MAX(position), 0) + 1 AS position FROM set_list_scores WHERE set_list_id = ?", [listId],
+        );
+        const position = rows[0]?.position ?? 1;
+
+        await this.ctx.auth.adapter.executeTransaction([
+            { sql: "INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES (?, ?)", params: [scoreId, tagId] },
+            {
+                sql: "INSERT IGNORE INTO set_list_scores (set_list_id, score_id, position) VALUES (?, ?, ?)",
+                params: [listId, scoreId, position],
+            },
+            { sql: "UPDATE set_lists SET revision = revision + 1 WHERE id = ?", params: [listId] },
+        ]);
     }
 
     /**
-     * @param scoreIds The scores to look at.
-     * @param usableIds The tag ids the caller can use; everything else stays invisible.
+     * Removes a score from a set list: the tag assignment and the place go together, so a score that is tagged
+     * again later starts at the end.
      *
-     * @returns The usable tag ids of every score.
+     * @param listId The list of the removed tag.
+     * @param scoreId The score that loses the tag.
+     * @param tagId The set-list tag.
      */
-    private async tagIdsPerScore(scoreIds: number[], usableIds: Set<number>): Promise<Map<number, number[]>> {
-        const result = new Map<number, number[]>();
-
-        if (scoreIds.length === 0) {
-            return result;
-        }
-
-        const placeholders = scoreIds.map(() => {
-            return "?";
-        }).join(", ");
-        const rows = await this.ctx.auth.adapter.query<{ scoreId: number; tagId: number; }>(
-            `SELECT score_id AS scoreId, tag_id AS tagId FROM score_tags WHERE score_id IN (${placeholders})`,
-            scoreIds,
+    private async unassignSetListMember(listId: number, scoreId: number, tagId: number): Promise<void> {
+        const assigned = await this.ctx.auth.adapter.query<{ scoreId: number; }>(
+            "SELECT score_id AS scoreId FROM score_tags WHERE score_id = ? AND tag_id = ?", [scoreId, tagId],
         );
 
-        for (const row of rows) {
-            if (!usableIds.has(row.tagId)) {
-                continue;
-            }
-
-            const ids = result.get(row.scoreId) ?? [];
-            ids.push(row.tagId);
-            result.set(row.scoreId, ids);
+        if (assigned.length === 0) {
+            return;
         }
 
-        return result;
+        await this.ctx.auth.adapter.executeTransaction([
+            {
+                sql: "DELETE FROM score_tags WHERE score_id = ? AND tag_id = ?", params: [scoreId, tagId],
+            },
+            {
+                sql: "DELETE FROM set_list_scores WHERE set_list_id = ? AND score_id = ?", params: [listId, scoreId],
+            },
+            { sql: "UPDATE set_lists SET revision = revision + 1 WHERE id = ?", params: [listId] },
+        ]);
     }
 
     /**

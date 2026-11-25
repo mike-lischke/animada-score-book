@@ -9,8 +9,6 @@ import { Button } from "../components/ui/framework/Button.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
-import { Menu } from "../components/ui/framework/Menu/Menu.js";
-import type { IMenuItem } from "../components/ui/framework/Menu/MenuItem.js";
 import { TagInput, type ITag, type ITagCompletion } from "../components/ui/framework/TagInput.js";
 import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
@@ -76,6 +74,9 @@ export interface IScoreCardProperties extends ICommonUIProperties {
     /** Whether the caller may manage tags at all; a tag belongs to its scope, not to the score. */
     canEditTags: boolean;
 
+    /** Whether the card's tag editing is switched on. Tags are never editable without it. */
+    editing: boolean;
+
     expanded: boolean;
     isAdmin: boolean;
 
@@ -85,6 +86,7 @@ export interface IScoreCardProperties extends ICommonUIProperties {
     onToggleLineup: (score: ISbDmScore) => void;
     onOpen: (score: ISbDmScore) => void;
     onAction: (action: string, score: ISbDmScore) => void;
+    onToggleEdit: (score: ISbDmScore) => void;
     onTagAdd: (score: ISbDmScore, tagId: number) => void;
     onTagRemove: (score: ISbDmScore, tagId: number) => void;
 }
@@ -136,25 +138,25 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         };
     }
 
+    /**
+     * @param seconds A duration in seconds.
+     *
+     * @returns The duration as minutes and seconds, for example `2:07`.
+     */
+    private static durationCaption(seconds: number): string {
+        const total = Math.max(0, Math.round(seconds));
+        const minutes = Math.floor(total / 60);
+        const rest = total % 60;
+
+        return `${minutes}:${String(rest).padStart(2, "0")}`;
+    }
+
     private renderHeader(): ComponentChild {
-        const { score, position, tagChips, tagCompletions, canEditTags, isAdmin, showPermission } = this.props;
+        const { score, position, tagChips, tagCompletions, canEditTags, editing, isAdmin, showPermission } = this.props;
 
         const { perm } = score;
         const canManage = isAdmin || (perm?.isOwner === true);
-
-        const menuItems: IMenuItem[] = [
-            { id: "load", label: "Load Score" },
-            { id: "copyUrl", label: "Copy Score URL", icon: UIIcon.Link },
-            { id: "separator2", label: "-" },
-            { id: "remove", label: "Remove Score", icon: UIIcon.Trash },
-        ];
-
-        if (canManage) {
-            menuItems.push(
-                { id: "separator3", label: "-" },
-                { id: "managePerm", label: "Group Access", icon: UIIcon.Key },
-            );
-        }
+        const actions = this.renderActions(canManage);
 
         let indicator: ComponentChild = undefined;
         if (showPermission && perm !== undefined) {
@@ -169,7 +171,7 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         }
 
         let chips: ComponentChild = undefined;
-        if (canEditTags) {
+        if (canEditTags && editing) {
             chips = (
                 <TagInput className="score-card-tags" tags={tagChips} removable completions={tagCompletions}
                     allowNew={false} onAdd={this.handleTagAdd} onRemove={this.handleTagRemove} />
@@ -177,6 +179,8 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         } else if (tagChips.length > 0) {
             chips = <TagInput className="score-card-tags" tags={tagChips} readOnly />;
         }
+
+        const meta = this.renderMeta();
 
         return (
             <Container className="score-card-header" orientation={Orientation.LeftToRight}
@@ -195,16 +199,123 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
                             <span className="score-card-name" title={score.name}>{score.name}</span>
                         </Button>
                         {indicator}
-                        <Container className="score-card-actions" orientation={Orientation.LeftToRight}>
-                            <Menu
-                                icon={UIIcon.KebabVertical}
-                                items={menuItems}
-                                onItemClick={this.handleMenuItemClick}
-                            />
-                        </Container>
+                        {actions}
                     </Container>
+                    {meta}
                     {chips}
                 </Container>
+            </Container>
+        );
+    }
+
+    /**
+     * @returns The read-only metadata badges of the card: tempo, meter, bar count and length. The row is left out
+     * entirely when the content states none of them.
+     */
+    private renderMeta(): ComponentChild {
+        const { score } = this.props;
+        const meta = score.meta;
+
+        if (meta === undefined) {
+            return undefined;
+        }
+
+        const entries: Array<{ key: string; caption: string; }> = [];
+        if (meta.bpm !== undefined) {
+            entries.push({ key: "bpm", caption: `${meta.bpm} BPM` });
+        }
+
+        if (meta.timeSignature !== undefined) {
+            entries.push({ key: "meter", caption: meta.timeSignature });
+        }
+
+        if (meta.barCount !== undefined) {
+            entries.push({ key: "bars", caption: `${meta.barCount} bars` });
+        }
+
+        if (meta.durationSeconds !== undefined) {
+            entries.push({ key: "length", caption: ScoreCard.durationCaption(meta.durationSeconds) });
+        }
+
+        if (entries.length === 0) {
+            return undefined;
+        }
+
+        const badges = entries.map((entry) => {
+            return <span key={entry.key} className="score-card-meta-tag">{entry.caption}</span>;
+        });
+
+        return (
+            <Container className="score-card-meta" orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}>
+                {badges}
+            </Container>
+        );
+    }
+
+    /**
+     * @param canManage Whether the caller may manage the score's permissions.
+     *
+     * @returns The card's actions as one joined button group: edit, copy, permissions, remove.
+     */
+    private renderActions(canManage: boolean): ComponentChild {
+        const { canEditTags, editing } = this.props;
+        const editTitle = editing ? "Close tag editing" : "Edit tags";
+        const editClass = editing
+            ? "score-card-action du-join-item score-card-edit is-active"
+            : "score-card-action du-join-item score-card-edit";
+
+        const buttons: ComponentChild[] = [];
+
+        if (canEditTags) {
+            buttons.push(
+                <Button
+                    key="edit"
+                    className={editClass}
+                    title={editTitle}
+                    aria-pressed={editing}
+                    onClick={this.handleEditClick}
+                >
+                    <span className="score-card-edit-dot" aria-hidden="true" />
+                    <span className="score-card-edit-label">{editing ? "Editing" : "Edit Tags"}</span>
+                </Button>,
+            );
+        }
+
+        buttons.push(
+            <Button key="copyUrl" className="score-card-action du-join-item" imageOnly={true} title="Copy Score URL"
+                onClick={() => {
+                    this.handleAction("copyUrl");
+                }}>
+                <Icon src={UIIcon.Copy} />
+            </Button>,
+        );
+
+        if (canManage) {
+            buttons.push(
+                <Button key="managePerm" className="score-card-action du-join-item" imageOnly={true}
+                    title="Group Access"
+                    onClick={() => {
+                        this.handleAction("managePerm");
+                    }}>
+                    <Icon src={UIIcon.Key} />
+                </Button>,
+            );
+        }
+
+        buttons.push(
+            <Button key="remove" className="score-card-action du-join-item" imageOnly={true} title="Remove Score"
+                onClick={() => {
+                    this.handleAction("remove");
+                }}>
+                <Icon src={UIIcon.Trash} />
+            </Button>,
+        );
+
+        return (
+            <Container className="score-card-actions du-join" orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}>
+                {buttons}
             </Container>
         );
     }
@@ -365,10 +476,16 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
     };
 
     private handleManagePermissions = (): void => {
-        this.handleMenuItemClick("managePerm");
+        this.handleAction("managePerm");
     };
 
-    private handleMenuItemClick = (id: string): void => {
+    private handleEditClick = (): void => {
+        const { score, onToggleEdit } = this.props;
+
+        onToggleEdit(score);
+    };
+
+    private handleAction = (id: string): void => {
         const { score, onAction } = this.props;
 
         onAction(id, score);

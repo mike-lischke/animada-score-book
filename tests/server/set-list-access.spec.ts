@@ -6,11 +6,12 @@
 import { describe, expect, it } from "vitest";
 
 import { TagCombination } from "../../src/core/TagCombination.js";
-import { Auth, EntityType } from "../../src/server/Auth.js";
-import { SetListAccess, SetListFilterProblem } from "../../src/server/SetListAccess.js";
+import { Auth, type ITokenPayload } from "../../src/server/Auth.js";
+import { SetListAccess } from "../../src/server/SetListAccess.js";
+import { TagFilter, TagFilterProblem } from "../../src/server/TagFilter.js";
 import {
-    FakeSetListDatabase, foreignGroupId, globalTagId, memberGroupId, memberTagId, ownerUserId, unknownTagId,
-    worldGroupId,
+    FakeSetListDatabase, adminUserId, foreignGroupId, foreignUserId, globalTagId, memberGroupId, memberTagId,
+    memberUserId, ownerUserId, unknownTagId,
 } from "./set-list-fake-database.js";
 
 const setup = (): { database: FakeSetListDatabase; auth: Auth; } => {
@@ -19,28 +20,36 @@ const setup = (): { database: FakeSetListDatabase; auth: Auth; } => {
     return { database, auth: new Auth(database) };
 };
 
-const privateAudience = { groupIds: [], isWorld: false };
+/**
+ * @param userId The user to act as.
+ * @param isAdmin Whether the token claims administrator rights; the database decides the real membership.
+ *
+ * @returns The caller the access rules evaluate.
+ */
+const callerOf = (userId: number, isAdmin = false): ITokenPayload => {
+    return { userId, email: `user${userId}@example.com`, isAdmin };
+};
 
-describe("set list access — reading a combination", () => {
+describe("tag filter — reading a combination", () => {
     it("reads the AND groups and removes duplicate tags", () => {
-        expect(SetListAccess.readGroups([[5, 6, 5], [7]])).toEqual([[5, 6], [7]]);
+        expect(TagFilter.readGroups([[5, 6, 5], [7]])).toEqual([[5, 6], [7]]);
     });
 
     it("drops groups that hold no condition", () => {
-        expect(SetListAccess.readGroups([[], [5]])).toEqual([[5]]);
+        expect(TagFilter.readGroups([[], [5]])).toEqual([[5]]);
     });
 
     it("rejects a value that is not a list of groups", () => {
-        expect(SetListAccess.readGroups("5")).toBeUndefined();
-        expect(SetListAccess.readGroups([5])).toBeUndefined();
-        expect(SetListAccess.readGroups(["5"])).toBeUndefined();
+        expect(TagFilter.readGroups("5")).toBeUndefined();
+        expect(TagFilter.readGroups([5])).toBeUndefined();
+        expect(TagFilter.readGroups(["5"])).toBeUndefined();
     });
 
     it("rejects ids that are not positive integers", () => {
-        expect(SetListAccess.readGroups([[0]])).toBeUndefined();
-        expect(SetListAccess.readGroups([[-1]])).toBeUndefined();
-        expect(SetListAccess.readGroups([[1.5]])).toBeUndefined();
-        expect(SetListAccess.readGroups([["abc"]])).toBeUndefined();
+        expect(TagFilter.readGroups([[0]])).toBeUndefined();
+        expect(TagFilter.readGroups([[-1]])).toBeUndefined();
+        expect(TagFilter.readGroups([[1.5]])).toBeUndefined();
+        expect(TagFilter.readGroups([["abc"]])).toBeUndefined();
     });
 
     it("rejects a combination beyond the group limit", () => {
@@ -48,7 +57,7 @@ describe("set list access — reading a combination", () => {
             return [5];
         });
 
-        expect(SetListAccess.readGroups(groups)).toBeUndefined();
+        expect(TagFilter.readGroups(groups)).toBeUndefined();
     });
 
     it("rejects a group beyond the tag limit", () => {
@@ -56,86 +65,132 @@ describe("set list access — reading a combination", () => {
             return index + 1;
         });
 
-        expect(SetListAccess.readGroups([group])).toBeUndefined();
+        expect(TagFilter.readGroups([group])).toBeUndefined();
     });
 });
 
-describe("set list access — tags and audiences", () => {
-    it("allows a global tag wherever the list is visible", async () => {
+describe("tag filter — usable tags", () => {
+    it("accepts a global tag for a signed-in user", async () => {
         const { auth } = setup();
 
-        const problem = await SetListAccess.filterProblem(auth, [[globalTagId]],
-            { groupIds: [], isWorld: true }, ownerUserId);
-
-        expect(problem).toBeUndefined();
+        expect(await TagFilter.problem(auth, callerOf(memberUserId), [[globalTagId]])).toBeUndefined();
     });
 
-    it("allows a group tag in a list only its owner can see", async () => {
+    it("accepts a group tag for a member of that group", async () => {
         const { auth } = setup();
 
-        const problem = await SetListAccess.filterProblem(auth, [[memberTagId]], privateAudience, ownerUserId);
-
-        expect(problem).toBeUndefined();
+        expect(await TagFilter.problem(auth, callerOf(memberUserId), [[memberTagId]])).toBeUndefined();
     });
 
-    it("refuses a group tag in a list everybody can read", async () => {
+    it("rejects a group tag of another group", async () => {
         const { auth } = setup();
 
-        const problem = await SetListAccess.filterProblem(auth, [[memberTagId]],
-            { groupIds: [], isWorld: true }, ownerUserId);
+        const problem = await TagFilter.problem(auth, callerOf(foreignUserId), [[memberTagId]]);
 
-        expect(problem).toBe(SetListFilterProblem.TagScope);
-    });
-
-    it("refuses a group tag in a list that another group can read", async () => {
-        const { auth } = setup();
-
-        const problem = await SetListAccess.filterProblem(auth, [[memberTagId]],
-            { groupIds: [memberGroupId, foreignGroupId], isWorld: false }, ownerUserId);
-
-        expect(problem).toBe(SetListFilterProblem.TagScope);
-    });
-
-    it("allows a group tag in a list shared with exactly that group", async () => {
-        const { auth } = setup();
-
-        const problem = await SetListAccess.filterProblem(auth, [[memberTagId]],
-            { groupIds: [memberGroupId], isWorld: false }, ownerUserId);
-
-        expect(problem).toBeUndefined();
-    });
-
-    it("refuses a group tag whose group does not hold the owner", async () => {
-        const { auth } = setup();
-
-        const problem = await SetListAccess.filterProblem(auth, [[memberTagId]], privateAudience,
-            ownerUserId + 100);
-
-        expect(problem).toBe(SetListFilterProblem.TagScope);
+        expect(problem).toBe(TagFilterProblem.NotUsable);
     });
 
     it("reports a tag that no longer exists", async () => {
         const { auth } = setup();
 
-        const problem = await SetListAccess.filterProblem(auth, [[unknownTagId]], privateAudience, ownerUserId);
+        const problem = await TagFilter.problem(auth, callerOf(adminUserId), [[unknownTagId]]);
 
-        expect(problem).toBe(SetListFilterProblem.UnavailableTag);
+        expect(problem).toBe(TagFilterProblem.UnavailableTag);
     });
 
-    it("splits the audience of a list into World and groups", async () => {
-        const { auth, database } = setup();
-        database.seedGrants(EntityType.SetList, 42, ownerUserId, [memberGroupId, worldGroupId]);
+    it("rejects every tag for a visitor", async () => {
+        const { auth } = setup();
 
-        expect(await SetListAccess.audience(auth, 42)).toEqual({ groupIds: [memberGroupId], isWorld: true });
+        const problem = await TagFilter.problem(auth, undefined, [[globalTagId]]);
+
+        expect(problem).toBe(TagFilterProblem.NotUsable);
+    });
+});
+
+describe("set list access — selecting and editing", () => {
+    it("lets the owner read and change the list", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, ownerUserId);
+
+        expect(await SetListAccess.canRead(auth, callerOf(ownerUserId), seeded.id)).toBe(true);
+        expect(await SetListAccess.canEdit(auth, callerOf(ownerUserId), seeded.id)).toBe(true);
     });
 
-    it("plans the audience of a change without touching the stored grants", async () => {
+    it("keeps a list private to its owner when no group is granted", async () => {
         const { auth, database } = setup();
-        database.seedGrants(EntityType.SetList, 42, ownerUserId, [memberGroupId]);
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, ownerUserId);
 
-        const planned = await SetListAccess.plannedAudience(auth, 42, [worldGroupId], [memberGroupId]);
+        expect(await SetListAccess.canRead(auth, callerOf(memberUserId), seeded.id)).toBe(false);
+        expect(await SetListAccess.canEdit(auth, callerOf(memberUserId), seeded.id)).toBe(false);
+    });
 
-        expect(planned).toEqual({ groupIds: [], isWorld: true });
-        expect(await SetListAccess.audience(auth, 42)).toEqual({ groupIds: [memberGroupId], isWorld: false });
+    it("lets a group with read access select the list but not change it", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, ownerUserId, [memberGroupId]);
+
+        expect(await SetListAccess.canRead(auth, callerOf(memberUserId), seeded.id)).toBe(true);
+        expect(await SetListAccess.canEdit(auth, callerOf(memberUserId), seeded.id)).toBe(false);
+    });
+
+    it("lets a group with write access change the list", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, ownerUserId, [{ groupId: memberGroupId, writable: true }]);
+
+        expect(await SetListAccess.canRead(auth, callerOf(memberUserId), seeded.id)).toBe(true);
+        expect(await SetListAccess.canEdit(auth, callerOf(memberUserId), seeded.id)).toBe(true);
+    });
+
+    it("lets the administrators reach every list", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, ownerUserId);
+
+        expect(await SetListAccess.canRead(auth, callerOf(adminUserId), seeded.id)).toBe(true);
+        expect(await SetListAccess.canEdit(auth, callerOf(adminUserId), seeded.id)).toBe(true);
+    });
+
+    it("grants no reading to a visitor, even when the list is granted to a group", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, null, [foreignGroupId]);
+
+        expect(await SetListAccess.canRead(auth, undefined, seeded.id)).toBe(false);
+        expect(await SetListAccess.canEdit(auth, undefined, seeded.id)).toBe(false);
+    });
+
+    it("reaches a list through a granted group only", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, ownerUserId, [foreignGroupId]);
+
+        expect(await SetListAccess.canRead(auth, callerOf(foreignUserId), seeded.id)).toBe(true);
+        expect(await SetListAccess.canRead(auth, callerOf(memberUserId), seeded.id)).toBe(false);
+    });
+
+    it("finds a list by its tag and reports the tag ids of all lists", async () => {
+        const { database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+
+        const list = await SetListAccess.forTag(database, seeded.tagId);
+        expect(list?.id).toBe(seeded.id);
+
+        const ids = await SetListAccess.listIdsByTag(database);
+        expect(ids.get(seeded.tagId)).toBe(seeded.id);
+    });
+
+    it("reads the tag and the group grants of a stored list", async () => {
+        const { auth, database } = setup();
+        const seeded = database.seedSetList("Auftritt", memberGroupId);
+        database.seedGrants("setlist", seeded.id, null, [{ groupId: foreignGroupId, writable: true }]);
+
+        const entry = await SetListAccess.load(database, seeded.id);
+
+        expect(entry?.tag.name).toBe("Auftritt");
+        expect(await SetListAccess.sharedGroups(auth, seeded.id))
+            .toEqual([{ groupId: foreignGroupId, writable: true }]);
     });
 });

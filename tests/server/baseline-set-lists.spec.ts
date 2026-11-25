@@ -16,8 +16,15 @@ describe("baseline — set lists", () => {
         expect(baseline).toContain("CREATE TABLE IF NOT EXISTS set_list_scores");
     });
 
-    it("keeps the list's combination, its revision and its order", () => {
-        expect(baseline).toMatch(/filters\s+JSON\s+NOT NULL/);
+    it("defines the list by exactly one tag, which owns its name and scope", () => {
+        expect(baseline).toMatch(/tag_id\s+INT UNSIGNED NOT NULL/);
+        expect(baseline).toContain("UNIQUE KEY uk_set_lists_tag (tag_id)");
+        expect(baseline).toContain("FOREIGN KEY (tag_id) REFERENCES tags(id)");
+        expect(baseline).toMatch(/ON DELETE CASCADE/);
+        expect(baseline).not.toMatch(/filters\s+JSON/);
+    });
+
+    it("keeps the list's revision and its order", () => {
         expect(baseline).toMatch(/revision\s+INT UNSIGNED NOT NULL DEFAULT 1/);
         expect(baseline).toMatch(/position\s+INT UNSIGNED NOT NULL/);
     });
