@@ -163,7 +163,10 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                 showArrow
                 focusOnOpen
                 header={<Label id="permissionEditorHeader" caption={`Owner: ${ownerName}`} />}
-                placement={ComponentPlacement.RightCenter}
+                placement={ComponentPlacement.LeftCenter}
+
+                /* The arrow sticks out 6 px, so this gap makes its tip touch the button that opened the editor. */
+                offset={6}
             >
                 {errorMessage && <Label caption={errorMessage} />}
                 {!errorMessage && (

@@ -35,8 +35,8 @@ export class Container extends UIComponent<IContainerProperties> {
         const {
             id, children, style, orientation = Orientation.LeftToRight, mainAlignment, crossAlignment, wrap, innerRef,
             onClick, onDblClick, onPointerDown, onPointerUp, onPointerMove, onPointerEnter, onPointerLeave,
-            onDragStart, onDragEnd,
-            title, gap, onScroll, onWheel,
+            onDragStart, onDragEnd, onDragEnter, onDragOver, onDragLeave, onDrop,
+            title, gap, onScroll, onWheel, draggable,
         } = this.props;
 
         const newStyle: CSSProperties = { ...style };
@@ -79,6 +79,11 @@ export class Container extends UIComponent<IContainerProperties> {
                 onPointerLeave={onPointerLeave}
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
+                onDragEnter={onDragEnter}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                draggable={draggable}
                 title={title}
                 {...this.dataAttributes}
             >

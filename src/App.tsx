@@ -2078,10 +2078,13 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "managePerm": {
-                const row = document.querySelector<HTMLElement>(`.score-card[data-score-id="${data.id}"]`);
+                // The editor hangs on the button that opened it, so its arrow can point at that button.
+                const button = document.querySelector<HTMLElement>(`#score-card-permissions-${data.id}`);
+                const card = document.querySelector<HTMLElement>(`.score-card[data-score-id="${data.id}"]`);
+                const anchor = button ?? card;
 
-                if (row) {
-                    void this.openPermissionEditor(row.getBoundingClientRect(), data);
+                if (anchor) {
+                    void this.openPermissionEditor(anchor.getBoundingClientRect(), data);
                 }
 
                 return false;

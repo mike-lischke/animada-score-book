@@ -52,6 +52,7 @@ exports[`AppFooter > renders the compact footer 1`] = `
         class="dropdown-host footerOverflowMenu"
       >
         <button
+          aria-label="More footer actions"
           class="btn du-btn imageOnly du-btn-ghost"
           popovertarget="popover-{id}"
           style="anchor-name: --anchor-{id};"

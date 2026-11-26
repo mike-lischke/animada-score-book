@@ -208,6 +208,7 @@ exports[`ToolsBar > matches the compact snapshot 1`] = `
     class="dropdown-host toolsBarOverflowMenu"
   >
     <button
+      aria-label="Placing tools"
       class="btn du-btn imageOnly du-btn-ghost"
       popovertarget="popover-{id}"
       style="anchor-name: --anchor-{id};"

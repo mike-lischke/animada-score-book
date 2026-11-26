@@ -83,11 +83,9 @@
 }
 
 /* The pill list a click into the field opens: every tag the field can still take, all at once. It lies in a popup,
-   which renders outside the field, hence not nested in it. The popup does not clip, so its arrow stays visible; the
-   pill list scrolls instead. */
+   which renders outside the field, hence not nested in it. The pill list scrolls while the popup keeps its arrow
+   visible. */
 .popup.tag-input-picker-popup {
-    overflow: visible;
-
     .tag-input-picker {
         display: flex;
         flex-wrap: wrap;

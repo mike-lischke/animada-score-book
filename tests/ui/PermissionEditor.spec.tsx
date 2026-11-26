@@ -153,6 +153,22 @@ describe("PermissionEditor", () => {
         expect(adminChip).toBeUndefined();
     });
 
+    it("opens left of its anchor so the arrow points right at the button", async () => {
+        const { renderResult: rr } = await openWithScore();
+
+        renderResult = rr;
+
+        const popup = await waitFor(() => {
+            const element = document.querySelector<HTMLElement>("#permissionEditor");
+            expect(element).toBeTruthy();
+
+            return element!;
+        });
+
+        expect(popup.classList.contains("left")).toBe(true);
+        expect(popup.classList.contains("noArrow")).toBe(false);
+    });
+
     it("shows owner name in the header", async () => {
         const { renderResult: rr } = await openWithScore();
 

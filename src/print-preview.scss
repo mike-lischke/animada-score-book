@@ -309,7 +309,7 @@
 
     background: #fff;
     color: #000;
-    font-family: system-ui, "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    font-family: "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
     box-shadow: 0 2px 14px rgb(0 0 0 / 0.28);
 
     @include score.score-grid-rules($useThemeColors: false, $renderBeam: false, $beatNumberTop: 0);

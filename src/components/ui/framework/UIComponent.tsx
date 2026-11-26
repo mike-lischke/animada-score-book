@@ -95,6 +95,10 @@ export interface ICommonUIProperties<TRole = AriaRole> {
     onPointerLeave?: PointerEventCallback;
     onDragStart?: DragEventCallback;
     onDragEnd?: DragEventCallback;
+    onDragEnter?: DragEventCallback;
+    onDragOver?: DragEventCallback;
+    onDragLeave?: DragEventCallback;
+    onDrop?: DragEventCallback;
 
     onScroll?: GenericEventHandler<HTMLElement>;
     onWheel?: WheelEventHandler<HTMLElement>;

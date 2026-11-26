@@ -30,8 +30,8 @@ export interface IBadgeProperties extends ICommonUIProperties {
  */
 export class Badge extends UIComponent<IBadgeProperties> {
     public render(): ComponentChild {
-        const { className, caption, children, variant = BadgeVariant.Neutral } = this.props;
-        const finalClassName = this.generateFinalClassName(["uiBadge", `uiBadge-${variant}`, className]);
+        const { caption, children, variant = BadgeVariant.Neutral } = this.props;
+        const finalClassName = this.generateFinalClassName(["uiBadge", `uiBadge-${variant}`]);
 
         return <span className={finalClassName} {...this.dataAttributes}>{children ?? caption}</span>;
     }

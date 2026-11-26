@@ -7,13 +7,14 @@
     display: none;
     position: absolute;
     top: 0;
-    overflow: visible;
 
     min-width: min-content;
     box-sizing: border-box;
     max-width: min(500px, calc(var(--popup-viewport-width, 100vw) - 16px));
     max-height: min(600px, calc(var(--popup-viewport-height, 100dvh) - 16px));
-    overflow: auto;
+
+    /* The arrow lies outside the box, so the popup itself must not clip; its body scrolls instead. */
+    overflow: visible;
 
     margin: 0;
     padding: 8px;
@@ -61,6 +62,14 @@
     font-weight: bold;
 
     margin-bottom: 0.5em;
+}
+
+/* The popup's content: it takes the remaining height and scrolls on its own, while the popup keeps its header in
+   place and does not clip the arrow. */
+.popup > .popup-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
 /*

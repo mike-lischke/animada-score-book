@@ -137,10 +137,12 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
                     id={id}
                     className={className}
                     innerRef={this.containerRef}
-                    orientation={orientation}
+                    orientation={Orientation.TopDown}
                 >
                     {header}
-                    {children}
+                    <Container className="popup-body" orientation={orientation}>
+                        {children}
+                    </Container>
                 </Container>
             </Portal>
         );
@@ -562,11 +564,8 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             + "textarea:not(:disabled), a[href], [tabindex]:not([tabindex='-1'])",
         );
 
-        if (focusTarget) {
-            focusTarget.focus({ preventScroll: true });
-        } else {
-            popup.tabIndex = -1;
-            popup.focus({ preventScroll: true });
-        }
+        // A popup without a focusable element keeps the focus where it was. Focusing the popup box itself would only
+        // paint a focus ring around the whole surface, which says nothing about what the user can operate.
+        focusTarget?.focus({ preventScroll: true });
     }
 };

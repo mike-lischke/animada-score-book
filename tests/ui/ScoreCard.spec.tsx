@@ -92,6 +92,7 @@ describe("ScoreCard", { concurrent: false }, () => {
         onToggleEdit: ReturnType<typeof vi.fn>;
         onTagAdd: ReturnType<typeof vi.fn>;
         onTagRemove: ReturnType<typeof vi.fn>;
+        onToggleMembership: ReturnType<typeof vi.fn>;
     } => {
         const onOpen = vi.fn();
         const onToggleLineup = vi.fn();
@@ -99,6 +100,7 @@ describe("ScoreCard", { concurrent: false }, () => {
         const onToggleEdit = vi.fn();
         const onTagAdd = vi.fn();
         const onTagRemove = vi.fn();
+        const onToggleMembership = vi.fn();
 
         renderResult = render(
             <ScoreCard
@@ -112,16 +114,19 @@ describe("ScoreCard", { concurrent: false }, () => {
                 expanded={expanded}
                 isAdmin={false}
                 showPermission={true}
+                showMembership={false}
+                member={false}
                 onOpen={onOpen}
                 onToggleLineup={onToggleLineup}
                 onAction={onAction}
                 onToggleEdit={onToggleEdit}
                 onTagAdd={onTagAdd}
                 onTagRemove={onTagRemove}
+                onToggleMembership={onToggleMembership}
             />,
         );
 
-        return { onOpen, onToggleLineup, onAction, onToggleEdit, onTagAdd, onTagRemove };
+        return { onOpen, onToggleLineup, onAction, onToggleEdit, onTagAdd, onTagRemove, onToggleMembership };
     };
 
     it("keeps the lineup closed until it is opened", () => {
@@ -263,18 +268,18 @@ describe("ScoreCard", { concurrent: false }, () => {
 
         renderCard(score);
 
-        const badges = Array.from(renderResult!.container.querySelectorAll(".score-card-meta-tag"), (entry) => {
+        const badges = Array.from(renderResult!.container.querySelectorAll(".score-meta-tag"), (entry) => {
             return entry.textContent;
         });
 
         expect(badges).toEqual(["110 BPM", "4/4", "24 bars", "2:07"]);
-        expect(renderResult!.container.querySelector(".score-card-meta input")).toBeNull();
+        expect(renderResult!.container.querySelector(".score-meta input")).toBeNull();
     });
 
     it("leaves the metadata row out when the content states no metadata", () => {
         renderCard({ ...createScore(twoTracks), meta: {} });
 
-        expect(renderResult!.container.querySelector(".score-card-meta")).toBeNull();
+        expect(renderResult!.container.querySelector(".score-meta")).toBeNull();
     });
 
     it("does not open the score when the accordion is clicked through the keyboard", () => {
@@ -296,13 +301,13 @@ describe("ScoreCard", { concurrent: false }, () => {
 
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-field")).toBeNull();
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
-        expect(renderResult!.container.querySelector(".score-card-edit")?.classList.contains("is-active")).toBe(false);
+        expect(renderResult!.container.querySelector(".edit-switch")?.classList.contains("is-active")).toBe(false);
     });
 
     it("shows the status dot while the card's edit mode is on", () => {
         renderCard(createScore(twoTracks), false, userTags, [], true, true);
 
-        const edit = renderResult!.container.querySelector<HTMLElement>(".score-card-edit");
+        const edit = renderResult!.container.querySelector<HTMLElement>(".edit-switch");
 
         expect(edit?.classList.contains("is-active")).toBe(true);
         expect(edit?.getAttribute("aria-pressed")).toBe("true");
@@ -314,7 +319,7 @@ describe("ScoreCard", { concurrent: false }, () => {
         const score = createScore(twoTracks);
         const handlers = renderCard(score);
 
-        renderResult!.container.querySelector<HTMLButtonElement>(".score-card-edit")!.click();
+        renderResult!.container.querySelector<HTMLButtonElement>(".edit-switch")!.click();
 
         expect(handlers.onToggleEdit).toHaveBeenCalledWith(score);
     });
@@ -324,7 +329,7 @@ describe("ScoreCard", { concurrent: false }, () => {
 
         renderCard(score, false, userTags, [], false, true);
 
-        expect(renderResult!.container.querySelector(".score-card-edit")).toBeNull();
+        expect(renderResult!.container.querySelector(".edit-switch")).toBeNull();
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-field")).toBeNull();
         expect(renderResult!.container.querySelector(".score-card-tags .tag-input-close-button")).toBeNull();
     });

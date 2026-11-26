@@ -243,7 +243,10 @@ test.describe("Score library modal", () => {
         await expect(page.locator("#set-list-tab-4")).toHaveAttribute("aria-selected", "true");
         await expect(page.locator("#scoreCardsHost .score-card")).toHaveCount(1);
         await expect(page.locator("#scoreCardsHost .score-card")).toContainText("Set Score");
-        await expect(page.locator("#libraryPaneContent")).toContainText("saved order");
+
+        // The sort selector keeps its place in the toolbar while a set list is active.
+        await expect(page.locator(".set-list-bar")).toContainText("Sort:");
+        await expect(page.locator("#scoreListSortOrder")).toBeVisible();
 
         await page.locator("#set-list-tab-all").click();
 

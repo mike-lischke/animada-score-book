@@ -3,13 +3,11 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { type ComponentChild, createRef } from "preact";
+import { type ComponentChild, type ComponentChildren, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Container } from "../components/ui/framework/Container.js";
-import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
-import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import type { ISetListInfo } from "../core/DatabaseTypes.js";
@@ -31,11 +29,19 @@ export interface ISetListBarProperties extends ICommonUIProperties {
     /** How many scores All Scores shows, which is what its pill counts. */
     allScoresCount: number;
 
-    /** Whether the caller may create or change a list at all. */
-    canManage: boolean;
+    /** Whether the active list may be changed, which is what the edit button needs. */
+    canEdit: boolean;
+
+    /** Whether the running-order editor is open. */
+    editing: boolean;
 
     onSelect: (id?: number) => void;
-    onManage: () => void;
+
+    /** Switches the editor on, or off again. */
+    onToggleEdit: () => void;
+
+    /** The controls that close the toolbar, shown after the pills: the sort selector or the saved-order note. */
+    children?: ComponentChildren;
 }
 
 interface ISetListBarState {
@@ -46,7 +52,8 @@ interface ISetListBarState {
 /**
  * The selector above the score cards: a horizontal tab row with All Scores first and one pill per set list. It works
  * like a tab view - exactly one pill is active and the arrow keys, Home and End move between them - and scrolls
- * horizontally when the pills do not fit, keeping the active pill in view.
+ * horizontally when the pills do not fit, keeping the active pill in view. An active list the caller may change adds
+ * the switch that opens its running-order editor.
  */
 export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarState> {
     private readonly rowRef = createRef<HTMLDivElement>();
@@ -69,7 +76,7 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
     }
 
     public render(): ComponentChild {
-        const { lists, canManage } = this.props;
+        const { lists, canEdit, editing, children } = this.props;
         const tabs = this.buildTabs();
         const pills = tabs.map((tab, index) => {
             return this.renderPill(tab, index);
@@ -93,8 +100,9 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
                 crossAlignment={ChildAlignment.Center}>
                 <Label className="set-list-bar-label" caption="Active set list" />
                 {row}
-                {canManage && this.renderManageButton()}
                 {lists.length === 0 && <Label className="set-list-bar-empty" caption="No set lists yet." />}
+                {canEdit && this.renderEditButton(editing)}
+                {children}
             </Container>
         );
     }
@@ -148,11 +156,20 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
         );
     }
 
-    private renderManageButton(): ComponentChild {
+    /**
+     * @param editing Whether the running-order editor is open.
+     *
+     * @returns The switch that opens the editor for the active list. It is the same control the cards use for their
+     * tag editing, so both edit modes of the collection look and read the same.
+     */
+    private renderEditButton(editing: boolean): ComponentChild {
+        const className = editing ? "edit-switch is-active" : "edit-switch";
+
         return (
-            <Button id="setListsManage" className="set-list-manage" imageOnly={true} title="Manage set lists"
-                onClick={this.handleManageClick}>
-                <Icon src={UIIcon.Edit} />
+            <Button id="setListsEdit" className={className} title="Edit the running order and the scores of this list"
+                aria-pressed={editing} onClick={this.handleEditClick}>
+                <span className="edit-switch-dot" aria-hidden="true" />
+                <span className="edit-switch-label">{editing ? "Editing" : "Edit"}</span>
             </Button>
         );
     }
@@ -165,8 +182,8 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
         }
     };
 
-    private handleManageClick = (): void => {
-        this.props.onManage();
+    private handleEditClick = (): void => {
+        this.props.onToggleEdit();
     };
 
     private handleRowScroll = (): void => {

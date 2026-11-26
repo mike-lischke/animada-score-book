@@ -8,14 +8,6 @@
 @use "ui/app-ui" as ui;
 
 @font-face {
-    font-family: "Fairytale";
-    src: url("/fonts/FairytaleSerif-MediumItalic.woff2") format("woff2");
-    font-weight: 600;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
     font-family: "Petaluma Script";
     src: url("/fonts/PetalumaScript.woff2") format("woff2");
     font-weight: 400;
@@ -58,7 +50,7 @@ body {
     padding: var(--page-gap);
     background-color: var(--color-base-200);
 
-    font-family: system-ui, 'Open Sans', 'Helvetica Neue', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: 'Open Sans', 'Helvetica Neue', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     line-height: 1.5;
     font-weight: 400;
     font-size: 14px;

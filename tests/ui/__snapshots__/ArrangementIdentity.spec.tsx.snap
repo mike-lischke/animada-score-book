@@ -69,7 +69,7 @@ exports[`ArrangementIdentity > renders with the minimum props 1`] = `
         4/4 • 1 bar • 2 s
       </span>
       <span
-        class="uiBadge uiBadge-neutral arrangement-save-chip arrangement-save-chip"
+        class="uiBadge uiBadge-neutral arrangement-save-chip"
       >
         Unchanged
       </span>

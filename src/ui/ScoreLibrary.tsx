@@ -26,7 +26,7 @@ import { ScoreListSortOrder } from "../core/types/general.js";
 import { globalTagOwnerCaption, SystemTagKind, type ITagCombination } from "../core/types/tags.js";
 import { ScoreCard } from "./ScoreCard.js";
 import { SetListBar } from "./SetListBar.js";
-import { SetListDialog } from "./SetListDialog.js";
+import { SetListEditor } from "./SetListEditor.js";
 import { TagBadges } from "./TagBadges.js";
 import { TagFilterBar, type IFilterGroup } from "./TagFilterBar.js";
 import { requisitions } from "../supplement/Requisitions.js";
@@ -124,8 +124,14 @@ interface IScoreLibraryState {
     /** The selected set list, or undefined for All Scores. */
     activeSetListId?: number;
 
-    /** Whether the set-list editor is open. */
-    setListDialogOpen: boolean;
+    /**
+     * Whether the running-order editor is open. Only an editable set list offers it, and while it is open the cards
+     * show the whole repertoire, so a score can be ticked into the list.
+     */
+    setListEditing: boolean;
+
+    /** The members of the edited list, which is what the cards' checkboxes show. */
+    setListMemberIds: ReadonlySet<number>;
 
     /** A note about the set-list selection, for example that the selected list disappeared. */
     setListNotice?: string;
@@ -164,7 +170,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             expandedScoreIds: new Set(),
             editingScoreId: undefined,
             setLists: [...props.dataModel.setLists],
-            setListDialogOpen: false,
+            setListEditing: false,
+            setListMemberIds: new Set(),
         };
     }
 
@@ -195,8 +202,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         } else {
             this.dialogRef.current?.close(true);
 
-            // A closed library leaves no card in edit mode, so reopening it starts with read-only tags.
-            this.setState({ editingScoreId: undefined });
+            // A closed library leaves no card in edit mode, so reopening it starts with read-only tags. The set-list
+            // editor closes as well, which means the cards have to be restricted to the list again.
+            const { setListEditing } = this.state;
+            this.setState({ editingScoreId: undefined, setListEditing: false });
+
+            if (setListEditing) {
+                void this.queryList(this.state.manualFilter, this.state.activeSetListId);
+            }
         }
     }
 
@@ -217,41 +230,44 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const header = this.renderHeader();
         const filter = this.renderFilter();
         const setListBar = this.renderSetListBar();
-        const sortSelector = this.state.activeSetListId === undefined
-            ? this.renderSortSelector()
-            : this.renderSavedOrderNote();
         const list = this.renderList();
-        const favourites = this.renderFavourites();
-        const setListDialog = this.renderSetListDialog();
+        const editor = this.renderSetListEditor();
 
         return (
-            <>
-                <Dialog
-                    id="scoreLibraryDialog"
-                    ref={this.dialogRef}
-                    className="score-library-dialog"
-                    ariaLabel="Scores and Repertoires"
-                    closeOnBackdropClick={true}
-                    onClose={this.handleDialogClose}
-                >
-                    <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
-                        {header}
-                        {filter}
-                        {setListBar}
-                        {sortSelector}
+            <Dialog
+                id="scoreLibraryDialog"
+                ref={this.dialogRef}
+                className="score-library-dialog"
+                ariaLabel="Scores and Repertoires"
+                closeOnBackdropClick={true}
+                onClose={this.handleDialogClose}
+            >
+                <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
+                    {header}
+                    {filter}
+                    {setListBar}
+                    <Container id="scoreListSplit" orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Stretch}>
                         {list}
-                        {favourites}
+                        {editor}
                     </Container>
-                </Dialog>
-                {setListDialog}
-            </>
+                </Container>
+            </Dialog>
         );
     }
 
+    /**
+     * @returns The toolbar above the cards: the pill row with the edit switch, and the sort selector as its last
+     * entry. The selector is always there; it orders the repertoire, while a set list keeps its own saved order.
+     */
     private renderSetListBar(): ComponentChild {
         const { dataModel } = this.props;
-        const { setLists, activeSetListId, setListNotice } = this.state;
-        const canManage = dataModel.tagOwnerScopes.length > 0 || setLists.length > 0;
+        const { setLists, activeSetListId, setListEditing, setListNotice } = this.state;
+
+        // Only the list that is active can be edited, and only when the caller may change it.
+        const canEdit = setLists.some((list) => {
+            return list.id === activeSetListId && list.editable;
+        });
 
         let notice: ComponentChild = undefined;
         if (setListNotice !== undefined) {
@@ -264,36 +280,44 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     lists={setLists}
                     activeId={activeSetListId}
                     allScoresCount={dataModel.readableScoreCount}
-                    canManage={canManage}
+                    canEdit={canEdit}
+                    editing={setListEditing}
                     onSelect={this.handleSetListSelect}
-                    onManage={this.handleManageSetLists}
-                />
+                    onToggleEdit={this.handleToggleSetListEdit}
+                >
+                    {this.renderSortSelector()}
+                </SetListBar>
                 {notice}
             </Container>
         );
     }
 
-    private renderSavedOrderNote(): ComponentChild {
-        return (
-            <Container className="score-library-sort" orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}>
-                <Label caption="Order: saved order of the set list" />
-            </Container>
-        );
-    }
-
-    private renderSetListDialog(): ComponentChild {
+    /**
+     * @returns The running-order editor beside the cards, or nothing while the collection is not in the set-list edit
+     * mode.
+     */
+    private renderSetListEditor(): ComponentChild {
         const { dataModel } = this.props;
-        const { setLists, activeSetListId, setListDialogOpen } = this.state;
+        const { setLists, activeSetListId, setListEditing } = this.state;
+
+        if (!setListEditing) {
+            return undefined;
+        }
+
+        const list = setLists.find((candidate) => {
+            return candidate.id === activeSetListId;
+        });
+
+        if (list === undefined) {
+            return undefined;
+        }
 
         return (
-            <SetListDialog
+            <SetListEditor
                 dataModel={dataModel}
-                lists={setLists}
-                activeId={activeSetListId}
-                open={setListDialogOpen}
-                onClose={this.handleSetListDialogClose}
-                onSelect={this.handleSetListSelect}
+                list={list}
+                onMembershipChanged={this.handleSetListMembershipChanged}
+                onClose={this.handleSetListEditorClose}
             />
         );
     }
@@ -488,11 +512,11 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     private renderEmptyState(): ComponentChild {
-        const { activeSetListId } = this.state;
+        const restricted = this.activeSetList() !== undefined;
         const hasFilter = !TagCombination.isEmpty(this.effectiveCombination());
 
         let caption = "No score matches the selected tags.";
-        if (activeSetListId !== undefined) {
+        if (restricted) {
             caption = hasFilter
                 ? "No score in this set list matches the selected tags."
                 : "This set list holds no scores you can read.";
@@ -505,7 +529,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private renderCards(): ComponentChild {
         const { dataModel } = this.props;
-        const { scores, currentSettings, expandedScoreIds, editingScoreId } = this.state;
+        const { scores, currentSettings, expandedScoreIds, editingScoreId, setListEditing, setListMemberIds } =
+            this.state;
         const isAdmin = dataModel.user?.isAdmin ?? false;
         const showPermission = currentSettings.showPermMatrix ?? true;
         const canEditTags = this.canEditTags();
@@ -524,12 +549,15 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     expanded={expandedScoreIds.has(score.id)}
                     isAdmin={isAdmin}
                     showPermission={showPermission}
+                    showMembership={setListEditing}
+                    member={setListMemberIds.has(score.id)}
                     onToggleLineup={this.handleToggleLineup}
                     onOpen={this.handleOpenScore}
                     onAction={this.handleCardAction}
                     onToggleEdit={this.handleToggleCardEdit}
                     onTagAdd={this.handleCardTagAdd}
                     onTagRemove={this.handleCardTagRemove}
+                    onToggleMembership={this.handleToggleMembership}
                 />
             );
         });
@@ -582,18 +610,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         return dataModel.tags.some((tag) => {
             return tag.assignable && tag.systemKind !== SystemTagKind.Instrument;
         });
-    }
-
-    /**
-     * @returns The lower area of the drawer, below the score list.
-     */
-    private renderFavourites(): ComponentChild {
-        return (
-            <Container id="scoreListFavourites" className="score-library-favourites"
-                orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}>
-                <Label caption="No favourite tag combinations yet." wrap />
-            </Container>
-        );
     }
 
     private handleToggleLineup = (score: ISbDmScore): void => {
@@ -708,7 +724,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         if (!stillVisible) {
             // The selected list was deleted or left the caller's reach; the notice is set by the query that found
             // out. Falling back to All Scores keeps the collection usable.
-            this.setState({ setLists: lists, activeSetListId: undefined });
+            this.setState({ setLists: lists, activeSetListId: undefined, setListEditing: false });
             void this.queryList(this.state.manualFilter, undefined);
 
             return Promise.resolve(true);
@@ -724,17 +740,99 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             return;
         }
 
-        this.setState({ activeSetListId: id, setListNotice: undefined });
+        // Another list has its own order, so leaving the editor keeps the composed order from reaching it.
+        this.setState({ activeSetListId: id, setListEditing: false, setListNotice: undefined });
         void this.queryList(this.state.manualFilter, id);
     };
 
-    private handleManageSetLists = (): void => {
-        this.setState({ setListDialogOpen: true });
+    /**
+     * Opens the running-order editor for the active list, or closes it again. The cards show the whole repertoire
+     * while it is open, so a score can be ticked into the list.
+     */
+    private handleToggleSetListEdit = (): void => {
+        const { activeSetListId, setListEditing } = this.state;
+
+        if (activeSetListId === undefined) {
+            return;
+        }
+
+        if (setListEditing) {
+            this.handleSetListEditorClose();
+
+            return;
+        }
+
+        this.setState({ setListEditing: true, setListMemberIds: new Set() });
+        void this.queryList(this.state.manualFilter, undefined);
     };
 
-    private handleSetListDialogClose = (): void => {
-        this.setState({ setListDialogOpen: false });
+    /**
+     * Leaves the set-list edit mode, which the editor does when it saved the order or when the user left it. The
+     * cards return to the list's members in its saved order.
+     */
+    private handleSetListEditorClose = (): void => {
+        this.setState({ setListEditing: false });
+        void this.queryList(this.state.manualFilter, this.state.activeSetListId);
     };
+
+    private handleSetListMembershipChanged = (memberIds: ReadonlySet<number>): void => {
+        this.setState({ setListMemberIds: memberIds });
+    };
+
+    /**
+     * Puts a score into the edited set list or takes it out again. Membership is the list's tag on the score, so the
+     * checkbox is the tag assignment. The state follows the click right away and is put back if the backend refuses.
+     *
+     * @param score The card whose checkbox was clicked.
+     */
+    private handleToggleMembership = (score: ISbDmScore): void => {
+        void this.changeMembership(score);
+    };
+
+    /**
+     * @param score The card whose membership is changed.
+     */
+    private async changeMembership(score: ISbDmScore): Promise<void> {
+        const { dataModel } = this.props;
+        const { setLists, activeSetListId, setListMemberIds } = this.state;
+
+        const list = setLists.find((candidate) => {
+            return candidate.id === activeSetListId;
+        });
+
+        if (list === undefined) {
+            return;
+        }
+
+        const member = setListMemberIds.has(score.id);
+        const next = new Set(setListMemberIds);
+        if (member) {
+            next.delete(score.id);
+        } else {
+            next.add(score.id);
+        }
+
+        this.setState({ setListMemberIds: next });
+
+        const accepted = member
+            ? await dataModel.unassignTag(score.id, list.tagId)
+            : await dataModel.assignTag(score.id, list.tagId);
+
+        if (accepted) {
+            return;
+        }
+
+        this.setState((previous) => {
+            const restored = new Set(previous.setListMemberIds);
+            if (member) {
+                restored.add(score.id);
+            } else {
+                restored.delete(score.id);
+            }
+
+            return { setListMemberIds: restored };
+        });
+    }
 
     private handleTagsChanged = (): Promise<boolean> => {
         // A deleted tag stays in the filter and is reported: dropping it would answer a wider question than the user
@@ -828,11 +926,15 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         void this.applyFilter();
     };
 
+    /**
+     * Stores the sort choice and orders the cards by it. A set list keeps its own saved order, so the choice only
+     * changes what the repertoire shows.
+     *
+     * @param sortOrder The order the user picked.
+     */
     private handleSortOrderChange = (sortOrder: ScoreListSortOrder): void => {
-        const { dataModel } = this.props;
-
         AppStorage.saveSetting("scoreListSortOrder", sortOrder);
-        this.setState({ sortOrder, scores: arrangeScores(dataModel.scores, sortOrder) });
+        this.setState({ sortOrder, scores: this.orderedScores(sortOrder) });
     };
 
     /**
@@ -890,14 +992,24 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     /**
+     * @returns The set list the cards are restricted to, or undefined while the collection shows every readable
+     * score. The set-list edit mode needs the whole repertoire, so a score that is not a member yet can be ticked
+     * into the edited list.
+     */
+    private activeSetList(): number | undefined {
+        return this.state.setListEditing ? undefined : this.state.activeSetListId;
+    }
+
+    /**
+     * @param sortOrder The order to arrange by; the choice in the toolbar by default.
+     *
      * @returns The scores of the current list in the order the user picked.
      */
-    private orderedScores(): ISbDmScore[] {
+    private orderedScores(sortOrder: ScoreListSortOrder = this.state.sortOrder): ISbDmScore[] {
         const { dataModel } = this.props;
-        const { sortOrder, activeSetListId } = this.state;
 
         // A set list carries its own saved order, which the backend already applied.
-        if (activeSetListId !== undefined) {
+        if (this.activeSetList() !== undefined) {
             return [...dataModel.scores];
         }
 
@@ -1002,7 +1114,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
      * @param groups The AND groups of the manual filter; the current filter by default.
      */
     private async applyFilter(groups: number[][] = this.state.manualFilter): Promise<void> {
-        await this.queryList(groups, this.state.activeSetListId);
+        await this.queryList(groups, this.activeSetList());
     }
 
     /** Cancels a pending delay that would announce a running query, which an answer makes pointless. */

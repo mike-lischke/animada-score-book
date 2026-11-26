@@ -80,7 +80,8 @@ export interface ISetListInfo {
     readonly managesAccess: boolean;
 }
 
-/** What a score's stored content allows the list to say about its lineup. */export enum ScoreLineupStatus {
+/** What a score's stored content allows the list to say about its lineup. */
+export enum ScoreLineupStatus {
     /** The content is a packed arrangement this build reads. */
     Ok = "ok",
 

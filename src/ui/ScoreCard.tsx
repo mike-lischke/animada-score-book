@@ -6,6 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
+import { Checkbox } from "../components/ui/framework/Checkbox.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
@@ -18,6 +19,7 @@ import {
     InstrumentRole, type ISbDmInstrument, type ISbDmScore,
 } from "../core/ScoreBookDataModel.js";
 import { PermIndicator } from "./PermIndicator.js";
+import { ScoreMetaBadges } from "./ScoreMetaBadges.js";
 
 /** The order the lineup sections follow, from the pulse up to the effects. */
 const roleOrder: Array<InstrumentRole | undefined> = [
@@ -83,12 +85,22 @@ export interface IScoreCardProperties extends ICommonUIProperties {
     /** Whether the permission matrix is shown at all, which a setting turns off. */
     showPermission: boolean;
 
+    /**
+     * Whether the card offers the checkbox that puts the score into the set list that is being edited. It is only
+     * shown while the set-list editor is open, where the list beside it may hold scores that are not members yet.
+     */
+    showMembership: boolean;
+
+    /** Whether the score is a member of the set list that is being edited, which its checkbox shows. */
+    member: boolean;
+
     onToggleLineup: (score: ISbDmScore) => void;
     onOpen: (score: ISbDmScore) => void;
     onAction: (action: string, score: ISbDmScore) => void;
     onToggleEdit: (score: ISbDmScore) => void;
     onTagAdd: (score: ISbDmScore, tagId: number) => void;
     onTagRemove: (score: ISbDmScore, tagId: number) => void;
+    onToggleMembership: (score: ISbDmScore) => void;
 }
 
 /**
@@ -138,25 +150,16 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         };
     }
 
-    /**
-     * @param seconds A duration in seconds.
-     *
-     * @returns The duration as minutes and seconds, for example `2:07`.
-     */
-    private static durationCaption(seconds: number): string {
-        const total = Math.max(0, Math.round(seconds));
-        const minutes = Math.floor(total / 60);
-        const rest = total % 60;
-
-        return `${minutes}:${String(rest).padStart(2, "0")}`;
-    }
-
     private renderHeader(): ComponentChild {
-        const { score, position, tagChips, tagCompletions, canEditTags, editing, isAdmin, showPermission } = this.props;
+        const {
+            score, position, tagChips, tagCompletions, canEditTags, editing, isAdmin, showPermission, showMembership,
+            member,
+        } = this.props;
 
         const { perm } = score;
         const canManage = isAdmin || (perm?.isOwner === true);
         const actions = this.renderActions(canManage);
+        const membership = this.renderMembership(showMembership, member);
 
         let indicator: ComponentChild = undefined;
         if (showPermission && perm !== undefined) {
@@ -180,11 +183,10 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
             chips = <TagInput className="score-card-tags" tags={tagChips} readOnly />;
         }
 
-        const meta = this.renderMeta();
-
         return (
             <Container className="score-card-header" orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}>
+                {membership}
                 <Icon src={UIIcon.Music} className="score-card-icon" />
                 <Container className="score-card-identity" orientation={Orientation.TopDown}>
                     <Container className="score-card-title-row" orientation={Orientation.LeftToRight}
@@ -201,7 +203,7 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
                         {indicator}
                         {actions}
                     </Container>
-                    {meta}
+                    <ScoreMetaBadges meta={score.meta} />
                     {chips}
                 </Container>
             </Container>
@@ -209,47 +211,29 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
     }
 
     /**
-     * @returns The read-only metadata badges of the card: tempo, meter, bar count and length. The row is left out
-     * entirely when the content states none of them.
+     * @param show Whether the card offers the checkbox at all.
+     * @param member Whether the score belongs to the set list that is being edited.
+     *
+     * @returns The checkbox that adds the score to the edited set list or takes it out again.
      */
-    private renderMeta(): ComponentChild {
+    private renderMembership(show: boolean, member: boolean): ComponentChild {
         const { score } = this.props;
-        const meta = score.meta;
 
-        if (meta === undefined) {
+        if (!show) {
             return undefined;
         }
 
-        const entries: Array<{ key: string; caption: string; }> = [];
-        if (meta.bpm !== undefined) {
-            entries.push({ key: "bpm", caption: `${meta.bpm} BPM` });
-        }
-
-        if (meta.timeSignature !== undefined) {
-            entries.push({ key: "meter", caption: meta.timeSignature });
-        }
-
-        if (meta.barCount !== undefined) {
-            entries.push({ key: "bars", caption: `${meta.barCount} bars` });
-        }
-
-        if (meta.durationSeconds !== undefined) {
-            entries.push({ key: "length", caption: ScoreCard.durationCaption(meta.durationSeconds) });
-        }
-
-        if (entries.length === 0) {
-            return undefined;
-        }
-
-        const badges = entries.map((entry) => {
-            return <span key={entry.key} className="score-card-meta-tag">{entry.caption}</span>;
-        });
+        const title = member ? `Remove ${score.name} from the set list` : `Add ${score.name} to the set list`;
 
         return (
-            <Container className="score-card-meta" orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}>
-                {badges}
-            </Container>
+            <Checkbox
+                id={`score-card-member-${score.id}`}
+                className="score-card-member"
+                checked={member}
+                title={title}
+                ariaLabel={title}
+                onChange={this.handleMembershipChange}
+            />
         );
     }
 
@@ -259,11 +243,11 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
      * @returns The card's actions as one joined button group: edit, copy, permissions, remove.
      */
     private renderActions(canManage: boolean): ComponentChild {
-        const { canEditTags, editing } = this.props;
+        const { score, canEditTags, editing } = this.props;
         const editTitle = editing ? "Close tag editing" : "Edit tags";
         const editClass = editing
-            ? "score-card-action du-join-item score-card-edit is-active"
-            : "score-card-action du-join-item score-card-edit";
+            ? "score-card-action du-join-item edit-switch is-active"
+            : "score-card-action du-join-item edit-switch";
 
         const buttons: ComponentChild[] = [];
 
@@ -276,8 +260,8 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
                     aria-pressed={editing}
                     onClick={this.handleEditClick}
                 >
-                    <span className="score-card-edit-dot" aria-hidden="true" />
-                    <span className="score-card-edit-label">{editing ? "Editing" : "Edit Tags"}</span>
+                    <span className="edit-switch-dot" aria-hidden="true" />
+                    <span className="edit-switch-label">{editing ? "Editing" : "Edit Tags"}</span>
                 </Button>,
             );
         }
@@ -287,14 +271,14 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
                 onClick={() => {
                     this.handleAction("copyUrl");
                 }}>
-                <Icon src={UIIcon.Copy} />
+                <Icon src={UIIcon.Share} />
             </Button>,
         );
 
         if (canManage) {
             buttons.push(
-                <Button key="managePerm" className="score-card-action du-join-item" imageOnly={true}
-                    title="Group Access"
+                <Button key="managePerm" id={`score-card-permissions-${score.id}`}
+                    className="score-card-action du-join-item" imageOnly={true} title="Group Access"
                     onClick={() => {
                         this.handleAction("managePerm");
                     }}>
@@ -503,5 +487,11 @@ export class ScoreCard extends UIComponent<IScoreCardProperties> {
         const { score, onTagRemove } = this.props;
 
         onTagRemove(score, tagId);
+    };
+
+    private handleMembershipChange = (): void => {
+        const { score, onToggleMembership } = this.props;
+
+        onToggleMembership(score);
     };
 }

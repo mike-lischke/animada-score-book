@@ -48,6 +48,12 @@ export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElem
     /** The element a disclosure button controls. */
     ariaControls?: string;
 
+    /**
+     * The accessible name of the button, when the caption or the title is not what a screen reader should say. A
+     * button with a visible caption needs none; an image-only button falls back to its title.
+     */
+    ariaLabel?: string;
+
     popoverTarget?: string;
 
     /**
@@ -72,6 +78,7 @@ export class Button extends UIComponent<IButtonProperties> {
         const {
             id, children, caption, style, orientation, round, compact, imageOnly, disabled, isDefault, title, role,
             name, type, value, popoverTarget, onClick, plain, "aria-pressed": ariaPressed, ariaExpanded, ariaControls,
+            ariaLabel,
         } = this.props;
 
         const className = this.generateFinalClassName([
@@ -85,6 +92,11 @@ export class Button extends UIComponent<IButtonProperties> {
         ]);
 
         const content = children ?? caption;
+
+        // An image-only button carries its caption in the title, which is the last resort a screen reader falls back
+        // to. Naming it explicitly makes the tooltip text its accessible name, which every assistive technology reads.
+        const accessibleName = ariaLabel ?? (imageOnly ? title : undefined);
+
         const newStyle = {
             ...style,
             flexDirection: orientation,
@@ -101,6 +113,7 @@ export class Button extends UIComponent<IButtonProperties> {
             role={role}
             name={name}
             value={value}
+            aria-label={accessibleName}
             aria-pressed={ariaPressed}
             aria-expanded={ariaExpanded}
             aria-controls={ariaControls}
