@@ -40,10 +40,17 @@ const config: IServerConfig = {
 /** Answers the handful of statements the tag routes and the permission checks issue. */
 class FakeDatabase implements IDatabaseAdapter {
     public readonly tags: ITagRow[] = [
-        { id: 1, name: "Demo Score", colorIndex: 1, groupId: null, systemKey: "demo" },
-        { id: 2, name: "Caixa", colorIndex: 2, groupId: null, systemKey: "instrument:5" },
-        { id: 3, name: "Internal", colorIndex: 5, groupId: foreignGroupId, systemKey: null },
-        { id: 4, name: "Set list", colorIndex: 4, groupId: memberGroupId, systemKey: null },
+        { id: 1, name: "Demo Score", colorIndex: 1, ownerUserId: null, ownerGroupId: null, systemKey: "demo" },
+        {
+            id: 2, name: "Caixa", colorIndex: 2, ownerUserId: null, ownerGroupId: null, systemKey: "instrument:5",
+        },
+        {
+            id: 3, name: "Internal", colorIndex: 5, ownerUserId: null, ownerGroupId: foreignGroupId,
+            systemKey: null,
+        },
+        {
+            id: 4, name: "Set list", colorIndex: 4, ownerUserId: null, ownerGroupId: memberGroupId, systemKey: null,
+        },
     ];
 
     public readonly scores = [{ id: scoreId, name: "Samba", content: "{\"k\":[[1,\"5\",[]]]}" }];
@@ -132,7 +139,8 @@ class FakeDatabase implements IDatabaseAdapter {
                 id,
                 name: String(params[0]),
                 colorIndex: Number(params[1]),
-                groupId: params[2] === null ? null : Number(params[2]),
+                ownerUserId: null,
+                ownerGroupId: params[2] === null ? null : Number(params[2]),
                 systemKey: null,
             });
 
@@ -180,6 +188,26 @@ class FakeDatabase implements IDatabaseAdapter {
                 return entry.adminId === Number(params[0]);
             }).map((entry) => {
                 return { id: entry.id };
+            });
+        }
+
+        if (sql.includes("FROM tags WHERE name = ? AND name_user_scope")) {
+            const userId = params[1] === null || params[1] === undefined ? 0 : Number(params[1]);
+            const groupId = params[2] === null || params[2] === undefined ? 0 : Number(params[2]);
+
+            return this.tags.filter((tag) => {
+                const excluded = sql.includes("AND id != ?") && tag.id === Number(params[3]);
+
+                return !excluded && tag.name === String(params[0])
+                    && (tag.ownerUserId ?? 0) === userId && (tag.ownerGroupId ?? 0) === groupId;
+            }).map((tag) => {
+                return { id: tag.id };
+            });
+        }
+
+        if (sql.includes("FROM tags WHERE name = ?")) {
+            return this.tags.filter((tag) => {
+                return tag.name === String(params[0]);
             });
         }
 
@@ -552,7 +580,7 @@ describe("tag actions — colour", () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateTag(createRequest({ name: "Ensaio", groupId: memberGroupId }, memberUserId), res);
+        await routes.handleCreateTag(createRequest({ name: "Ensaio", groupId: memberGroupId }, adminUserId), res);
 
         expect(captured.status).toBe(200);
         expect(database.tags[4].colorIndex).toBe(104 % TagPalette.count);
@@ -563,7 +591,7 @@ describe("tag actions — colour", () => {
         const { res, captured } = createResponse();
 
         await routes.handleCreateTag(
-            createRequest({ name: "Ensaio", groupId: memberGroupId, colorIndex: 7 }, memberUserId),
+            createRequest({ name: "Ensaio", groupId: memberGroupId, colorIndex: 7 }, adminUserId),
             res,
         );
 
@@ -579,7 +607,7 @@ describe("tag actions — colour", () => {
         const { res, captured } = createResponse();
 
         await routes.handleCreateTag(
-            createRequest({ name: "Ensaio", groupId: memberGroupId, colorIndex: TagPalette.count }, memberUserId),
+            createRequest({ name: "Ensaio", groupId: memberGroupId, colorIndex: TagPalette.count }, adminUserId),
             res,
         );
 
@@ -614,7 +642,7 @@ describe("tag actions — name length", () => {
         const { res, captured } = createResponse();
 
         await routes.handleCreateTag(
-            createRequest({ name: "x".repeat(TagAccess.maxNameLength + 1), groupId: memberGroupId }, memberUserId),
+            createRequest({ name: "x".repeat(TagAccess.maxNameLength + 1), groupId: memberGroupId }, adminUserId),
             res,
         );
 
@@ -627,7 +655,7 @@ describe("tag actions — name length", () => {
         const { res, captured } = createResponse();
         const name = "x".repeat(TagAccess.maxNameLength);
 
-        await routes.handleCreateTag(createRequest({ name, groupId: memberGroupId }, memberUserId), res);
+        await routes.handleCreateTag(createRequest({ name, groupId: memberGroupId }, adminUserId), res);
 
         expect(captured.status).toBe(200);
         expect(database.tags.some((tag) => {
@@ -658,7 +686,7 @@ describe("tag actions — name length", () => {
 
         expect(name.length).toBeGreaterThan(TagAccess.maxNameLength);
 
-        await routes.handleCreateTag(createRequest({ name, groupId: memberGroupId }, memberUserId), res);
+        await routes.handleCreateTag(createRequest({ name, groupId: memberGroupId }, adminUserId), res);
 
         expect(captured.status).toBe(200);
         expect(database.tags.some((tag) => {
@@ -671,7 +699,7 @@ describe("tag actions — name length", () => {
         const { res, captured } = createResponse();
 
         await routes.handleCreateTag(
-            createRequest({ name: "𝄞".repeat(TagAccess.maxNameLength + 1), groupId: memberGroupId }, memberUserId),
+            createRequest({ name: "𝄞".repeat(TagAccess.maxNameLength + 1), groupId: memberGroupId }, adminUserId),
             res,
         );
 

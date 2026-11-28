@@ -121,6 +121,7 @@ const setupLibraryApi = async (page: Page, options: IScoreLibraryMockOptions = {
                         },
                     ],
                     readableScoreCount: 2,
+                    canCreate: true,
                 }),
             });
 

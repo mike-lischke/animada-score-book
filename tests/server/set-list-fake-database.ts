@@ -64,9 +64,17 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     ];
 
     public readonly tags: ITagRow[] = [
-        { id: globalTagId, name: "Groovy", colorIndex: 1, groupId: null, systemKey: null },
-        { id: memberTagId, name: "Bateria Internal", colorIndex: 2, groupId: memberGroupId, systemKey: null },
-        { id: foreignTagId, name: "Fremd Internal", colorIndex: 3, groupId: foreignGroupId, systemKey: null },
+        {
+            id: globalTagId, name: "Groovy", colorIndex: 1, ownerUserId: null, ownerGroupId: null, systemKey: null,
+        },
+        {
+            id: memberTagId, name: "Bateria Internal", colorIndex: 2, ownerUserId: null,
+            ownerGroupId: memberGroupId, systemKey: null,
+        },
+        {
+            id: foreignTagId, name: "Fremd Internal", colorIndex: 3, ownerUserId: null,
+            ownerGroupId: foreignGroupId, systemKey: null,
+        },
     ];
 
     public readonly setLists: ISetListRowFixture[] = [];
@@ -149,18 +157,23 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     }
 
     /**
-     * Creates a set list in the fixture with a tag of the same name in the given scope, as the backend does.
+     * Creates a set list in the fixture with a tag of the same name, as the backend does.
      *
      * @param name The name of both the list and its tag.
      * @param groupId The owner scope; undefined makes it a global tag.
      * @param revision The revision the list starts with.
+     * @param tagOwnerId The user whose private tag it is; undefined leaves it a tag of the catalogue.
      *
      * @returns The ids of the created list and tag.
      */
-    public seedSetList(name: string, groupId: number | undefined, revision = 1): { id: number; tagId: number; } {
+    public seedSetList(name: string, groupId: number | undefined, revision = 1,
+        tagOwnerId: number | null = null): { id: number; tagId: number; } {
         const tagId = this.nextTagId++;
         const id = this.nextListId++;
-        this.tags.push({ id: tagId, name, colorIndex: tagId % 10, groupId: groupId ?? null, systemKey: null });
+        this.tags.push({
+            id: tagId, name, colorIndex: tagId % 10, ownerUserId: tagOwnerId, ownerGroupId: groupId ?? null,
+            systemKey: null,
+        });
         this.setLists.push({ id, tagId, revision });
 
         return { id, tagId };
@@ -201,6 +214,42 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
     }
 
     private rows(sql: string, params: unknown[]): DbRow[] {
+        if (sql.includes("FROM entity_groups eg")) {
+            const groupIds = params.slice(1, params.length - 2).map(Number);
+            const name = String(params[params.length - 2]);
+            const exceptListId = Number(params[params.length - 1]);
+            const rows: DbRow[] = [];
+
+            for (const [key, grants] of this.grants) {
+                const [entityType, entityId] = key.split(":");
+                const listId = Number(entityId);
+                if (entityType !== String(params[0]) || listId === exceptListId) {
+                    continue;
+                }
+
+                const list = this.setLists.find((entry) => {
+                    return entry.id === listId;
+                });
+                const tag = this.tags.find((entry) => {
+                    return entry.id === list?.tagId;
+                });
+                if (tag?.name !== name) {
+                    continue;
+                }
+
+                for (const groupId of grants.keys()) {
+                    if (groupIds.includes(groupId)) {
+                        const group = this.groups.find((entry) => {
+                            return entry.id === groupId;
+                        });
+                        rows.push({ groupName: group?.name ?? "" });
+                    }
+                }
+            }
+
+            return rows;
+        }
+
         if (sql.includes("ug JOIN `groups` g")) {
             const group = this.groups.find((entry) => {
                 return entry.name === String(params[1]);
@@ -225,6 +274,30 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
                 return entry.userId === Number(params[0]);
             }).map((entry) => {
                 return { groupId: entry.groupId };
+            });
+        }
+
+        if (sql.includes("FROM `groups` WHERE id IN")) {
+            const ids = params.map(Number);
+
+            return this.groups.filter((entry) => {
+                return ids.includes(entry.id);
+            }).map((entry) => {
+                return { id: entry.id };
+            });
+        }
+
+        if (sql.includes("SELECT id, name FROM `groups` WHERE admin_id = ?")) {
+            return this.groups.filter((entry) => {
+                return entry.adminId === Number(params[0]);
+            }).map((entry) => {
+                return { id: entry.id, name: entry.name };
+            });
+        }
+
+        if (sql.includes("SELECT id, name FROM `groups`")) {
+            return this.groups.map((entry) => {
+                return { id: entry.id, name: entry.name };
             });
         }
 
@@ -278,16 +351,23 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             });
         }
 
-        if (sql.includes("FROM tags WHERE name = ? AND owner_scope")) {
-            if (sql.includes("AND id != ?")) {
-                return this.tags.filter((tag) => {
-                    return tag.name === String(params[0]) && (tag.groupId ?? 0) === Number(params[1])
-                        && tag.id !== Number(params[2]);
-                });
-            }
+        if (sql.includes("FROM tags WHERE name = ? AND name_user_scope = ? AND name_group_scope = 0")) {
+            return this.tags.filter((tag) => {
+                return tag.name === String(params[0]) && (tag.ownerUserId ?? 0) === Number(params[1]);
+            }).map((tag) => {
+                return { id: tag.id };
+            });
+        }
+
+        if (sql.includes("FROM tags WHERE name = ? AND name_user_scope = IFNULL(?, 0)")) {
+            const userId = params[1] === null ? 0 : Number(params[1]);
+            const groupId = params[2] === null ? 0 : Number(params[2]);
 
             return this.tags.filter((tag) => {
-                return tag.name === String(params[0]) && (tag.groupId ?? 0) === Number(params[1]);
+                return tag.name === String(params[0]) && (tag.ownerUserId ?? 0) === userId
+                    && (tag.ownerGroupId ?? 0) === groupId && tag.id !== Number(params[3]);
+            }).map((tag) => {
+                return { id: tag.id };
             });
         }
 
@@ -495,6 +575,16 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             });
         }
 
+        if (sql.includes("FROM set_lists") && sql.includes("t.owner_user_id = ?")) {
+            const tag = this.tags.find((entry) => {
+                return entry.name === String(params[0]) && entry.ownerUserId === Number(params[1]);
+            });
+
+            return tag === undefined ? [] : this.setLists.filter((entry) => {
+                return entry.tagId === tag.id;
+            });
+        }
+
         if (sql.includes("FROM set_lists")) {
             return [...this.setLists];
         }
@@ -507,9 +597,9 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
             const entityType = String(params[0]);
             const ownerId = Number(params[1]);
             const name = String(params[2]);
-            const groupId = params[3] === null ? null : Number(params[3]);
+            const creatorId = Number(params[3]);
             const tag = this.tags.find((entry) => {
-                return entry.name === name && (entry.groupId ?? 0) === (groupId ?? 0);
+                return entry.name === name && entry.ownerUserId === creatorId;
             });
             const list = tag === undefined ? undefined : this.listOfTag(tag.id);
 
@@ -530,6 +620,28 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
 
         if (sql.startsWith("DELETE FROM permissions")) {
             this.owners.delete(`${String(params[0])}:${Number(params[1])}`);
+
+            return 1;
+        }
+
+        if (sql.startsWith("INSERT INTO entity_groups") && sql.includes("SELECT")) {
+            const entityType = String(params[0]);
+            const groupId = Number(params[1]);
+            const name = String(params[2]);
+            const creatorId = Number(params[3]);
+            const tag = this.tags.find((entry) => {
+                return entry.name === name && entry.ownerUserId === creatorId;
+            });
+            const list = tag === undefined ? undefined : this.listOfTag(tag.id);
+
+            if (list === undefined) {
+                return 0;
+            }
+
+            const key = `${entityType}:${list.id}`;
+            const grants = this.grants.get(key) ?? new Map<number, boolean>();
+            grants.set(groupId, grants.get(groupId) ?? false);
+            this.grants.set(key, grants);
 
             return 1;
         }
@@ -560,11 +672,13 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
 
         if (sql.startsWith("INSERT INTO tags")) {
             const tagId = this.nextTagId++;
+            const privateTag = sql.includes("owner_user_id");
             this.tags.push({
                 id: tagId,
                 name: String(params[0]),
-                colorIndex: 0,
-                groupId: params[1] === null ? null : Number(params[1]),
+                colorIndex: privateTag ? 0 : Number(params[1]),
+                ownerUserId: privateTag ? Number(params[1]) : null,
+                ownerGroupId: privateTag || params[1] === null ? null : Number(params[1]),
                 systemKey: null,
             });
 
@@ -587,7 +701,7 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
 
         if (sql.startsWith("UPDATE tags SET color_index")) {
             const tag = this.tags.find((entry) => {
-                return entry.name === String(params[1]) && (entry.groupId ?? 0) === Number(params[2]);
+                return entry.name === String(params[1]) && entry.ownerUserId === Number(params[2]);
             });
 
             if (tag) {
@@ -624,7 +738,7 @@ export class FakeSetListDatabase implements IDatabaseAdapter {
 
         if (sql.startsWith("INSERT INTO set_lists")) {
             const tag = this.tags.find((entry) => {
-                return entry.name === String(params[0]) && (entry.groupId ?? 0) === Number(params[1]);
+                return entry.name === String(params[0]) && entry.ownerUserId === Number(params[1]);
             });
 
             if (tag === undefined) {

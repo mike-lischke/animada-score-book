@@ -992,6 +992,9 @@ export class ScoreBookDataModel {
     /** The set lists the current user may select, as the backend last reported them. */
     private setListCatalogue: ISetListInfo[] = [];
 
+    /** Whether the current user may create set lists, which the backend decides and only administrators may. */
+    private setListCreation = false;
+
     /** How many scores the current user may read, which the All Scores pill shows. */
     private readableScores = 0;
 
@@ -1060,6 +1063,13 @@ export class ScoreBookDataModel {
      */
     public get setLists(): readonly ISetListInfo[] {
         return this.setListCatalogue;
+    }
+
+    /**
+     * @returns Whether the current user may create a set list, which the backend decides.
+     */
+    public get canCreateSetLists(): boolean {
+        return this.setListCreation;
     }
 
     /**
@@ -3584,10 +3594,14 @@ export class ScoreBookDataModel {
 
         if (res === undefined) {
             this.setListCatalogue = [];
+            this.setListCreation = false;
         } else {
-            const data = await res.json() as { setLists?: ISetListInfo[]; readableScoreCount?: number; };
+            const data = await res.json() as {
+                setLists?: ISetListInfo[]; readableScoreCount?: number; canCreate?: boolean;
+            };
             this.setListCatalogue = data.setLists ?? [];
             this.readableScores = data.readableScoreCount ?? 0;
+            this.setListCreation = data.canCreate === true;
         }
 
         if (this.activeSetList !== undefined && !this.setListCatalogue.some((list) => {
@@ -3601,18 +3615,21 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Creates a set list with the tag of the same name in the given owner scope.
+     * Creates a set list with the tag of the same name. Only an administrator creates lists, so the tag lands in the
+     * scope the creator answers for and the creator owns the list.
      *
      * @param name The name of the list and its tag.
-     * @param groupId The owner scope; undefined creates a list of the administrators.
+     * @param groups The ids of the groups the list is shared with; none keeps it private to its creator.
      *
      * @returns What became of the request, with the new list's id.
      */
-    public async createSetList(name: string, groupId?: number): Promise<ISetListChangeResult & { id?: number; }> {
+    public async createSetList(name: string, groups: readonly number[] = []): Promise<ISetListChangeResult & {
+        id?: number;
+    }> {
         const res = await this.fetchApi("/api?action=createSetList", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, groupId }),
+            body: JSON.stringify({ name, groups }),
         }, true, true);
 
         if (res === undefined) {
@@ -3630,6 +3647,25 @@ export class ScoreBookDataModel {
         await this.reloadSetLists();
 
         return { success: true, revision: data.revision, id: data.id };
+    }
+
+    /**
+     * @returns The groups a set list may be shared with: every group for an administrator, the groups a group
+     * administrator answers for. An empty answer means the caller may not create lists at all.
+     */
+    public async listShareGroups(): Promise<Array<{ id: number; name: string; }>> {
+        const res = await this.fetchApi("/api?action=listShareGroups", {
+            method: "POST",
+            headers: { Accept: "application/json" },
+        });
+
+        if (!res?.ok) {
+            return [];
+        }
+
+        const data = await res.json() as { groups?: Array<{ id: number; name: string; }>; };
+
+        return data.groups ?? [];
     }
 
     /**
@@ -3738,6 +3774,35 @@ export class ScoreBookDataModel {
         const data = await res.json() as { scores?: IScoreListEntry[]; };
 
         return data.scores ?? [];
+    }
+
+    /**
+     * Stores the description and the icon of one set-list entry. They belong to the entry, so the same score may read
+     * differently in two lists; the stored order and the revision stay untouched.
+     *
+     * @param listId The list that holds the entry.
+     * @param scoreId The score the entry belongs to.
+     * @param note The description of the entry, or undefined to clear it.
+     * @param icon The key of the icon to show, or undefined for the catalogue's default.
+     *
+     * @returns Whether the backend accepted the change.
+     */
+    public async saveSetListEntry(listId: number, scoreId: number, note?: string,
+        icon?: string): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=saveSetListEntry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: listId, scoreId, note, icon }),
+        }, true, true);
+
+        if (!res?.ok) {
+            const data = res ? await res.json() as { error?: string; } : undefined;
+            void requisitions.execute("showError", data?.error ?? "The entry could not be saved.");
+
+            return false;
+        }
+
+        return true;
     }
 
     /**

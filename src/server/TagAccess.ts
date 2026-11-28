@@ -14,8 +14,11 @@ export interface ITagRow extends DbRow {
     /** The index of the tag's colour in the fixed palette. */
     colorIndex: number;
 
-    /** The group that owns the tag, or null for a global tag (owned by the administrators). */
-    groupId: number | null;
+    /** The user who owns the tag, or null when a group or the installation owns it. */
+    ownerUserId: number | null;
+
+    /** The group that owns the tag, or null when a user or the installation owns it. */
+    ownerGroupId: number | null;
 
     /** Set only for system tags, which code uses instead of a name or id. */
     systemKey: string | null;
@@ -137,60 +140,70 @@ export class TagAccess {
      * @param tag The tag in question.
      *
      * @returns Whether the caller may see and use the tag. Everything else about a tag is invisible to a caller
-     * who cannot use it: it stays out of the catalogue, the completions, a score's tag row and a filter.
+     * who cannot use it: it stays out of the catalogue, the completions, a score's tag row and a filter. A system
+     * tag and a tag without an owner are the installation's vocabulary and belong to everybody who is signed in;
+     * an owned tag belongs to its owner's group or - for a personal one - to its user. Sharing with further groups
+     * is not part of this check: it needs the stored grants, which `TagRights` reads.
      */
     public static canUse(context: ITagAccessContext, tag: ITagRow): boolean {
         if (!context.isSignedIn) {
             return false;
         }
 
-        if (tag.groupId === null) {
+        if (tag.systemKey !== null || (tag.ownerUserId === null && tag.ownerGroupId === null)) {
             return true;
         }
 
-        return context.memberGroupIds.includes(tag.groupId) || context.adminGroupIds.includes(tag.groupId);
+        if (context.isAdmin) {
+            return true;
+        }
+
+        return TagAccess.ownerGroupOf(context, tag) || tag.ownerUserId === context.userId;
     }
 
     /**
      * @param context The rules of the caller.
      * @param tag The tag in question.
      *
-     * @returns Whether the caller owns the tag's scope, which is what editing and deleting a tag needs. Global
-     * tags belong to the administrators together; a group tag belongs to that group, and administrators have no
-     * extra rights on it. A set-list tag is the exception: it follows the list rules, where the administrators reach
-     * every list, so code that handles it asks `SetListAccess.canEdit` instead.
+     * @returns Whether the caller may rename or delete the tag and put it on a score. The administrators answer for
+     * the whole installation; otherwise the owner decides, and a member of the owning group inherits every right
+     * that group has on the tag. A personal tag belongs to its user alone.
      */
-    public static owns(context: ITagAccessContext, tag: ITagRow): boolean {
-        if (tag.groupId === null) {
-            return context.isAdmin;
+    public static canManage(context: ITagAccessContext, tag: ITagRow): boolean {
+        if (!context.isSignedIn) {
+            return false;
         }
 
-        return context.adminGroupIds.includes(tag.groupId);
+        if (context.isAdmin) {
+            return true;
+        }
+
+        return TagAccess.ownerGroupOf(context, tag) || tag.ownerUserId === context.userId;
     }
 
     /**
      * @param context The rules of the caller.
-     * @param groupId The owner scope in question; undefined names the global scope.
      *
-     * @returns Whether the caller may create tags in the given owner scope.
+     * @returns Whether the caller may create tags at all, which only an administrator may. Private tags for
+     * everybody are a later change, not a current one.
      */
-    public static canOwnScope(context: ITagAccessContext, groupId: number | undefined): boolean {
-        if (groupId === undefined) {
-            return context.isAdmin;
-        }
-
-        return context.adminGroupIds.includes(groupId);
+    public static canCreate(context: ITagAccessContext): boolean {
+        return context.isSignedIn && context.isAdmin;
     }
 
     /**
      * @param context The rules of the caller.
      * @param tag The tag in question.
      *
-     * @returns Whether the caller may put the tag on a score. A tag is its own entity, so this follows the tag, not
-     * the score: only the owners of its scope manage it, which makes a global tag an administrator's business and a
-     * group tag the business of that group's administrator. `Demo Score` is global and follows the same rule.
+     * @returns Whether the caller belongs to the group that owns the tag: as a member, who inherits the group's
+     * rights, or as its administrator.
      */
-    public static canAssign(context: ITagAccessContext, tag: ITagRow): boolean {
-        return TagAccess.owns(context, tag);
+    private static ownerGroupOf(context: ITagAccessContext, tag: ITagRow): boolean {
+        if (tag.ownerGroupId === null) {
+            return false;
+        }
+
+        return context.memberGroupIds.includes(tag.ownerGroupId)
+            || context.adminGroupIds.includes(tag.ownerGroupId);
     }
 }

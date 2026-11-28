@@ -680,6 +680,13 @@ export class AuthRoutes {
             [result.insertId, adminGroupResult.insertId],
         );
 
+        // The system tags - one per instrument type and the demo marker - are the administrators' vocabulary, so the
+        // Admins group owns them from here on. They stay visible to everybody through their system_key.
+        await this.ctx.auth.adapter.execute(
+            "UPDATE tags SET owner_group_id = ? WHERE system_key IS NOT NULL AND owner_group_id IS NULL",
+            [adminGroupResult.insertId],
+        );
+
         await this.ctx.auth.adapter.insertReturningId(
             "INSERT INTO `groups` (name, description, color_index) VALUES (?, ?, ?)",
             [Auth.worldGroupName, "Public access — everyone can read", 11],

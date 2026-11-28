@@ -136,28 +136,40 @@ CREATE TABLE IF NOT EXISTS entity_groups (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- A tag belongs either to a group or - with a NULL group_id - to the administrators (a global tag).
--- The generated owner_scope makes the name unique per owner, which a unique key over the nullable group_id
--- would not do for the global tags.
+-- A tag is owned either by a user or by a group; the two columns exclude each other and both stay NULL only for a
+-- system tag, which code finds by its system_key instead of a name or an id. The owners are foreign keys, so a
+-- deleted user or group takes the tags it owns with it.
+-- The name is unique per owner, and the two scope columns are what makes that work: MySQL and MariaDB treat NULLs
+-- in a unique key as distinct, so a name would not collide for a tag without an owner. They mirror the owner
+-- columns as plain numbers (0 for no owner) and are written together with them, because MySQL refuses a foreign
+-- key on a column that a stored generated column depends on.
+-- A member of the owning group inherits every right the group has on the tag, so a group-owned tag is the vocabulary
+-- of that group. Sharing a tag with further groups lives in entity_groups under the entity type 'tag' and grants
+-- reading only.
 -- The column holds 100 characters while the backend accepts 64: the headroom keeps a name storable when the limit
 -- itself grows or when a name arrives from a source that was not checked.
 -- color_index points into the fixed palette of src/core/TagPalette.ts.
--- A set-list tag is an ordinary tag in its owner's catalogue, referenced from set_lists.tag_id. Code tells the two
--- apart by that reference, so a list never needs a second name or owner of its own.
+-- A set-list tag is referenced from set_lists.tag_id and carries the user who created the list as its owner: a list
+-- and its tag are private until they are shared, and the list's own grants decide who reaches them.
 CREATE TABLE IF NOT EXISTS tags (
-    id          INT UNSIGNED     NOT NULL AUTO_INCREMENT,
-    name        VARCHAR(100)     NOT NULL,
-    color_index TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    group_id    INT UNSIGNED     NULL,
-    owner_scope INT UNSIGNED AS (IFNULL(group_id, 0)) STORED,
-    system_key  VARCHAR(32)      NULL,
-    created_at  TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    id               INT UNSIGNED     NOT NULL AUTO_INCREMENT,
+    name             VARCHAR(100)     NOT NULL,
+    color_index      TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    system_key       VARCHAR(32)      NULL,
+    owner_user_id    INT UNSIGNED     NULL,
+    owner_group_id   INT UNSIGNED     NULL,
+    name_user_scope  INT UNSIGNED     NOT NULL DEFAULT 0,
+    name_group_scope INT UNSIGNED     NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_tags_owner_name (owner_scope, name),
+    UNIQUE KEY uk_tags_name_owner (name, name_user_scope, name_group_scope),
     UNIQUE KEY uk_tags_system_key (system_key),
-    INDEX idx_tags_group (group_id),
-    CONSTRAINT fk_tags_group
-        FOREIGN KEY (group_id) REFERENCES `groups`(id)
+    INDEX idx_tags_owner_user (owner_user_id),
+    INDEX idx_tags_owner_group (owner_group_id),
+    CONSTRAINT fk_tags_owner_user
+        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tags_owner_group
+        FOREIGN KEY (owner_group_id) REFERENCES `groups`(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS score_tags (
@@ -192,11 +204,15 @@ CREATE TABLE IF NOT EXISTS set_lists (
 
 -- The saved score order of one list. Membership is the tag assignment, so a row only exists while the score carries
 -- the list's tag; the backend deletes it when the tag comes off and appends a new row when it goes back on.
+-- The note and the icon belong to the entry, not to the score: the same score may be described differently in two
+-- lists. `icon` holds a key of the icon catalogue, so the UI is the only place that knows its appearance.
 -- Both foreign keys clean up after a deleted list or score.
 CREATE TABLE IF NOT EXISTS set_list_scores (
     set_list_id INT UNSIGNED NOT NULL,
     score_id    INT UNSIGNED NOT NULL,
     position    INT UNSIGNED NOT NULL,
+    note        VARCHAR(500) NULL,
+    icon        VARCHAR(40) NULL,
     PRIMARY KEY (set_list_id, score_id),
     INDEX idx_set_list_scores_order (set_list_id, position),
     CONSTRAINT fk_set_list_scores_list

@@ -6,16 +6,27 @@
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
 import { NameText } from "../core/NameText.js";
+import { isSetListIconKey } from "../core/SetListIcons.js";
+import { setListEntryNoteLimit } from "../core/DatabaseTypes.js";
 import { TagPalette } from "../core/TagPalette.js";
 import { EntityType, type ITokenPayload } from "./Auth.js";
 import type { IDbStatement } from "./database.js";
 import { type RequestContext } from "./RequestContext.js";
-import { SetListAccess, type ISetListRow } from "./SetListAccess.js";
+import { SetListAccess, type ISetListRights, type ISetListRow } from "./SetListAccess.js";
 import { SetListMembership } from "./SetListMembership.js";
 import { SetListOrder } from "./SetListOrder.js";
-import { ScoreEntries } from "./ScoreEntries.js";
+import { ScoreEntries, type IScoreEntryJson } from "./ScoreEntries.js";
 import { TagAccess, type ITagAccessContext, type ITagRow } from "./TagAccess.js";
 import { TagFilter, TagFilterProblem } from "./TagFilter.js";
+
+/** A score of a set list as the client receives it: the card's description plus what the list added to the entry. */
+interface ISetListScoreJson extends IScoreEntryJson {
+    /** The description the entry carries in this list, if it has one. */
+    note?: string;
+
+    /** The key of the icon the entry shows, if its author picked one. */
+    icon?: string;
+}
 
 /** A set list as the client receives it. */
 interface ISetListJson {
@@ -37,16 +48,18 @@ interface ISetListJson {
     /** Whether the caller may change the list. */
     editable: boolean;
 
-    /** Whether the caller may grant the list to groups: its owner and the administrators, exactly as with a score. */
+    /** Whether the caller may grant the list to groups: its owner and the administrators. */
     managesAccess: boolean;
 }
 
 /**
  * The handlers behind the set-list actions. A set list is defined by one tag: a score belongs to it while that tag is
- * assigned, so the list copies no score and grants no score access. Ownership and group access follow the score
- * permission model. These handlers own the list itself - its name, its group grants, its revision and its saved
- * order. `SetListMembership` resolves which scores it holds and `SetListOrder` how they are placed, so neither a
- * grant nor an order can widen what a caller may see.
+ * assigned, so the list copies no score and grants no score access. A list belongs to the administrator who created
+ * it, sharing it with a group grants reading only, and the administrators of the instance reach every list; the rules
+ * themselves live in `SetListAccess`. These handlers
+ * own the list itself - its name, its group grants, its revision and its saved order. `SetListMembership` resolves
+ * which scores it holds and `SetListOrder` how they are placed, so neither a grant nor an order can widen what a
+ * caller may see.
  */
 export class SetListRoutes {
     public constructor(private readonly ctx: RequestContext) { }
@@ -68,23 +81,22 @@ export class SetListRoutes {
         }));
         const shares = await this.sharingRows();
         const owners = await this.ownerRows();
-        const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.SetList, rows.map((row) => {
+        const access = await SetListAccess.rights(this.ctx.auth, user, rows.map((row) => {
             return row.id;
         }));
-        const isAdmin = user ? await this.ctx.auth.isUserInAdminGroup(user.userId) : false;
-        const counts = await this.memberCounts(user, rows, tags, summaries);
+        const counts = await this.memberCounts(user, rows, tags, access);
 
         const entries: ISetListJson[] = [];
         for (const row of rows) {
             const tag = tags.get(row.tagId);
-            const summary = summaries.get(row.id);
-            if (tag === undefined || summary?.canRead !== true) {
+            const rights = access.get(row.id);
+            if (tag === undefined || rights === undefined) {
                 continue;
             }
 
             const owner = owners.get(row.id);
 
-            entries.push(this.listJson(row, tag, summary.canWrite, summary.isOwner || isAdmin,
+            entries.push(this.listJson(row, tag, rights.editable, rights.editable,
                 shares.get(row.id) ?? [], owner?.ownerId, counts.get(row.id) ?? 0, owner?.ownerName));
         }
 
@@ -92,7 +104,11 @@ export class SetListRoutes {
             return NameText.compare(left.name, right.name);
         });
 
-        this.ctx.sendJson(res, { setLists: entries, readableScoreCount: await this.readableScoreCount(user) });
+        this.ctx.sendJson(res, {
+            setLists: entries,
+            readableScoreCount: await this.readableScoreCount(user),
+            canCreate: SetListRoutes.createsLists(await TagAccess.contextFor(this.ctx.auth, user)),
+        });
     }
 
     /**
@@ -116,17 +132,16 @@ export class SetListRoutes {
         }
 
         const entry = await SetListAccess.load(this.ctx.auth.adapter, listId);
-        const summary = user === undefined
-            ? undefined
-            : await this.ctx.auth.getPermissionSummary(user, EntityType.SetList, listId);
-        if (entry === undefined || user === undefined || summary?.canRead !== true) {
+        const access = user === undefined
+            ? new Map<number, ISetListRights>()
+            : await SetListAccess.rights(this.ctx.auth, user, [listId]);
+        const rights = access.get(listId);
+        if (entry === undefined || user === undefined || rights === undefined) {
             this.ctx.sendError(res, "Set list not found", 404);
 
             return;
         }
 
-        const isAdmin = await this.ctx.auth.isUserInAdminGroup(user.userId);
-        const editable = summary.canWrite;
         const sharedGroups = await SetListAccess.sharedGroups(this.ctx.auth, listId);
         const ownerId = await this.ctx.auth.getExplicitOwner(EntityType.SetList, listId) ?? undefined;
         const ownerName = await this.ownerName(ownerId);
@@ -153,10 +168,85 @@ export class SetListRoutes {
             ? members
             : await SetListMembership.resolve(this.ctx.auth, user, storedIds, entry.tag.id, extraGroups);
         const scores = await ScoreEntries.list(this.ctx.auth, user, membership.visible);
-        const json = this.listJson(entry.row, entry.tag, editable, summary.isOwner || isAdmin, sharedGroups, ownerId,
+        const entries = await this.entryNotes(listId);
+        const described = scores.map((score): ISetListScoreJson => {
+            const extra = entries.get(score.id);
+
+            return extra === undefined ? score : { ...score, ...extra };
+        });
+        const json = this.listJson(entry.row, entry.tag, rights.editable, rights.editable, sharedGroups, ownerId,
             members.visible.length, ownerName);
 
-        this.ctx.sendJson(res, { ...json, scores });
+        this.ctx.sendJson(res, { ...json, scores: described });
+    }
+
+    /**
+     * Stores the description and the icon of one entry. They belong to the entry, not to the score, so the same score
+     * may read differently in two lists. The order and the revision stay untouched.
+     *
+     * @param req The incoming HTTP request.
+     * @param res The response to write to.
+     */
+    public async handleSaveSetListEntry(req: IncomingMessage, res: ServerResponse): Promise<void> {
+        const user = this.ctx.getAuthUser(req);
+
+        if (!user) {
+            this.ctx.sendError(res, "Forbidden", 403);
+
+            return;
+        }
+
+        const body = await this.ctx.readJsonBody(req);
+        const listId = body.id !== undefined ? Number(body.id) : undefined;
+        const scoreId = body.scoreId !== undefined ? Number(body.scoreId) : undefined;
+
+        if (listId === undefined || !Number.isInteger(listId)
+            || scoreId === undefined || !Number.isInteger(scoreId)) {
+            this.ctx.sendError(res, "id and scoreId required");
+
+            return;
+        }
+
+        const note = String(body.note ?? "").trim();
+        if (NameText.codePointCount(note) > setListEntryNoteLimit) {
+            this.ctx.sendError(res, `A note may hold at most ${setListEntryNoteLimit} characters.`);
+
+            return;
+        }
+
+        // An icon the catalogue does not know is refused instead of stored, so no entry ends up without an
+        // appearance after the catalogue changed.
+        const icon = body.icon ?? undefined;
+        if (icon !== undefined && !isSetListIconKey(icon)) {
+            this.ctx.sendError(res, "Unknown icon.");
+
+            return;
+        }
+
+        const allowed = await SetListAccess.canEdit(this.ctx.auth, user, listId);
+        if (!allowed) {
+            this.ctx.sendError(res, "Forbidden", 403);
+
+            return;
+        }
+
+        const rows = await this.ctx.auth.adapter.query<{ scoreId: number; }>(
+            "SELECT score_id AS scoreId FROM set_list_scores WHERE set_list_id = ? AND score_id = ?",
+            [listId, scoreId],
+        );
+
+        if (rows.length === 0) {
+            this.ctx.sendError(res, "The score is not part of this set list.", 404);
+
+            return;
+        }
+
+        await this.ctx.auth.adapter.execute(
+            "UPDATE set_list_scores SET note = ?, icon = ? WHERE set_list_id = ? AND score_id = ?",
+            [note.length === 0 ? null : note, icon ?? null, listId, scoreId],
+        );
+
+        this.ctx.sendJson(res, { success: true });
     }
 
     /**
@@ -242,8 +332,10 @@ export class SetListRoutes {
     }
 
     /**
-     * Creates a set list together with its tag. The caller chooses the owner scope: a group administrator one of the
-     * groups they administer, an administrator any group or the global scope.
+     * Creates a set list together with its tag. Only administrators create lists. A list and its tag are private to
+     * their creator from the start: the tag sits in no catalogue, and the name only has to be free in the creator's
+     * own namespace. Sharing with groups grants reading only, and each of those groups must not hold another list of
+     * that name already - the check that keeps their lists tellable apart.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -263,63 +355,126 @@ export class SetListRoutes {
             return;
         }
 
-        const groupId = SetListRoutes.optionalId(body.groupId);
-        if (body.groupId !== undefined && body.groupId !== null && groupId === undefined) {
-            this.ctx.sendError(res, "Invalid group id");
+        const context = await TagAccess.contextFor(this.ctx.auth, user);
+        if (!SetListRoutes.createsLists(context)) {
+            this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
-        const context = await TagAccess.contextFor(this.ctx.auth, user);
-        if (!SetListRoutes.createsInScope(context, groupId)) {
+        const sharedWith = SetListRoutes.readGroupIds(body.groups);
+        if (sharedWith === undefined) {
+            this.ctx.sendError(res, "Invalid groups");
+
+            return;
+        }
+
+        // Sharing is a grant of the caller, so only the groups they answer for may receive it.
+        const allowed = sharedWith.every((id) => {
+            return context.isAdmin || context.adminGroupIds.includes(id);
+        });
+        if (!allowed || !await this.groupsExist(sharedWith)) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
         }
 
         const clash = await this.ctx.auth.adapter.query<{ id: number; }>(
-            "SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0)", [name, groupId ?? null],
+            "SELECT id FROM tags WHERE name = ? AND name_user_scope = ? AND name_group_scope = 0",
+            [name, user.userId],
         );
 
         if (clash.length > 0) {
-            this.ctx.sendError(res, "A tag with that name already exists in this scope.", 409);
+            this.ctx.sendError(res, "You already own a set list with that name.", 409);
 
             return;
         }
 
-        const scopeParams = [name, groupId ?? null];
+        const conflicting = await SetListAccess.sharedNameConflict(this.ctx.auth.adapter, name, sharedWith);
+        if (conflicting !== undefined) {
+            this.ctx.sendError(res, `The group "${conflicting}" already holds a set list with that name.`, 409);
+
+            return;
+        }
+
+        const ownerParams = [name, user.userId];
         const statements: IDbStatement[] = [
             {
-                sql: "INSERT INTO tags (name, color_index, group_id) VALUES (?, 0, ?)",
-                params: [name, groupId ?? null],
+                // The scope column mirrors the owner, which is what the unique key over the name runs on.
+                sql: "INSERT INTO tags (name, color_index, owner_user_id, name_user_scope) VALUES (?, 0, ?, ?)",
+                params: [name, user.userId, user.userId],
             },
             {
                 // The list is created from the tag in the same transaction, so neither exists without the other.
-                sql: "INSERT INTO set_lists (tag_id) SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0)",
-                params: scopeParams,
+                sql: "INSERT INTO set_lists (tag_id) SELECT id FROM tags WHERE name = ? AND owner_user_id = ?",
+                params: ownerParams,
             },
             {
-                sql: "UPDATE tags SET color_index = id % ? WHERE name = ? AND owner_scope = IFNULL(?, 0)",
-                params: [TagPalette.count, ...scopeParams],
+                sql: "UPDATE tags SET color_index = id % ? WHERE name = ? AND owner_user_id = ?",
+                params: [TagPalette.count, ...ownerParams],
             },
             {
-                // The creator owns the list until other groups are granted access, exactly as a new score does.
+                // The creator owns the list, and nobody else reaches it until a group is granted reading access.
                 sql: "INSERT INTO permissions (entity_type, entity_id, owner_id) "
                     + "SELECT ?, l.id, ? FROM set_lists l JOIN tags t ON t.id = l.tag_id "
-                    + "WHERE t.name = ? AND t.owner_scope = IFNULL(?, 0) "
+                    + "WHERE t.name = ? AND t.owner_user_id = ? "
                     + "ON DUPLICATE KEY UPDATE owner_id = ?",
-                params: [EntityType.SetList, user.userId, ...scopeParams, user.userId],
+                params: [EntityType.SetList, user.userId, ...ownerParams, user.userId],
             },
         ];
+
+        for (const sharedGroupId of sharedWith) {
+            statements.push({
+                sql: "INSERT INTO entity_groups (entity_type, entity_id, group_id, writable) "
+                    + "SELECT ?, l.id, ?, 0 FROM set_lists l JOIN tags t ON t.id = l.tag_id "
+                    + "WHERE t.name = ? AND t.owner_user_id = ?",
+                params: [EntityType.SetList, sharedGroupId, ...ownerParams],
+            });
+        }
 
         await this.ctx.auth.adapter.executeTransaction(statements);
 
         const entries = await this.ctx.auth.adapter.query<ISetListRow>(
             "SELECT l.id, l.tag_id AS tagId, l.revision FROM set_lists l JOIN tags t ON t.id = l.tag_id "
-            + "WHERE t.name = ? AND t.owner_scope = IFNULL(?, 0)", scopeParams,
+            + "WHERE t.name = ? AND t.owner_user_id = ?", ownerParams,
         );
 
         this.ctx.sendJson(res, { success: true, id: entries[0]?.id, revision: entries[0]?.revision });
+    }
+
+    /**
+     * Lists the groups a set list may be shared with. An administrator shares with any group, a group administrator
+     * with the groups they administer, and everybody else with none - which is why the same call answers whether the
+     * caller may create a list at all.
+     *
+     * @param req The incoming HTTP request.
+     * @param res The response to write to.
+     */
+    public async handleListShareGroups(req: IncomingMessage, res: ServerResponse): Promise<void> {
+        const user = this.ctx.getAuthUser(req);
+        const context = user === undefined
+            ? undefined
+            : await TagAccess.contextFor(this.ctx.auth, user);
+
+        if (user === undefined || context === undefined || (!context.isAdmin && context.adminGroupIds.length === 0)) {
+            this.ctx.sendJson(res, { groups: [] });
+
+            return;
+        }
+
+        const rows = context.isAdmin
+            ? await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
+                "SELECT id, name FROM `groups`", [])
+            : await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
+                "SELECT id, name FROM `groups` WHERE admin_id = ?", [user.userId]);
+
+        const groups = rows.map((row) => {
+            return { id: row.id, name: row.name };
+        }).sort((left, right) => {
+            return NameText.compare(left.name, right.name);
+        });
+
+        this.ctx.sendJson(res, { groups });
     }
 
     /**
@@ -369,12 +524,24 @@ export class SetListRoutes {
         }
 
         const duplicate = await this.ctx.auth.adapter.query<{ id: number; }>(
-            "SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0) AND id != ?",
-            [name, entry.tag.groupId, entry.tag.id],
+            "SELECT id FROM tags WHERE name = ? AND name_user_scope = IFNULL(?, 0) "
+            + "AND name_group_scope = IFNULL(?, 0) AND id != ?",
+            [name, entry.tag.ownerUserId, entry.tag.ownerGroupId, entry.tag.id],
         );
 
         if (duplicate.length > 0) {
-            this.ctx.sendError(res, "A tag with that name already exists in this scope.", 409);
+            this.ctx.sendError(res, "You already own a set list with that name.", 409);
+
+            return;
+        }
+
+        // A group the list is shared with must not end up with two lists of this name either.
+        const groups = (await SetListAccess.sharedGroups(this.ctx.auth, listId)).map((grant) => {
+            return grant.groupId;
+        });
+        const conflicting = await SetListAccess.sharedNameConflict(this.ctx.auth.adapter, name, groups, listId);
+        if (conflicting !== undefined) {
+            this.ctx.sendError(res, `The group "${conflicting}" already holds a set list with that name.`, 409);
 
             return;
         }
@@ -440,36 +607,40 @@ export class SetListRoutes {
 
     /**
      * @param context The rules of the caller.
-     * @param groupId The owner scope a new list asks for; undefined for the global scope.
      *
-     * @returns Whether the caller may create a list in that scope. A group administrator chooses among the groups
-     * they administer; an administrator may use any group or the global scope.
+     * @returns Whether the caller may create a set list at all: only an administrator of the installation or of a
+     * group does.
      */
-    private static createsInScope(context: ITagAccessContext, groupId: number | undefined): boolean {
-        if (!context.isSignedIn) {
-            return false;
-        }
-
-        if (groupId === undefined) {
-            return context.isAdmin;
-        }
-
-        return context.isAdmin || context.adminGroupIds.includes(groupId);
+    private static createsLists(context: ITagAccessContext): boolean {
+        return context.isSignedIn && (context.isAdmin || context.adminGroupIds.length > 0);
     }
 
     /**
-     * @param value A request field that names an id.
+     * @param value The `groups` field of a request body: the ids of the groups a list is shared with.
      *
-     * @returns The id, or undefined when the field is missing or not a positive integer.
+     * @returns Those ids without repetitions, empty for a missing field, or undefined when the value is not a list of
+     * positive integers.
      */
-    private static optionalId(value: unknown): number | undefined {
-        if (value === undefined || value === null || value === "") {
+    private static readGroupIds(value: unknown): number[] | undefined {
+        if (value === undefined || value === null) {
+            return [];
+        }
+
+        if (!Array.isArray(value)) {
             return undefined;
         }
 
-        const id = Number(value);
+        const ids: number[] = [];
+        for (const entry of value) {
+            const id = Number(entry);
+            if (!Number.isInteger(id) || id <= 0) {
+                return undefined;
+            }
 
-        return Number.isInteger(id) && id > 0 ? id : undefined;
+            ids.push(id);
+        }
+
+        return Array.from(new Set(ids));
     }
 
     /**
@@ -546,6 +717,26 @@ export class SetListRoutes {
     }
 
     /**
+     * @param groupIds The groups a list is to be shared with.
+     *
+     * @returns Whether every one of them names a stored group.
+     */
+    private async groupsExist(groupIds: readonly number[]): Promise<boolean> {
+        if (groupIds.length === 0) {
+            return true;
+        }
+
+        const placeholders = groupIds.map(() => {
+            return "?";
+        }).join(", ");
+        const rows = await this.ctx.auth.adapter.query<{ id: number; }>(
+            `SELECT id FROM \`groups\` WHERE id IN (${placeholders})`, [...groupIds],
+        );
+
+        return rows.length === groupIds.length;
+    }
+
+    /**
      * @param tagIds The tags to read.
      *
      * @returns The tag rows, keyed by id.
@@ -559,7 +750,8 @@ export class SetListRoutes {
             return "?";
         }).join(", ");
         const rows = await this.ctx.auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey "
+            "SELECT id, name, color_index AS colorIndex, owner_user_id AS ownerUserId, "
+            + "owner_group_id AS ownerGroupId, system_key AS systemKey "
             + `FROM tags WHERE id IN (${placeholders})`, tagIds,
         );
 
@@ -596,9 +788,9 @@ export class SetListRoutes {
      * @returns How many members of each list the caller may read, keyed by list id.
      */
     private async memberCounts(user: ITokenPayload | undefined, rows: ISetListRow[], tags: Map<number, ITagRow>,
-        listAccess: Map<number, { canRead: boolean; }>): Promise<Map<number, number>> {
+        listAccess: Map<number, ISetListRights>): Promise<Map<number, number>> {
         const readable = rows.filter((row) => {
-            return tags.has(row.tagId) && listAccess.get(row.id)?.canRead === true;
+            return tags.has(row.tagId) && listAccess.get(row.id)?.readable === true;
         });
 
         const counts = new Map<number, number>();
@@ -659,6 +851,29 @@ export class SetListRoutes {
             editable,
             managesAccess,
         };
+    }
+
+    /**
+     * @param listId The list to read the descriptions of.
+     *
+     * @returns What each entry of that list carries beyond the score itself, keyed by score id. Entries without a
+     * description and without an icon are left out.
+     */
+    private async entryNotes(listId: number): Promise<Map<number, { note?: string; icon?: string; }>> {
+        const rows = await this.ctx.auth.adapter.query<{ scoreId: number; note: string | null; icon: string | null; }>(
+            "SELECT score_id AS scoreId, note, icon FROM set_list_scores WHERE set_list_id = ?", [listId],
+        );
+
+        const result = new Map<number, { note?: string; icon?: string; }>();
+        for (const row of rows) {
+            const note = row.note ?? undefined;
+            const icon = row.icon ?? undefined;
+            if (note !== undefined || icon !== undefined) {
+                result.set(row.scoreId, { note, icon });
+            }
+        }
+
+        return result;
     }
 
     /**

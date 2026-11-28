@@ -117,10 +117,13 @@ const setup = (): IRoutes => {
     };
 };
 
-/** The permissions a seeded list carries: its owner and the group grants. */
+/** The permissions a seeded list carries: its owner, the group grants and the tag's private owner. */
 interface IListAccessFixture {
     ownerId?: number | null;
     groups?: Array<number | { groupId: number; writable: boolean; }>;
+
+    /** The user whose private tag the fixture creates; undefined leaves it a tag of the catalogue. */
+    tagOwnerId?: number;
 }
 
 /**
@@ -134,7 +137,7 @@ interface IListAccessFixture {
  */
 const seedList = (database: FakeSetListDatabase, name: string, groupId: number | undefined,
     memberScoreIds: number[] = [], access: IListAccessFixture = {}): { id: number; tagId: number; } => {
-    const seeded = database.seedSetList(name, groupId);
+    const seeded = database.seedSetList(name, groupId, 1, access.tagOwnerId ?? null);
 
     memberScoreIds.forEach((score, index) => {
         database.scoreTags.push({ scoreId: score, tagId: seeded.tagId });
@@ -164,7 +167,7 @@ const storedOrder = (database: FakeSetListDatabase, listId: number): number[] =>
 };
 
 describe("set list routes — creating", () => {
-    it("lets an administrator create a list in the global scope with its tag", async () => {
+    it("lets an administrator create a private list with its tag", async () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
@@ -174,7 +177,10 @@ describe("set list routes — creating", () => {
         const tag = database.tags.find((entry) => {
             return entry.name === "Auftritt";
         });
-        expect(tag?.groupId).toBeNull();
+
+        // A list and its tag are private: no catalogue scope, and the creator's id is what the name is unique for.
+        expect(tag?.ownerGroupId).toBeNull();
+        expect(tag?.ownerUserId).toBe(adminUserId);
         const list = database.setLists.find((entry) => {
             return entry.tagId === tag?.id;
         });
@@ -184,24 +190,91 @@ describe("set list routes — creating", () => {
         expect(database.owners.get(`setlist:${list?.id}`)).toBe(adminUserId);
     });
 
-    it("lets a group administrator create a list for the group they administer", async () => {
+    it("lets a group administrator create a private list of their own", async () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateSetList(createRequest({ name: "Bateria Set", groupId: memberGroupId }, ownerUserId),
+        await routes.handleCreateSetList(createRequest({ name: "Bateria Set" }, ownerUserId), res);
+
+        expect(captured.status).toBe(200);
+        const tag = database.tags.find((entry) => {
+            return entry.name === "Bateria Set";
+        });
+        expect(tag?.ownerGroupId).toBeNull();
+        expect(tag?.ownerUserId).toBe(ownerUserId);
+    });
+
+    it("shares a new list with the chosen groups and keeps them read-only", async () => {
+        const { database, routes } = setup();
+        const { res, captured } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Bateria Set", groups: [memberGroupId] }, ownerUserId),
             res);
 
         expect(captured.status).toBe(200);
-        expect(database.tags.find((entry) => {
-            return entry.name === "Bateria Set";
-        })?.groupId).toBe(memberGroupId);
+        const list = database.setLists.find((entry) => {
+            return entry.tagId === database.tags.find((tag) => {
+                return tag.name === "Bateria Set";
+            })?.id;
+        });
+        expect(database.grants.get(`${EntityType.SetList}:${list?.id}`)?.get(memberGroupId)).toBe(false);
     });
 
-    it("refuses a group a group administrator does not administer", async () => {
+    it("refuses a name its creator already gave another list", async () => {
+        const { database, routes } = setup();
+        seedList(database, "Eigener Auftritt", undefined, [], { ownerId: ownerUserId, tagOwnerId: ownerUserId });
+        const { res, captured } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Eigener Auftritt" }, ownerUserId), res);
+
+        expect(captured.status).toBe(409);
+    });
+
+    it("refuses sharing with a group that already holds a list of that name", async () => {
+        const { database, routes } = setup();
+        seedList(database, "Auftritt", undefined, [], { ownerId: foreignUserId, groups: [memberGroupId] });
+        const { res, captured } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Auftritt", groups: [memberGroupId] }, ownerUserId),
+            res);
+
+        expect(captured.status).toBe(409);
+    });
+
+    it("lets the same name into a group that holds no list of it yet", async () => {
+        const { database, routes } = setup();
+        const seeded = seedList(database, "Auftritt", undefined, [], { ownerId: foreignUserId });
+        const { res, captured } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Auftritt", groups: [memberGroupId] }, ownerUserId),
+            res);
+
+        expect(captured.status).toBe(200);
+        expect(database.setLists.filter((entry) => {
+            return entry.tagId === seeded.tagId;
+        })).toHaveLength(1);
+    });
+
+    it("keeps a list nobody is granted private to its creator", async () => {
+        const { database, routes } = setup();
+        const { res } = createResponse();
+
+        await routes.handleCreateSetList(createRequest({ name: "Privat" }, ownerUserId), res);
+
+        const list = database.setLists.find((entry) => {
+            return entry.tagId === database.tags.find((tag) => {
+                return tag.name === "Privat";
+            })?.id;
+        });
+        expect(database.grants.get(`${EntityType.SetList}:${list?.id}`)).toBeUndefined();
+    });
+
+    it("refuses sharing with a group a group administrator does not administer", async () => {
         const { routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateSetList(createRequest({ name: "Fremd Set", groupId: otherGroupId }, ownerUserId), res);
+        await routes.handleCreateSetList(createRequest({ name: "Fremd Set", groups: [otherGroupId] }, ownerUserId),
+            res);
 
         expect(captured.status).toBe(403);
     });
@@ -210,7 +283,7 @@ describe("set list routes — creating", () => {
         const { routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateSetList(createRequest({ name: "Meins", groupId: memberGroupId }, memberUserId), res);
+        await routes.handleCreateSetList(createRequest({ name: "Meins" }, memberUserId), res);
 
         expect(captured.status).toBe(403);
     });
@@ -224,21 +297,23 @@ describe("set list routes — creating", () => {
         expect(captured.status).toBe(403);
     });
 
-    it("refuses a name an existing tag of the same owner already uses", async () => {
-        const { routes } = setup();
+    it("lets a list carry a name a tag of the catalogue already uses", async () => {
+        const { database, routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateSetList(createRequest({ name: "Bateria Internal", groupId: memberGroupId },
-            ownerUserId), res);
+        await routes.handleCreateSetList(createRequest({ name: "Bateria Internal" }, ownerUserId), res);
 
-        expect(captured.status).toBe(409);
+        expect(captured.status).toBe(200);
+        expect(database.tags.filter((entry) => {
+            return entry.name === "Bateria Internal";
+        })).toHaveLength(2);
     });
 
     it("allows a name another owner scope already uses", async () => {
         const { database, routes } = setup();
         const { res, captured } = createResponse();
 
-        await routes.handleCreateSetList(createRequest({ name: "Groovy", groupId: memberGroupId }, ownerUserId), res);
+        await routes.handleCreateSetList(createRequest({ name: "Groovy" }, ownerUserId), res);
 
         expect(captured.status).toBe(200);
         expect(database.tags.filter((entry) => {
@@ -296,7 +371,7 @@ describe("set list routes — listing", () => {
         expect((captured.body as { setLists: unknown[]; }).setLists).toEqual([]);
     });
 
-    it("shows every list to an administrator and marks the editable ones", async () => {
+    it("shows every list to an administrator and marks them all as changeable", async () => {
         const { database, routes } = setup();
         seedList(database, "Admin Set", undefined);
         seedList(database, "Gruppen Set", memberGroupId);
@@ -534,15 +609,42 @@ describe("set list routes — membership through the tag", () => {
         expect(storedOrder(database, seeded.id)).toEqual([otherScoreId, scoreId]);
     });
 
-    it("refuses an assignment by a member who may only select the list", async () => {
+    it("answers 404 for the tag of a list the caller may not read", async () => {
         const { database, tags } = setup();
         const seeded = seedList(database, "Auftritt", memberGroupId, [scoreId]);
         const { res, captured } = createResponse();
 
         await tags.handleAssignTag(createRequest({ scoreId: otherScoreId, tagId: seeded.tagId }, memberUserId), res);
 
+        expect(captured.status).toBe(404);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId]);
+    });
+
+    it("refuses an assignment by a group the list is shared with", async () => {
+        const { database, tags } = setup();
+
+        // The tag lives in the catalogue of another group; the caller reaches the list through its grant, read-only.
+        const seeded = seedList(database, "Fremder Auftritt", foreignGroupId, [scoreId],
+            { groups: [memberGroupId] });
+        const { res, captured } = createResponse();
+
+        await tags.handleAssignTag(createRequest({ scoreId: otherScoreId, tagId: seeded.tagId }, memberUserId), res);
+
         expect(captured.status).toBe(403);
         expect(storedOrder(database, seeded.id)).toEqual([scoreId]);
+    });
+
+    it("refuses taking the tag off for a group the list is shared with", async () => {
+        const { database, tags } = setup();
+        const seeded = seedList(database, "Fremder Auftritt", foreignGroupId, [scoreId, otherScoreId],
+            { groups: [memberGroupId] });
+        const { res, captured } = createResponse();
+
+        await tags.handleUnassignTag(createRequest({ scoreId: otherScoreId, tagId: seeded.tagId }, memberUserId),
+            res);
+
+        expect(captured.status).toBe(403);
+        expect(storedOrder(database, seeded.id)).toEqual([scoreId, otherScoreId]);
     });
 
     it("deletes the list when its tag is deleted", async () => {
@@ -578,7 +680,8 @@ describe("set list routes — membership through the tag", () => {
         const seeded = seedList(database, "Auftritt", memberGroupId);
         const { res, captured } = createResponse();
 
-        await tags.handleListTags(createRequest({}, memberUserId), res);
+        // The owner is the caller who reaches the list's tag; a member of no granted group does not.
+        await tags.handleListTags(createRequest({}, ownerUserId), res);
 
         const body = captured.body as { tags: Array<{ id: number; setListId?: number; }>; };
         expect(body.tags.find((tag) => {

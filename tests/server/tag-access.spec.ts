@@ -7,12 +7,24 @@ import { describe, expect, it } from "vitest";
 
 import { SystemTagKind, TagAccess, type ITagAccessContext, type ITagRow } from "../../src/server/TagAccess.js";
 
-const demoTag: ITagRow = { id: 1, name: "Demo Score", colorIndex: 1, groupId: null, systemKey: "demo" };
-const instrumentTag: ITagRow = {
-    id: 2, name: "Caixa", colorIndex: 2, groupId: null, systemKey: "instrument:5",
+const demoTag: ITagRow = {
+    id: 1, name: "Demo Score", colorIndex: 1, ownerUserId: null, ownerGroupId: null, systemKey: "demo",
 };
-const administeredTag: ITagRow = { id: 3, name: "Set list", colorIndex: 4, groupId: 10, systemKey: null };
-const foreignTag: ITagRow = { id: 4, name: "Internal", colorIndex: 5, groupId: 20, systemKey: null };
+const instrumentTag: ITagRow = {
+    id: 2, name: "Caixa", colorIndex: 2, ownerUserId: null, ownerGroupId: null, systemKey: "instrument:5",
+};
+const administeredTag: ITagRow = {
+    id: 3, name: "Set list", colorIndex: 4, ownerUserId: null, ownerGroupId: 10, systemKey: null,
+};
+const foreignTag: ITagRow = {
+    id: 4, name: "Internal", colorIndex: 5, ownerUserId: null, ownerGroupId: 20, systemKey: null,
+};
+const personalTag: ITagRow = {
+    id: 5, name: "Meins", colorIndex: 6, ownerUserId: 3, ownerGroupId: null, systemKey: null,
+};
+const unownedTag: ITagRow = {
+    id: 6, name: "Wettkampf", colorIndex: 7, ownerUserId: null, ownerGroupId: null, systemKey: null,
+};
 
 const administrator: ITagAccessContext = {
     isSignedIn: true, userId: 1, isAdmin: true, memberGroupIds: [], adminGroupIds: [],
@@ -44,12 +56,14 @@ describe("TagAccess — usable tags", () => {
     it("gives a visitor without a session no tags", () => {
         expect(TagAccess.canUse(visitor, demoTag)).toBe(false);
         expect(TagAccess.canUse(visitor, instrumentTag)).toBe(false);
+        expect(TagAccess.canUse(visitor, unownedTag)).toBe(false);
     });
 
-    it("lets every signed-in user use a global tag", () => {
+    it("lets every signed-in user use the installation's vocabulary", () => {
         expect(TagAccess.canUse(administrator, demoTag)).toBe(true);
         expect(TagAccess.canUse(member, demoTag)).toBe(true);
         expect(TagAccess.canUse(groupAdmin, instrumentTag)).toBe(true);
+        expect(TagAccess.canUse(member, unownedTag)).toBe(true);
     });
 
     it("keeps a group tag with the members of that group", () => {
@@ -58,52 +72,46 @@ describe("TagAccess — usable tags", () => {
         expect(TagAccess.canUse(groupAdmin, administeredTag)).toBe(true);
     });
 
-    it("hides a tag of a foreign group from an administrator", () => {
-        expect(TagAccess.canUse(administrator, foreignTag)).toBe(false);
+    it("keeps a personal tag with its user", () => {
+        expect(TagAccess.canUse(member, personalTag)).toBe(true);
+        expect(TagAccess.canUse(groupAdmin, personalTag)).toBe(false);
+    });
+
+    it("lets an administrator reach every tag", () => {
+        expect(TagAccess.canUse(administrator, foreignTag)).toBe(true);
+        expect(TagAccess.canUse(administrator, personalTag)).toBe(true);
     });
 });
 
-describe("TagAccess — owners", () => {
-    it("gives the administrators the global tags together", () => {
-        expect(TagAccess.owns(administrator, demoTag)).toBe(true);
-        expect(TagAccess.owns(member, demoTag)).toBe(false);
+describe("TagAccess — managing tags", () => {
+    it("gives an administrator every tag", () => {
+        expect(TagAccess.canManage(administrator, demoTag)).toBe(true);
+        expect(TagAccess.canManage(administrator, administeredTag)).toBe(true);
+        expect(TagAccess.canManage(administrator, personalTag)).toBe(true);
     });
 
-    it("gives a group admin its group's tags", () => {
-        expect(TagAccess.owns(groupAdmin, administeredTag)).toBe(true);
-        expect(TagAccess.owns(groupAdmin, foreignTag)).toBe(false);
-        expect(TagAccess.owns(member, foreignTag)).toBe(false);
+    it("gives a member the tags of every group it belongs to, the owning group included", () => {
+        expect(TagAccess.canManage(groupAdmin, administeredTag)).toBe(true);
+        expect(TagAccess.canManage(member, foreignTag)).toBe(true);
+        expect(TagAccess.canManage(member, administeredTag)).toBe(false);
     });
 
-    it("gives an administrator no extra rights on a group tag", () => {
-        expect(TagAccess.owns(administrator, administeredTag)).toBe(false);
+    it("gives nobody but the administrators an unowned tag", () => {
+        expect(TagAccess.canManage(member, unownedTag)).toBe(false);
+        expect(TagAccess.canManage(groupAdmin, instrumentTag)).toBe(false);
     });
 
-    it("allows creating tags only in an owned scope", () => {
-        expect(TagAccess.canOwnScope(administrator, undefined)).toBe(true);
-        expect(TagAccess.canOwnScope(member, undefined)).toBe(false);
-        expect(TagAccess.canOwnScope(groupAdmin, 10)).toBe(true);
-        expect(TagAccess.canOwnScope(groupAdmin, 20)).toBe(false);
+    it("keeps a personal tag with its user", () => {
+        expect(TagAccess.canManage(member, personalTag)).toBe(true);
+        expect(TagAccess.canManage(groupAdmin, personalTag)).toBe(false);
     });
 });
 
-describe("TagAccess — assigning", () => {
-    it("keeps the demo tag with the administrators", () => {
-        expect(TagAccess.canAssign(administrator, demoTag)).toBe(true);
-        expect(TagAccess.canAssign(member, demoTag)).toBe(false);
-    });
-
-    it("keeps a global instrument tag with the administrators", () => {
-        expect(TagAccess.canAssign(administrator, instrumentTag)).toBe(true);
-        expect(TagAccess.canAssign(groupAdmin, instrumentTag)).toBe(false);
-    });
-
-    it("lets a group admin assign the tags of its group", () => {
-        expect(TagAccess.canAssign(groupAdmin, administeredTag)).toBe(true);
-    });
-
-    it("refuses a tag of a scope the caller does not manage", () => {
-        expect(TagAccess.canAssign(member, administeredTag)).toBe(false);
-        expect(TagAccess.canAssign(administrator, administeredTag)).toBe(false);
+describe("TagAccess — creating tags", () => {
+    it("allows creating tags to administrators only", () => {
+        expect(TagAccess.canCreate(administrator)).toBe(true);
+        expect(TagAccess.canCreate(groupAdmin)).toBe(false);
+        expect(TagAccess.canCreate(member)).toBe(false);
+        expect(TagAccess.canCreate(visitor)).toBe(false);
     });
 });

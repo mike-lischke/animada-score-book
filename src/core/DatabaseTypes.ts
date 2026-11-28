@@ -32,7 +32,19 @@ export interface IScoreListEntry {
     meta: IScoreMeta;
 
     perm: ISbDmPermissionInfo;
+
+    /**
+     * The description the entry carries in the set list it was read from, if it has one. The description belongs to
+     * the entry, not to the score, so the same score may read differently in two lists.
+     */
+    note?: string;
+
+    /** The icon the entry shows, as a key of the icon catalogue; absent while its author picked none. */
+    icon?: string;
 }
+
+/** How long the description of a set-list entry may be; the backend refuses anything longer. */
+export const setListEntryNoteLimit = 500;
 
 /**
  * The metadata a score's content states about itself. Every field is absent when the content cannot be read, so a
@@ -52,12 +64,12 @@ export interface IScoreMeta {
     durationSeconds?: number;
 }
 
-/** A set list as the backend describes it: one tag, its owner scope and the caller's rights on it. */
+/** A set list as the backend describes it: one private tag and the caller's rights on the list it defines. */
 export interface ISetListInfo {
     readonly id: number;
     readonly name: string;
 
-    /** The tag whose assignment decides membership; the name and owner scope are the tag's. */
+    /** The tag whose assignment decides membership; it carries the name and belongs to no catalogue. */
     readonly tagId: number;
 
     /** Bumped by every change, so a stale edit is rejected instead of overwriting a newer one. */

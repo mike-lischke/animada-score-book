@@ -155,6 +155,11 @@ export class Router {
 
                         break;
 
+                    case "listShareGroups":
+                        await this.setListRoutes.handleListShareGroups(req, res);
+
+                        break;
+
                     case "updateSetList":
                         await this.setListRoutes.handleUpdateSetList(req, res);
 
@@ -162,6 +167,11 @@ export class Router {
 
                     case "reorderSetList":
                         await this.setListRoutes.handleReorderSetList(req, res);
+
+                        break;
+
+                    case "saveSetListEntry":
+                        await this.setListRoutes.handleSaveSetListEntry(req, res);
 
                         break;
 

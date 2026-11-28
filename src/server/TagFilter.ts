@@ -5,7 +5,8 @@
 
 import { TagCombination } from "../core/TagCombination.js";
 import { type Auth, type ITokenPayload } from "./Auth.js";
-import { TagAccess, type ITagRow } from "./TagAccess.js";
+import { TagRights } from "./TagRights.js";
+import { type ITagRow } from "./TagAccess.js";
 
 /** What keeps a requested filter from being used. */
 export enum TagFilterProblem {
@@ -117,23 +118,24 @@ export class TagFilter {
             return "?";
         }).join(", ");
         const tags = await auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey "
+            "SELECT id, name, color_index AS colorIndex, owner_user_id AS ownerUserId, "
+            + "owner_group_id AS ownerGroupId, system_key AS systemKey "
             + `FROM tags WHERE id IN (${placeholders})`, tagIds,
         );
 
         const known = new Map(tags.map((tag) => {
             return [tag.id, tag];
         }));
-        const context = await TagAccess.contextFor(auth, user);
+        const usableIds = new Set((await TagRights.readable(auth, user, tags)).map((tag) => {
+            return tag.id;
+        }));
 
         for (const tagId of tagIds) {
-            const tag = known.get(tagId);
-
-            if (tag === undefined) {
+            if (!known.has(tagId)) {
                 return TagFilterProblem.UnavailableTag;
             }
 
-            if (!TagAccess.canUse(context, tag)) {
+            if (!usableIds.has(tagId)) {
                 return TagFilterProblem.NotUsable;
             }
         }

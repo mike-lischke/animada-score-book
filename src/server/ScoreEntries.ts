@@ -7,7 +7,8 @@ import { ScoreLineup } from "../core/ScoreLineup.js";
 import { ScoreMeta } from "../core/ScoreMeta.js";
 import { ScoreLineupStatus, type IScoreLineup, type IScoreMeta } from "../core/DatabaseTypes.js";
 import { EntityType, type Auth, type IPermissionSummary, type ITokenPayload } from "./Auth.js";
-import { TagAccess, type ITagRow } from "./TagAccess.js";
+import { TagRights } from "./TagRights.js";
+import { type ITagRow } from "./TagAccess.js";
 
 /** A score as the collection receives it: the card's identity, tags, lineup, metadata and the caller's access. */
 export interface IScoreEntryJson {
@@ -63,11 +64,8 @@ export class ScoreEntries {
             return [];
         }
 
-        const context = await TagAccess.contextFor(auth, user);
         const tags = await ScoreEntries.tags(auth);
-        const usableIds = new Set(tags.filter((tag) => {
-            return TagAccess.canUse(context, tag);
-        }).map((tag) => {
+        const usableIds = new Set((await TagRights.readable(auth, user, tags)).map((tag) => {
             return tag.id;
         }));
         const visibleIds = await ScoreEntries.usableTagIdsOf(auth, readableIds, usableIds);
@@ -92,7 +90,8 @@ export class ScoreEntries {
      */
     private static async tags(auth: Auth): Promise<ITagRow[]> {
         return auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, system_key AS systemKey FROM tags", [],
+            "SELECT id, name, color_index AS colorIndex, owner_user_id AS ownerUserId, "
+            + "owner_group_id AS ownerGroupId, system_key AS systemKey FROM tags", [],
         );
     }
 

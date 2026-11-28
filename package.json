@@ -13,7 +13,9 @@
     },
     "version": "2.1.0",
     "scripts": {
-        "dev": "vite --host",
+        "dev-server": "vite --host",
+        "start-backend": "tsx src/server/backend.ts",
+        "start-backend-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts",
         "build": "npm run generate:fonts && npm run verify:fonts && npm run generate-themes && vite build",
         "check": "tsc --noEmit && tsc -p tests/tsconfig.json --noEmit",
         "lint": "eslint 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}' 'build/**/*.{ts,mjs}'",
@@ -29,8 +31,6 @@
         "generate:fonts": "tsx build/generate-smufl-metrics.ts",
         "generate:mail-assets": "tsx build/generate-mail-assets.ts",
         "verify:fonts": "tsx build/verify-smufl-fonts.ts",
-        "start": "tsx src/server/backend.ts",
-        "start-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts",
         "db:cleanup": "tsx build/db-cleanup.ts",
         "package": "tsx build/package.ts"
     },

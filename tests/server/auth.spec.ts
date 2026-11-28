@@ -199,7 +199,8 @@ describe("auth — Constants", () => {
         expect(EntityType.Score).toBe("score");
         expect(EntityType.Feature).toBe("feature");
         expect(EntityType.SetList).toBe("setlist");
-        expect(Object.values(EntityType)).toHaveLength(3);
+        expect(EntityType.Tag).toBe("tag");
+        expect(Object.values(EntityType)).toHaveLength(4);
     });
 });
 

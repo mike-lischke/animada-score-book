@@ -26,6 +26,7 @@ import { ScoreListSortOrder } from "../core/types/general.js";
 import { globalTagOwnerCaption, SystemTagKind, type ITagCombination } from "../core/types/tags.js";
 import { ScoreCard } from "./ScoreCard.js";
 import { SetListBar } from "./SetListBar.js";
+import { SetListCreateDialog } from "./SetListCreateDialog.js";
 import { SetListEditor } from "./SetListEditor.js";
 import { TagBadges } from "./TagBadges.js";
 import { TagFilterBar, type IFilterGroup } from "./TagFilterBar.js";
@@ -133,6 +134,15 @@ interface IScoreLibraryState {
     /** The members of the edited list, which is what the cards' checkboxes show. */
     setListMemberIds: ReadonlySet<number>;
 
+    /**
+     * Counts the requests to leave the set-list edit mode. The editor sees the raised number and asks about a composed
+     * order before it goes.
+     */
+    setListCloseRequest: number;
+
+    /** Whether the form that creates a set list is open. */
+    setListCreating: boolean;
+
     /** A note about the set-list selection, for example that the selected list disappeared. */
     setListNotice?: string;
 }
@@ -172,6 +182,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             setLists: [...props.dataModel.setLists],
             setListEditing: false,
             setListMemberIds: new Set(),
+            setListCloseRequest: 0,
+            setListCreating: false,
         };
     }
 
@@ -232,27 +244,31 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const setListBar = this.renderSetListBar();
         const list = this.renderList();
         const editor = this.renderSetListEditor();
+        const createDialog = this.renderSetListCreateDialog();
 
         return (
-            <Dialog
-                id="scoreLibraryDialog"
-                ref={this.dialogRef}
-                className="score-library-dialog"
-                ariaLabel="Scores and Repertoires"
-                closeOnBackdropClick={true}
-                onClose={this.handleDialogClose}
-            >
-                <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
-                    {header}
-                    {filter}
-                    {setListBar}
-                    <Container id="scoreListSplit" orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Stretch}>
-                        {list}
-                        {editor}
+            <>
+                <Dialog
+                    id="scoreLibraryDialog"
+                    ref={this.dialogRef}
+                    className="score-library-dialog"
+                    ariaLabel="Scores and Repertoires"
+                    closeOnBackdropClick={true}
+                    onClose={this.handleDialogClose}
+                >
+                    <Container id="libraryPaneContent" orientation={Orientation.TopDown}>
+                        {header}
+                        {filter}
+                        {setListBar}
+                        <Container id="scoreListSplit" orientation={Orientation.LeftToRight}
+                            crossAlignment={ChildAlignment.Stretch}>
+                            {list}
+                            {editor}
+                        </Container>
                     </Container>
-                </Container>
-            </Dialog>
+                </Dialog>
+                {createDialog}
+            </>
         );
     }
 
@@ -260,6 +276,23 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
      * @returns The toolbar above the cards: the pill row with the edit switch, and the sort selector as its last
      * entry. The selector is always there; it orders the repertoire, while a set list keeps its own saved order.
      */
+    /**
+     * @returns The form that creates a set list, which the toolbar's add button opens.
+     */
+    private renderSetListCreateDialog(): ComponentChild {
+        const { dataModel } = this.props;
+        const { setListCreating } = this.state;
+
+        return (
+            <SetListCreateDialog
+                dataModel={dataModel}
+                open={setListCreating}
+                onClose={this.handleSetListCreateClose}
+                onCreated={this.handleSetListCreated}
+            />
+        );
+    }
+
     private renderSetListBar(): ComponentChild {
         const { dataModel } = this.props;
         const { setLists, activeSetListId, setListEditing, setListNotice } = this.state;
@@ -268,6 +301,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const canEdit = setLists.some((list) => {
             return list.id === activeSetListId && list.editable;
         });
+
+        // Only administrators create lists, and the backend says whether this caller is one.
+        const canCreate = dataModel.canCreateSetLists;
 
         let notice: ComponentChild = undefined;
         if (setListNotice !== undefined) {
@@ -282,8 +318,10 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     allScoresCount={dataModel.readableScoreCount}
                     canEdit={canEdit}
                     editing={setListEditing}
+                    canCreate={canCreate}
                     onSelect={this.handleSetListSelect}
                     onToggleEdit={this.handleToggleSetListEdit}
+                    onAdd={this.handleSetListAdd}
                 >
                     {this.renderSortSelector()}
                 </SetListBar>
@@ -298,7 +336,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
      */
     private renderSetListEditor(): ComponentChild {
         const { dataModel } = this.props;
-        const { setLists, activeSetListId, setListEditing } = this.state;
+        const { setLists, activeSetListId, setListEditing, setListCloseRequest } = this.state;
 
         if (!setListEditing) {
             return undefined;
@@ -316,6 +354,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             <SetListEditor
                 dataModel={dataModel}
                 list={list}
+                closeRequest={setListCloseRequest}
                 onMembershipChanged={this.handleSetListMembershipChanged}
                 onClose={this.handleSetListEditorClose}
             />
@@ -746,8 +785,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     };
 
     /**
-     * Opens the running-order editor for the active list, or closes it again. The cards show the whole repertoire
-     * while it is open, so a score can be ticked into the list.
+     * Opens the running-order editor for the active list, or asks it to close again. The cards show the whole
+     * repertoire while it is open, so a score can be ticked into the list.
      */
     private handleToggleSetListEdit = (): void => {
         const { activeSetListId, setListEditing } = this.state;
@@ -757,7 +796,10 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         }
 
         if (setListEditing) {
-            this.handleSetListEditorClose();
+            // The editor decides what happens to a composed order: it asks whether to save it, or goes straight away.
+            this.setState((previous) => {
+                return { setListCloseRequest: previous.setListCloseRequest + 1 };
+            });
 
             return;
         }
@@ -777,6 +819,22 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleSetListMembershipChanged = (memberIds: ReadonlySet<number>): void => {
         this.setState({ setListMemberIds: memberIds });
+    };
+
+    private handleSetListAdd = (): void => {
+        this.setState({ setListCreating: true });
+    };
+
+    private handleSetListCreateClose = (): void => {
+        this.setState({ setListCreating: false });
+    };
+
+    /**
+     * @param id The id of the list that was created. The form closed itself; the collection selects the new list.
+     */
+    private handleSetListCreated = (id: number): void => {
+        this.setState({ setListCreating: false });
+        this.handleSetListSelect(id);
     };
 
     /**

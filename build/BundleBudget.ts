@@ -40,12 +40,16 @@ interface IMeasuredFile {
 
 export class BundleBudget {
     /**
-     * Current sizes (2026-11-25): largest single file 348.9 kB raw, initial load 210.2 kB gzip. The headroom is for
+     * Current sizes (2026-11-28): largest single file 375.9 kB raw, initial load 221.2 kB gzip. The headroom is for
      * content work, not for new libraries: a new dependency either fits or the budget is raised deliberately.
+     *
+     * Raised from 212 to 224 with the set-list work: compact entries with a description and an icon picker, the
+     * creation form with its group sharing, and the music icons of the catalogue. The icons are all reachable through
+     * `UIIcon`, which keeps them in one map instead of a second rendering path.
      */
     private static readonly budget: IBundleBudget = {
         fileKb: 500,
-        initialLoadKb: 212,
+        initialLoadKb: 224,
     };
 
     /**

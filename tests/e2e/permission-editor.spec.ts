@@ -202,7 +202,7 @@ const setupPermissionApi = async (page: Page, setPermissionsError?: string): Pro
         }
 
         if (action === "listSetLists") {
-            const body = JSON.stringify({ setLists: [], readableScoreCount: 0 });
+            const body = JSON.stringify({ setLists: [], readableScoreCount: 0, canCreate: true });
 
             await route.fulfill({ status: 200, contentType: "application/json", body });
 

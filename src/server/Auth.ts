@@ -92,6 +92,7 @@ export enum EntityType {
     Score = "score",
     Feature = "feature",
     SetList = "setlist",
+    Tag = "tag",
 }
 
 const entityTypeValues = Object.values(EntityType) as string[];

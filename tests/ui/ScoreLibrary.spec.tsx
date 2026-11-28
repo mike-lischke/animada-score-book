@@ -14,7 +14,7 @@ import {
     type IScoreQueryOutcome,
 } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreListSortOrder } from "../../src/core/types/general.js";
-import { SystemTagKind, type ITagCombination, type ITagInfo } from "../../src/core/types/tags.js";
+import { SystemTagKind, type ITagCombination, type ITagInfo, type ITagOwnerScope } from "../../src/core/types/tags.js";
 import { ScoreLibrary } from "../../src/ui/ScoreLibrary.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
@@ -27,10 +27,14 @@ interface IMockDataModel {
     instruments: ISbDmInstrument[];
     setLists: ISetListInfo[];
     readableScoreCount: number;
+    tagOwnerScopes: ITagOwnerScope[];
+    canCreateSetLists: boolean;
     queryScores: Mock<(combination: ITagCombination, setListId?: number) => Promise<IScoreQueryOutcome>>;
     assignTag: ReturnType<typeof vi.fn>;
     unassignTag: ReturnType<typeof vi.fn>;
     loadSetListScores: ReturnType<typeof vi.fn>;
+    createSetList: ReturnType<typeof vi.fn>;
+    listShareGroups: ReturnType<typeof vi.fn>;
 }
 
 const caixaTag: ITagInfo = {
@@ -59,11 +63,15 @@ const createMockDataModel = (tags: ITagInfo[] = [], scores: ISbDmScore[] = []): 
         instruments: [],
         setLists: [],
         readableScoreCount: scores.length,
+        tagOwnerScopes: [{ name: "Bateria", groupId: 10 }],
+        canCreateSetLists: true,
         queryScores: vi.fn<(combination: ITagCombination, setListId?: number) => Promise<IScoreQueryOutcome>>()
             .mockResolvedValue(appliedOutcome),
         assignTag: vi.fn().mockResolvedValue(true),
         unassignTag: vi.fn().mockResolvedValue(true),
         loadSetListScores: vi.fn().mockResolvedValue([]),
+        createSetList: vi.fn().mockResolvedValue({ success: true, id: 4, revision: 1 }),
+        listShareGroups: vi.fn().mockResolvedValue([{ id: 10, name: "Bateria" }]),
     };
 };
 

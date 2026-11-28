@@ -7,7 +7,9 @@ import { type ComponentChild, type ComponentChildren, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Container } from "../components/ui/framework/Container.js";
+import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import type { ISetListInfo } from "../core/DatabaseTypes.js";
@@ -35,10 +37,16 @@ export interface ISetListBarProperties extends ICommonUIProperties {
     /** Whether the running-order editor is open. */
     editing: boolean;
 
+    /** Whether the caller may create a set list, which is what the add button offers. */
+    canCreate: boolean;
+
     onSelect: (id?: number) => void;
 
     /** Switches the editor on, or off again. */
     onToggleEdit: () => void;
+
+    /** Opens the form that creates a set list. */
+    onAdd: () => void;
 
     /** The controls that close the toolbar, shown after the pills: the sort selector or the saved-order note. */
     children?: ComponentChildren;
@@ -76,7 +84,7 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
     }
 
     public render(): ComponentChild {
-        const { lists, canEdit, editing, children } = this.props;
+        const { canEdit, canCreate, editing, children } = this.props;
         const tabs = this.buildTabs();
         const pills = tabs.map((tab, index) => {
             return this.renderPill(tab, index);
@@ -100,10 +108,23 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
                 crossAlignment={ChildAlignment.Center}>
                 <Label className="set-list-bar-label" caption="Active set list" />
                 {row}
-                {lists.length === 0 && <Label className="set-list-bar-empty" caption="No set lists yet." />}
+                {canCreate && !editing && this.renderAddButton()}
                 {canEdit && this.renderEditButton(editing)}
                 {children}
             </Container>
+        );
+    }
+
+    /**
+     * @returns The round button that opens the form for a new set list. It makes room for the edit switch while the
+     * running order is being edited, which would otherwise sit between the pills and the sort selector.
+     */
+    private renderAddButton(): ComponentChild {
+        return (
+            <Button id="setListsAdd" className="set-list-add" imageOnly={true} round={true} title="Add set list"
+                onClick={this.handleAddClick}>
+                <Icon src={UIIcon.Add} />
+            </Button>
         );
     }
 
@@ -184,6 +205,10 @@ export class SetListBar extends UIComponent<ISetListBarProperties, ISetListBarSt
 
     private handleEditClick = (): void => {
         this.props.onToggleEdit();
+    };
+
+    private handleAddClick = (): void => {
+        this.props.onAdd();
     };
 
     private handleRowScroll = (): void => {

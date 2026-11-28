@@ -11,6 +11,7 @@ import { AccessLevel, EntityType, isValidEntityType } from "./Auth.js";
 import { InstrumentTags } from "./InstrumentTags.js";
 import { type RequestContext } from "./RequestContext.js";
 import { ScoreLock } from "./ScoreLock.js";
+import { TagRights } from "./TagRights.js";
 import { TagAccess, type ITagRow } from "./TagAccess.js";
 
 const tokenBytes = 32;
@@ -55,12 +56,10 @@ export class ScoreRoutes {
             return;
         }
 
-        const context = await TagAccess.contextFor(this.ctx.auth, user);
-        const tagIds = (await this.tagsOfScore(score.id)).filter((tag) => {
-            return TagAccess.canUse(context, tag);
-        }).map((tag) => {
-            return tag.id;
-        });
+        const tagIds = (await TagRights.readable(this.ctx.auth, user, await this.tagsOfScore(score.id)))
+            .map((tag) => {
+                return tag.id;
+            });
 
         this.ctx.sendJson(res, {
             id: score.id,
@@ -445,8 +444,8 @@ export class ScoreRoutes {
      */
     private async tagsOfScore(scoreId: number): Promise<ITagRow[]> {
         return this.ctx.auth.adapter.query<ITagRow>(
-            "SELECT t.id, t.name, t.color_index AS colorIndex, t.group_id AS groupId, "
-            + "t.system_key AS systemKey FROM score_tags st " +
+            "SELECT t.id, t.name, t.color_index AS colorIndex, t.owner_user_id AS ownerUserId, "
+            + "t.owner_group_id AS ownerGroupId, t.system_key AS systemKey FROM score_tags st " +
             "JOIN tags t ON t.id = st.tag_id WHERE st.score_id = ?", [scoreId],
         );
     }

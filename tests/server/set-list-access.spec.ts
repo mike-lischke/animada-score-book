@@ -135,16 +135,16 @@ describe("set list access — selecting and editing", () => {
         expect(await SetListAccess.canEdit(auth, callerOf(memberUserId), seeded.id)).toBe(false);
     });
 
-    it("lets a group with write access change the list", async () => {
+    it("does not let a group with write access change the list either", async () => {
         const { auth, database } = setup();
         const seeded = database.seedSetList("Auftritt", memberGroupId);
         database.seedGrants("setlist", seeded.id, ownerUserId, [{ groupId: memberGroupId, writable: true }]);
 
         expect(await SetListAccess.canRead(auth, callerOf(memberUserId), seeded.id)).toBe(true);
-        expect(await SetListAccess.canEdit(auth, callerOf(memberUserId), seeded.id)).toBe(true);
+        expect(await SetListAccess.canEdit(auth, callerOf(memberUserId), seeded.id)).toBe(false);
     });
 
-    it("lets the administrators reach every list", async () => {
+    it("lets the administrators reach a list nobody shared", async () => {
         const { auth, database } = setup();
         const seeded = database.seedSetList("Auftritt", memberGroupId);
         database.seedGrants("setlist", seeded.id, ownerUserId);

@@ -12,7 +12,8 @@ import { AccessLevel, EntityType, type ITokenPayload } from "./Auth.js";
 import { InstrumentTags } from "./InstrumentTags.js";
 import { type RequestContext } from "./RequestContext.js";
 import { ScoreEntries } from "./ScoreEntries.js";
-import { SetListAccess } from "./SetListAccess.js";
+import { SetListAccess, type ISetListRow } from "./SetListAccess.js";
+import { TagRights, type ITagRights } from "./TagRights.js";
 import { SystemTagKind, TagAccess, type ITagAccessContext, type ITagRow } from "./TagAccess.js";
 
 /** A tag as the client receives it. */
@@ -63,7 +64,7 @@ export class TagActions {
     public async handleListTags(req: IncomingMessage, res: ServerResponse): Promise<void> {
         const user = this.ctx.getAuthUser(req);
         const context = await TagAccess.contextFor(this.ctx.auth, user);
-        const usable = await this.usableTags(context);
+        const usable = await this.usableTags(context, user);
 
         if (usable.length === 0) {
             this.ctx.sendJson(res, { tags: [] });
@@ -73,13 +74,13 @@ export class TagActions {
 
         const groupNames = await this.groupNames();
         const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
-        const writableTagIds = await this.writableSetListTags(user);
+        const rights = await TagRights.of(this.ctx.auth, user, usable);
         const usage = await this.usageCounts(user, usable.map((tag) => {
             return tag.id;
         }));
 
         const entries = usable.map((tag) => {
-            return TagActions.tagJson(context, tag, groupNames, setListIds, writableTagIds, usage.get(tag.id) ?? 0);
+            return TagActions.tagJson(tag, rights.get(tag.id), groupNames, setListIds, usage.get(tag.id) ?? 0);
         }).sort((left, right) => {
             return NameText.compare(left.name, right.name);
         });
@@ -97,34 +98,28 @@ export class TagActions {
         const user = this.ctx.getAuthUser(req);
         const context = await TagAccess.contextFor(this.ctx.auth, user);
 
-        const scopes: Array<{ groupId?: number; name: string; }> = [];
+        // Only an administrator creates tags, and every group may be the owner of one.
+        if (!TagAccess.canCreate(context)) {
+            this.ctx.sendJson(res, { scopes: [] });
 
-        if (context.isAdmin) {
-            scopes.push({ name: TagAccess.globalScopeName });
+            return;
         }
 
-        // An administrator may create tags in every scope, a group administrator only in the groups they administer.
-        const groupIds = context.isAdmin
-            ? (await this.ctx.auth.adapter.query<{ id: number; }>("SELECT id FROM `groups`", [])).map((row) => {
-                return row.id;
-            })
-            : context.adminGroupIds;
+        const rows = await this.ctx.auth.adapter.query<{ id: number; name: string; }>(
+            "SELECT id, name FROM `groups`", [],
+        );
 
-        for (const groupId of groupIds) {
-            const rows = await this.ctx.auth.adapter.query<{ name: string; }>(
-                "SELECT name FROM `groups` WHERE id = ?", [groupId],
-            );
-
-            if (rows.length > 0) {
-                scopes.push({ groupId, name: rows[0].name });
-            }
+        const scopes: Array<{ groupId?: number; name: string; }> = [{ name: TagAccess.globalScopeName }];
+        for (const row of rows) {
+            scopes.push({ groupId: row.id, name: row.name });
         }
 
         this.ctx.sendJson(res, { scopes });
     }
 
     /**
-     * Creates a tag in an owner scope. A name the caller can already use returns the existing tag instead.
+     * Creates a tag. Only an administrator may, and the tag is either the installation's own (no owner) or belongs
+     * to a group. A name the caller can already use returns the existing tag instead.
      *
      * @param req The incoming HTTP request.
      * @param res The response to write to.
@@ -133,7 +128,7 @@ export class TagActions {
         const user = this.ctx.getAuthUser(req);
         const context = await TagAccess.contextFor(this.ctx.auth, user);
 
-        if (!context.isSignedIn) {
+        if (!TagAccess.canCreate(context)) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
@@ -141,7 +136,7 @@ export class TagActions {
 
         const body = await this.ctx.readJsonBody(req);
         const name = this.storableName(res, body.name);
-        const groupId = TagActions.optionalId(body.groupId);
+        const ownerGroupId = TagActions.optionalId(body.groupId);
         const colourIndex = TagPalette.optionalIndex(body.colorIndex);
 
         if (name === undefined) {
@@ -154,27 +149,39 @@ export class TagActions {
             return;
         }
 
-        if (!TagAccess.canOwnScope(context, groupId)) {
-            this.ctx.sendError(res, "Forbidden", 403);
+        if (body.groupId !== undefined && body.groupId !== null && ownerGroupId === undefined) {
+            this.ctx.sendError(res, "Invalid group id");
 
             return;
         }
 
-        const existing = await this.usableTagNamed(context, name);
+        const existing = await this.usableTagNamed(user, name);
         if (existing !== undefined) {
             const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
-            const writableTagIds = await this.writableSetListTags(user);
+            const rights = await TagRights.of(this.ctx.auth, user, [existing]);
             this.ctx.sendJson(res, {
                 success: true, created: false,
-                tag: TagActions.tagJson(context, existing, await this.groupNames(), setListIds, writableTagIds, 0),
+                tag: TagActions.tagJson(existing, rights.get(existing.id), await this.groupNames(), setListIds, 0),
             });
 
             return;
         }
 
+        // The name is unique per owner, and the generated scope columns are what the unique key runs on.
+        const taken = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM tags WHERE name = ? AND name_user_scope = 0 AND name_group_scope = IFNULL(?, 0)",
+            [name, ownerGroupId ?? null],
+        );
+
+        if (taken.length > 0) {
+            this.ctx.sendError(res, "A tag with that name already exists.", 409);
+
+            return;
+        }
+
         const result = await this.ctx.auth.adapter.insertReturningId(
-            "INSERT INTO tags (name, color_index, group_id) VALUES (?, ?, ?)",
-            [name, colourIndex ?? 0, groupId ?? null],
+            "INSERT INTO tags (name, color_index, owner_group_id, name_group_scope) VALUES (?, ?, ?, ?)",
+            [name, colourIndex ?? 0, ownerGroupId ?? null, ownerGroupId ?? 0],
         );
         const tagId = result.insertId;
 
@@ -190,11 +197,12 @@ export class TagActions {
             return;
         }
 
+        const rights = await TagRights.of(this.ctx.auth, user, [created]);
         this.ctx.sendJson(res, {
             success: true,
             created: true,
-            tag: TagActions.tagJson(context, created, await this.groupNames(),
-                await SetListAccess.listIdsByTag(this.ctx.auth.adapter), await this.writableSetListTags(user), 0)
+            tag: TagActions.tagJson(created, rights.get(created.id), await this.groupNames(),
+                await SetListAccess.listIdsByTag(this.ctx.auth.adapter), 0),
         });
     }
 
@@ -215,11 +223,11 @@ export class TagActions {
             return;
         }
 
-        const context = await TagAccess.contextFor(this.ctx.auth, this.ctx.getAuthUser(req));
+        const user = this.ctx.getAuthUser(req);
         const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
-        const writableTagIds = await this.writableSetListTags(this.ctx.getAuthUser(req));
+        const rights = await TagRights.of(this.ctx.auth, user, [tag]);
 
-        if (!TagActions.mayManage(context, tag, setListIds, writableTagIds)) {
+        if (rights.get(tag.id)?.editable !== true) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
@@ -246,12 +254,13 @@ export class TagActions {
         }
 
         const duplicate = await this.ctx.auth.adapter.query<{ id: number; }>(
-            "SELECT id FROM tags WHERE name = ? AND owner_scope = IFNULL(?, 0) AND id != ?",
-            [name, tag.groupId, tagId],
+            "SELECT id FROM tags WHERE name = ? AND name_user_scope = IFNULL(?, 0) "
+            + "AND name_group_scope = IFNULL(?, 0) AND id != ?",
+            [name, tag.ownerUserId, tag.ownerGroupId, tagId],
         );
 
         if (duplicate.length > 0) {
-            this.ctx.sendError(res, "A tag with that name already exists in this scope.", 409);
+            this.ctx.sendError(res, "A tag with that name already exists.", 409);
 
             return;
         }
@@ -268,9 +277,12 @@ export class TagActions {
         }
 
         const updated = await this.tagById(tagId);
+        const updatedRights = updated === undefined
+            ? undefined
+            : await TagRights.of(this.ctx.auth, user, [updated]);
         const tagJson = updated === undefined
             ? undefined
-            : TagActions.tagJson(context, updated, await this.groupNames(), setListIds, writableTagIds, 0);
+            : TagActions.tagJson(updated, updatedRights?.get(updated.id), await this.groupNames(), setListIds, 0);
 
         this.ctx.sendJson(res, { success: true, tag: tagJson });
     }
@@ -292,11 +304,10 @@ export class TagActions {
             return;
         }
 
-        const context = await TagAccess.contextFor(this.ctx.auth, this.ctx.getAuthUser(req));
-        const setListIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
-        const writableTagIds = await this.writableSetListTags(this.ctx.getAuthUser(req));
+        const user = this.ctx.getAuthUser(req);
+        const rights = await TagRights.of(this.ctx.auth, user, [tag]);
 
-        if (!TagActions.mayManage(context, tag, setListIds, writableTagIds)) {
+        if (rights.get(tag.id)?.editable !== true) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return;
@@ -347,7 +358,7 @@ export class TagActions {
             return;
         }
 
-        const { tag, scoreId } = resolved;
+        const { tag, scoreId, list } = resolved;
 
         // An instrument tag follows the tracks of the score and is maintained by the backend; it is never assigned
         // by hand, even though its global scope makes it an administrator's tag.
@@ -357,7 +368,6 @@ export class TagActions {
             return;
         }
 
-        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
         if (list === undefined) {
             await this.ctx.auth.adapter.execute("INSERT IGNORE INTO score_tags (score_id, tag_id) VALUES (?, ?)",
                 [scoreId, tag.id]);
@@ -385,7 +395,7 @@ export class TagActions {
             return;
         }
 
-        const { tag, scoreId } = resolved;
+        const { tag, scoreId, list } = resolved;
 
         if (TagAccess.systemKind(tag) === SystemTagKind.Instrument
             && await InstrumentTags.isInUse(this.ctx.auth.adapter, scoreId, tag.id)) {
@@ -394,7 +404,6 @@ export class TagActions {
             return;
         }
 
-        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
         if (list === undefined) {
             await this.ctx.auth.adapter.execute("DELETE FROM score_tags WHERE score_id = ? AND tag_id = ?",
                 [scoreId, tag.id]);
@@ -447,41 +456,18 @@ export class TagActions {
     }
 
     /**
-     * @param context The rules of the caller.
-     * @param tag The tag in question.
-     * @param setListIds The list id of every set-list tag, keyed by tag id.
-     * @param writableTagIds The set-list tags whose list the caller may change.
-     *
-     * @returns Whether the caller may rename or delete the tag. A set-list tag follows the list permission model,
-     * so its owner and the groups with write access reach it; an ordinary tag follows its owner scope.
-     */
-    private static mayManage(context: ITagAccessContext, tag: ITagRow, setListIds: Map<number, number>,
-        writableTagIds: ReadonlySet<number>): boolean {
-        if (setListIds.has(tag.id)) {
-            return writableTagIds.has(tag.id);
-        }
-
-        return TagAccess.owns(context, tag);
-    }
-
-    /**
-     * @param context The rules of the caller.
      * @param tag The tag to describe.
+     * @param rights What the caller may do with it, or undefined when the caller has no rights on it.
      * @param groupNames The group names, keyed by id.
      * @param setListIds The list id of every set-list tag, keyed by tag id.
-     * @param writableTagIds The set-list tags whose list the caller may change.
      * @param usageCount How many readable scores carry the tag.
      *
      * @returns The tag as the client expects it.
      */
-    private static tagJson(context: ITagAccessContext, tag: ITagRow, groupNames: Map<number, string>,
-        setListIds: Map<number, number>, writableTagIds: ReadonlySet<number>,
-        usageCount: number): ITagJson {
-        const groupId = tag.groupId ?? undefined;
-
-        const setListId = setListIds.get(tag.id);
-        const editable = TagActions.mayManage(context, tag, setListIds, writableTagIds);
-        const assignable = setListId === undefined ? TagAccess.canAssign(context, tag) : editable;
+    private static tagJson(tag: ITagRow, rights: ITagRights | undefined, groupNames: Map<number, string>,
+        setListIds: Map<number, number>, usageCount: number): ITagJson {
+        const groupId = tag.ownerGroupId ?? undefined;
+        const editable = rights?.editable === true;
 
         return {
             id: tag.id,
@@ -491,9 +477,9 @@ export class TagActions {
             groupName: groupId === undefined ? undefined : groupNames.get(groupId),
             systemKind: TagAccess.systemKind(tag),
             instrumentTypeId: TagAccess.instrumentTypeId(tag),
-            setListId,
+            setListId: setListIds.get(tag.id),
             editable,
-            assignable,
+            assignable: editable,
             usageCount,
         };
     }
@@ -521,26 +507,6 @@ export class TagActions {
      */
     private static colourIndexForId(tagId: number): number {
         return tagId % TagPalette.count;
-    }
-
-    /**
-     * @param user The authenticated caller, or undefined for a visitor.
-     *
-     * @returns The ids of the set-list tags whose list the caller may change, which is what managing the tag needs.
-     */
-    private async writableSetListTags(user: ITokenPayload | undefined): Promise<Set<number>> {
-        const listIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
-        const summaries = await this.ctx.auth.getPermissionSummaries(user, EntityType.SetList,
-            Array.from(listIds.values()));
-
-        const writable = new Set<number>();
-        for (const [tagId, listId] of listIds) {
-            if (summaries.get(listId)?.canWrite === true) {
-                writable.add(tagId);
-            }
-        }
-
-        return writable;
     }
 
     /**
@@ -583,10 +549,12 @@ export class TagActions {
      * @param req The incoming HTTP request.
      * @param res The response to write to.
      *
-     * @returns The score id and the tag, or undefined when the response is already written.
+     * @returns The score id, the tag and the set list that tag defines, or undefined when the response is already
+     * written.
      */
-    private async resolveAssignment(req: IncomingMessage,
-        res: ServerResponse): Promise<{ scoreId: number; tag: ITagRow; } | undefined> {
+    private async resolveAssignment(req: IncomingMessage, res: ServerResponse): Promise<{
+        scoreId: number; tag: ITagRow; list?: ISetListRow;
+    } | undefined> {
         const user = this.ctx.getAuthUser(req);
 
         if (!user) {
@@ -605,11 +573,18 @@ export class TagActions {
             return undefined;
         }
 
-        const context = await TagAccess.contextFor(this.ctx.auth, user);
         const tag = await this.tagById(tagId);
 
-        // An unusable tag answers 404 like an unknown one, so its existence does not leak.
-        if (tag === undefined || !TagAccess.canUse(context, tag)) {
+        if (tag === undefined) {
+            this.ctx.sendError(res, "Tag not found", 404);
+
+            return undefined;
+        }
+
+        // Both answers come from one place: a set-list tag follows its list, every other tag its own rules.
+        const rights = (await TagRights.of(this.ctx.auth, user, [tag])).get(tag.id);
+
+        if (rights?.readable !== true) {
             this.ctx.sendError(res, "Tag not found", 404);
 
             return undefined;
@@ -628,20 +603,16 @@ export class TagActions {
             return undefined;
         }
 
-        // A tag is its own entity: changing it on a score needs the right to manage the tag's scope, not the score.
-        // A set-list tag follows the list, so its owner and the groups with write access may assign it.
-        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
-        const mayAssign = list === undefined
-            ? TagAccess.canAssign(context, tag)
-            : await SetListAccess.canEdit(this.ctx.auth, user, list.id);
-
-        if (!mayAssign) {
+        // A tag is its own entity: changing it on a score follows the tag, not the score.
+        if (!rights.editable) {
             this.ctx.sendError(res, "Forbidden", 403);
 
             return undefined;
         }
 
-        return { scoreId, tag };
+        const list = await SetListAccess.forTag(this.ctx.auth.adapter, tag.id);
+
+        return { scoreId, tag, list };
     }
 
     /**
@@ -661,8 +632,9 @@ export class TagActions {
             return undefined;
         }
 
-        const context = await TagAccess.contextFor(this.ctx.auth, this.ctx.getAuthUser(req));
-        const usableIds = new Set((await this.usableTags(context)).map((tag) => {
+        const user = this.ctx.getAuthUser(req);
+        const context = await TagAccess.contextFor(this.ctx.auth, user);
+        const usableIds = new Set((await this.usableTags(context, user)).map((tag) => {
             return tag.id;
         }));
 
@@ -840,40 +812,44 @@ export class TagActions {
 
     /**
      * @param context The rules of the caller.
+     * @param user The caller the list rules are read for, which decide about the set-list tags.
      *
      * @returns The tags the caller can use.
      */
-    private async usableTags(context: ITagAccessContext): Promise<ITagRow[]> {
+    private async usableTags(context: ITagAccessContext,
+        user: ITokenPayload | undefined): Promise<ITagRow[]> {
         if (!context.isSignedIn) {
             return [];
         }
 
         const tags = await this.ctx.auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, "
-            + "system_key AS systemKey FROM tags", [],
+            "SELECT id, name, color_index AS colorIndex, owner_user_id AS ownerUserId, "
+            + "owner_group_id AS ownerGroupId, system_key AS systemKey FROM tags", [],
         );
 
-        return tags.filter((tag) => {
-            return TagAccess.canUse(context, tag);
-        });
+        return TagRights.readable(this.ctx.auth, user, tags);
     }
 
     /**
-     * @param context The rules of the caller.
+     * @param user The authenticated caller, or undefined for a visitor.
      * @param name The name to look for.
      *
      * @returns The tag with that name the caller can use, if there is one. The name is compared by the column
      * collation, which ignores case.
      */
-    private async usableTagNamed(context: ITagAccessContext, name: string): Promise<ITagRow | undefined> {
+    private async usableTagNamed(user: ITokenPayload | undefined, name: string): Promise<ITagRow | undefined> {
         const rows = await this.ctx.auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, "
-            + "system_key AS systemKey FROM tags WHERE name = ?", [name],
+            "SELECT id, name, color_index AS colorIndex, owner_user_id AS ownerUserId, "
+            + "owner_group_id AS ownerGroupId, system_key AS systemKey FROM tags WHERE name = ?", [name],
         );
 
-        return rows.find((tag) => {
-            return TagAccess.canUse(context, tag);
+        // A set-list tag is never adopted as an ordinary one, so a list never enters the catalogue by its name.
+        const listIds = await SetListAccess.listIdsByTag(this.ctx.auth.adapter);
+        const catalogue = rows.filter((tag) => {
+            return !listIds.has(tag.id);
         });
+
+        return (await TagRights.readable(this.ctx.auth, user, catalogue))[0];
     }
 
     /**
@@ -883,8 +859,8 @@ export class TagActions {
      */
     private async tagById(tagId: number): Promise<ITagRow | undefined> {
         const rows = await this.ctx.auth.adapter.query<ITagRow>(
-            "SELECT id, name, color_index AS colorIndex, group_id AS groupId, "
-            + "system_key AS systemKey FROM tags WHERE id = ?", [tagId],
+            "SELECT id, name, color_index AS colorIndex, owner_user_id AS ownerUserId, "
+            + "owner_group_id AS ownerGroupId, system_key AS systemKey FROM tags WHERE id = ?", [tagId],
         );
 
         return rows.length > 0 ? rows[0] : undefined;
